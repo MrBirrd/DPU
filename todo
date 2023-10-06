@@ -1,0 +1,4 @@
+add LION modules for fp16
+add DDIM sampling
+add v prediction
+change PVD architecture to downsample first massively and attention on very buttom, now we downsample to only 1k points

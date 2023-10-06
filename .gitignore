@@ -1,0 +1,17 @@
+.vscode
+upsampling
+test
+logs_*
+PiMAE
+MinkowskiEngine
+syn
+*.pt
+*.pth
+*.log
+*.png
+*.ply
+wandb
+*/PVD/output
+__pycache__
+output
+LION

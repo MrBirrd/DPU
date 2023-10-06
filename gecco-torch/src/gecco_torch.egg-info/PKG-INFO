@@ -1,0 +1,21 @@
+Metadata-Version: 2.1
+Name: gecco-torch
+Version: 1.0.0
+Author-email: Michal Jan Tyszkiewicz <michal.tyszkiewicz@epfl.ch>
+Classifier: Programming Language :: Python :: 3
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Requires-Python: >=3.10
+Requires-Dist: lightning
+Requires-Dist: multiprocess
+Requires-Dist: plyfile
+Requires-Dist: k3d
+Requires-Dist: timm
+Requires-Dist: kornia
+Requires-Dist: torchvision
+Requires-Dist: torch
+Requires-Dist: einops
+Requires-Dist: h5py
+Requires-Dist: imageio
+Requires-Dist: multiprocess
+Requires-Dist: tqdm

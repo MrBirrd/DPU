@@ -1,0 +1,1 @@
+python train_upsampling.py --dataroot /mnt/d/ETH/MLData/MasterThesis/3d/ --overfit --bs 1 --save_dir . --npoints 1000000
