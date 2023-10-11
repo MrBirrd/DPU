@@ -36,7 +36,7 @@ def inverse_T(transformation):
 
 
 class IndoorScenes(Dataset):
-    def __init__(self, root_dir, npoints=1_000_000, voxel_size=0.03, normalize=True):
+    def __init__(self, root_dir, npoints=1_000_000, voxel_size=0.03, normalize=False):
         self.root = root_dir
         self.npoints = int(npoints)
         self.voxel_size = voxel_size
@@ -75,7 +75,7 @@ class IndoorScenes(Dataset):
         self.hires = faro_npy
         
     def __len__(self):
-        return 128
+        return 5000
 
     def __getitem__(self, idx):
         
@@ -112,3 +112,15 @@ class IndoorScenes(Dataset):
         }
         
         return out
+
+if __name__ == "__main__":
+    ds = IndoorScenes(root_dir="../../3d")
+    for data in ds:
+        idx = data['idx']
+        tp = data['train_points']
+        tplr = data['train_points_lowres']
+        print("idx: ", idx)
+        print("tp: ", tp.shape)
+        print("tplr: ", tplr.shape)
+        print("stats: ", tp.min(), tp.max(), tplr.min(), tplr.max())
+        break

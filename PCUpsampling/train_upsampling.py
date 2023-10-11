@@ -167,8 +167,8 @@ def train(gpu, cfg, output_dir, noises_init):
         if cfg.training.grad_clip.enabled:
             torch.nn.utils.clip_grad_norm_(model.parameters(), cfg.training.grad_clip.value)
 
-        optimizer.zero_grad()
         optimizer.step()
+        optimizer.zero_grad()
 
         if step % cfg.training.log_interval == 0 and is_main_process:
             logger.info(

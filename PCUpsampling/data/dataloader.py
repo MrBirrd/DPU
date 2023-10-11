@@ -43,7 +43,7 @@ def get_dataloader(opt):
         logger.info(
             "Loading IndoorScenes dataset, which is currently only for overfitting on one scene!"
         )
-        train_dataset = IndoorScenes(opt.data.data_dir, opt.data.npoints, voxel_size=opt.data.voxel_size)
+        train_dataset = IndoorScenes(opt.data.data_dir, opt.data.npoints, voxel_size=opt.data.voxel_size, normalize=opt.data.normalize)
 
     if opt.distribution_type == "multi":
         train_sampler = torch.utils.data.distributed.DistributedSampler(

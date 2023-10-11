@@ -15,3 +15,5 @@ wandb
 __pycache__
 output
 LION
+3d
+ShapeNetCore*

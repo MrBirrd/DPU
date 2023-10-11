@@ -8,8 +8,10 @@ from torch import einsum, nn
 from tqdm import tqdm
 import math
 from torch import Tensor
-from .unet_mink import MinkUnet
+#from .unet_mink import MinkUnet
 from .unet_pointvoxel import PVCLion
+from gecco_torch.models.linear_lift import LinearLift
+from gecco_torch.models.set_transformer import SetTransformer
 #from .unet_torchsparse import TSUnet
 # helpers
 
@@ -113,6 +115,10 @@ class ElucidatedDiffusion(nn.Module):
                 use_attention=args.model.use_attention,
                 init_ds_factor = 2,
             )
+        elif args.model.type == "SetTransformer":
+            fdim = 128
+            set_transformer = SetTransformer(n_layers=6, feature_dim=fdim, num_inducers=64, t_embed_dim=1).cuda()
+            self.net = LinearLift(inner=set_transformer, feature_dim=fdim, in_dim=args.model.in_dim + args.model.extra_feature_channels, out_dim=args.model.out_dim,).cuda()
         else:
             raise NotImplementedError(args.model.type)
 

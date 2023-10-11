@@ -12,7 +12,7 @@ from omegaconf import DictConfig, OmegaConf
 from utils.file_utils import *
 from utils.ops import *
 from utils.visualize import *
-
+from loguru import logger
 import wandb
 
 
@@ -20,7 +20,6 @@ def sample(gpu, cfg, output_dir, noises_init):
     set_seed(cfg)
     torch.cuda.empty_cache()
 
-    logger = setup_logging(output_dir)
     if cfg.distribution_type == "multi":
         is_main_process = gpu == 0
     else:
@@ -131,31 +130,22 @@ def sample(gpu, cfg, output_dir, noises_init):
                 shape=new_x_chain(x, lowres.shape[0] if not cfg.training.overfit else 1).shape,
                 device=x.device,
                 cond=lowres if not cfg.training.overfit else lowres[0].unsqueeze(0),
-                clip_denoised=False,
+                clip_denoised=cfg.diffusion.clip,
             )
             x_gen_list = model.sample(
                 shape=new_x_chain(x, 1).shape,
                 device=x.device,
                 cond=lowres[0].unsqueeze(0),
                 freq=0.1,
-                clip_denoised=False,
+                clip_denoised=cfg.diffusion.clip,
             )
             x_gen_all = torch.cat(x_gen_list, dim=0)
 
             gen_stats = [x_gen_eval.mean(), x_gen_eval.std()]
             gen_eval_range = [x_gen_eval.min().item(), x_gen_eval.max().item()]
-
-            # normalize if overfit
-            if cfg.training.overfit:
-                mean, std = dataloader.dataset.mean, dataloader.dataset.std
-                B, C, N = x_gen_eval.shape
-                std = repeat(std, "c -> b c n", b=B, n=N)
-                mean = repeat(mean, "c -> b c n", b=B, n=N)
-                x_gen_eval = x_gen_eval.cpu() * std + mean
-                x_gen_all = x_gen_all.cpu() * std + mean
-                x = x.cpu() * std + mean
-                lowres = lowres.cpu() * std + mean
-
+            print("gen_stats: ", gen_stats)
+            print("gen_eval_range: ", gen_eval_range)
+            
             visualize_pointcloud_batch(
                 "%s/epoch_%03d_samples_eval.png" % (out_sampling, sampling_iter),
                 x_gen_eval.transpose(1, 2),

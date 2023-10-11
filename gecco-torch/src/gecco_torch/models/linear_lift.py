@@ -50,6 +50,8 @@ class LinearLift(nn.Module):
 
         if cond is not None and self.in_dim == 3:
             geometry = cat([geometry, cond], dim=-1)
+        elif cond is not None and self.in_dim == 6:
+            geometry = cat([geometry, cond], dim=1)
 
         geometry = rearrange(geometry, "b d n -> b n d")
         embed = rearrange(embed, "b -> b 1 1").float()

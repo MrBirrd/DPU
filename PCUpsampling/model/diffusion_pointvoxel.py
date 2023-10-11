@@ -4,7 +4,7 @@ from torch import nn
 from torch.cuda.amp import autocast
 from tqdm import tqdm
 
-from .unet_mink import MinkUnet
+#from .unet_mink import MinkUnet
 from .unet_pointvoxel import PVCLion
 import math
 
@@ -90,7 +90,7 @@ class PVD(nn.Module):
                     shape=shape,
                     denoise_fn=self._denoise,
                     cond=cond,
-                    clip=False,
+                    clip=clip_denoised,
                 )
             else:
                 return self.diffusion.p_sample_loop(
@@ -110,7 +110,7 @@ class PVD(nn.Module):
                     denoise_fn=self._denoise,
                     save_every=save_every,
                     cond=cond,
-                    clip=False,
+                    clip=clip_denoised,
                 )
             else:
                 return self.diffusion.p_sample_loop_trajectory(
@@ -416,7 +416,7 @@ class GaussianDiffusion:
         for time, time_next in tqdm(time_pairs, desc = 'DDIM sampling loop time step'):
             time_cond = torch.full((batch,), time, device = device, dtype = torch.long)
             self_cond = x_start if self.self_condition else None
-            pred_noise, x_start = self.model_prediction(denoise_fn=denoise_fn, data=img, t=time_cond, cond=cond)
+            pred_noise, x_start = self.model_prediction(denoise_fn=denoise_fn, data=img, t=time_cond, cond=cond, clip_denoised=clip)
 
             if time_next < 0:
                 img = x_start

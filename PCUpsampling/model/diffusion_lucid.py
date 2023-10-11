@@ -10,7 +10,7 @@ from torch import nn
 from torch.cuda.amp import autocast
 from tqdm import tqdm
 
-from .unet_mink import MinkUnet
+#from .unet_mink import MinkUnet
 from .unet_pointvoxel import PVCLion
 from gecco_torch.models.linear_lift import LinearLift
 from gecco_torch.models.set_transformer import SetTransformer
@@ -134,7 +134,7 @@ class GaussianDiffusion(nn.Module):
             )
         elif cfg.model.type == "SetTransformer":
             fdim = 128
-            set_transformer = SetTransformer(n_layers=6, feature_dim=fdim, num_inducers=64, t_embed_dim=1).cuda()
+            set_transformer = SetTransformer(n_layers=6, feature_dim=fdim, num_inducers=1024, t_embed_dim=1).cuda()
             self.model = LinearLift(inner=set_transformer, feature_dim=fdim, in_dim=cfg.model.in_dim + cfg.model.extra_feature_channels, out_dim=cfg.model.out_dim,).cuda()
         else:
             raise NotImplementedError(cfg.unet)
@@ -280,7 +280,7 @@ class GaussianDiffusion(nn.Module):
         posterior_log_variance_clipped = extract(self.posterior_log_variance_clipped, t, x_t.shape)
         return posterior_mean, posterior_variance, posterior_log_variance_clipped
 
-    def model_predictions(self, x, t, cond=None, x_self_cond = None, clip_x_start = False, rederive_pred_noise = False):
+    def model_predictions(self, x, t, cond=None, x_self_cond = None, clip_x_start = False, rederive_pred_noise = True):
         model_output = self.model(x, t, cond=cond, x_self_cond = x_self_cond)
 
         # setup clipping
@@ -393,7 +393,7 @@ class GaussianDiffusion(nn.Module):
             sample_step += 1
 
         ret = img if not save_every else imgs
-        ret = self.unnormalize(ret)
+        #ret = self.unnormalize(ret)
 
         return ret
 
