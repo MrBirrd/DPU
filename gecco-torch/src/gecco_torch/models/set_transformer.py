@@ -105,6 +105,8 @@ class Broadcast(nn.Module):
         """
         if h is None:
             h = self.pool(x)
+            # TODO maybe concat here?
+            #print("h shape:", h.shape)
             h = self.norm_1(h, t_embed)
             h = self.mlp(h)
             h = self.norm_2(h, t_embed)
@@ -199,6 +201,7 @@ class SetTransformer(nn.Module):
         self,
         features: Tensor,
         t_embed: Tensor,
+        conditioning: Tensor = None,
         return_h: bool = False,
         hs: list[Tensor] | None = None,
     ) -> tuple[Tensor, list[Tensor] | None]:

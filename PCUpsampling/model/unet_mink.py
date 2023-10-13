@@ -50,13 +50,13 @@ class MinkowskiGroupNorm(Module):
         x = input.decomposed_features
         x = torch.cat([item.unsqueeze(0) for item in x])
         # reshape to (B, C, N)
-        x = x.permute(0, 2, 1)
+        x = rearrange(x, 'B N C -> B C N')
 
         # do group norm
         output = self.gn(x)
         
         # stack features
-        output = output.view(-1, output.shape[1])
+        output = rearrange(output, 'B C N -> (B N) C)')
 
         if isinstance(input, ME.TensorField):
             return ME.TensorField(

@@ -1,5 +1,5 @@
 import torch
-from .arkit import IndoorScenes
+from .arkit import IndoorScenes, IndoorScenesCut
 from .shapenet_data_pc import get_dataset_shapenet
 from loguru import logger
 
@@ -16,7 +16,7 @@ def save_iter(dataloader, sampler):
             yield next(iterator)
 
 
-def get_dataloader(opt):
+def get_dataloader(opt, sampling=False):
     """
     Returns train and test dataloaders along with their respective samplers.
 
@@ -44,7 +44,9 @@ def get_dataloader(opt):
             "Loading IndoorScenes dataset, which is currently only for overfitting on one scene!"
         )
         train_dataset = IndoorScenes(opt.data.data_dir, opt.data.npoints, voxel_size=opt.data.voxel_size, normalize=opt.data.normalize)
-
+    elif opt.data.dataset == "IndoorCut":
+        train_dataset = IndoorScenesCut(opt.data.data_dir, opt.data.npoints, voxel_size=opt.data.voxel_size, normalize=opt.data.normalize)
+    
     if opt.distribution_type == "multi":
         train_sampler = torch.utils.data.distributed.DistributedSampler(
             train_dataset, num_replicas=opt.world_size, rank=opt.rank
@@ -61,7 +63,7 @@ def get_dataloader(opt):
 
     train_dataloader = torch.utils.data.DataLoader(
         train_dataset,
-        batch_size=opt.training.bs,
+        batch_size=opt.training.bs if not sampling else opt.sampling.bs,
         sampler=train_sampler,
         shuffle=train_sampler is None,
         num_workers=int(opt.data.workers),
@@ -71,7 +73,7 @@ def get_dataloader(opt):
     if test_dataset is not None:
         test_dataloader = torch.utils.data.DataLoader(
             train_dataset,
-            batch_size=opt.training.bs,
+            batch_size=opt.training.bs if not sampling else opt.sampling.bs,
             sampler=test_sampler,
             shuffle=False,
             num_workers=int(opt.data.workers),

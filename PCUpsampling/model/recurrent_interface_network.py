@@ -554,6 +554,7 @@ class RIN(nn.Module):
         #    nn.Linear(dim, pixel_patch_dim),
         #    Rearrange('b (h w) (c p1 p2) -> b c (h p1) (w p2)', p1 = patch_size, p2 = patch_size, h = patch_height_width)
         #)
+        
         self.to_points = nn.Sequential(
             LayerNorm(dim),
             nn.Linear(dim, self.npoints),

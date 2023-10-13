@@ -14,7 +14,7 @@ from utils.ops import *
 from utils.visualize import *
 from loguru import logger
 import wandb
-
+#from metrics.evaluation_metrics import compute_all_metrics
 
 def sample(gpu, cfg, output_dir, noises_init):
     set_seed(cfg)
@@ -50,7 +50,7 @@ def sample(gpu, cfg, output_dir, noises_init):
         cfg.vizIter = int(cfg.vizIter / cfg.ngpus_per_node)
 
     """ data """
-    dataloader, _, train_sampler, _ = get_dataloader(cfg)
+    dataloader, _, train_sampler, _ = get_dataloader(cfg, sampling=True)
 
     """
     create networks
@@ -127,9 +127,9 @@ def sample(gpu, cfg, output_dir, noises_init):
 
         with torch.no_grad():
             x_gen_eval = model.sample(
-                shape=new_x_chain(x, lowres.shape[0] if not cfg.training.overfit else 1).shape,
+                shape=new_x_chain(x, cfg.sampling.bs).shape,
                 device=x.device,
-                cond=lowres if not cfg.training.overfit else lowres[0].unsqueeze(0),
+                cond=lowres,
                 clip_denoised=cfg.diffusion.clip,
             )
             x_gen_list = model.sample(
@@ -145,6 +145,10 @@ def sample(gpu, cfg, output_dir, noises_init):
             gen_eval_range = [x_gen_eval.min().item(), x_gen_eval.max().item()]
             print("gen_stats: ", gen_stats)
             print("gen_eval_range: ", gen_eval_range)
+            
+            # calculate metrics
+            #metrics = compute_all_metrics(x_gen_eval, gt_multiple, cfg.sampling.bs)
+            #print("Metrics:", metrics)
             
             visualize_pointcloud_batch(
                 "%s/epoch_%03d_samples_eval.png" % (out_sampling, sampling_iter),

@@ -10,7 +10,7 @@ from torch import nn
 from torch.cuda.amp import autocast
 from tqdm import tqdm
 
-#from .unet_mink import MinkUnet
+from .unet_mink import MinkUnet
 from .unet_pointvoxel import PVCLion
 from gecco_torch.models.linear_lift import LinearLift
 from gecco_torch.models.set_transformer import SetTransformer
@@ -133,16 +133,16 @@ class GaussianDiffusion(nn.Module):
                 dim=cfg.model.time_embed_dim, D=1, out_dim=cfg.model.out_dim, in_channels=cfg.model.in_dim + cfg.model.extra_feature_channels, dim_mults=(1, 2, 4, 8), use_attention=cfg.model.use_attention
             )
         elif cfg.model.type == "SetTransformer":
-            fdim = 128
-            set_transformer = SetTransformer(n_layers=6, feature_dim=fdim, num_inducers=1024, t_embed_dim=1).cuda()
-            self.model = LinearLift(inner=set_transformer, feature_dim=fdim, in_dim=cfg.model.in_dim + cfg.model.extra_feature_channels, out_dim=cfg.model.out_dim,).cuda()
+            set_transformer = SetTransformer(n_layers=cfg.model.ST.layers, feature_dim=cfg.model.ST.fdim, num_inducers=cfg.model.ST.inducers, t_embed_dim=1).cuda()
+            self.model = LinearLift(inner=set_transformer, feature_dim=cfg.model.ST.fdim, in_dim=cfg.model.in_dim + cfg.model.extra_feature_channels, out_dim=cfg.model.out_dim,).cuda()
         else:
             raise NotImplementedError(cfg.unet)
 
         # dimensions
         self.channels = cfg.data.nc
         self.npoints = cfg.data.npoints
-
+        self.amp = cfg.training.amp
+        
         objective = cfg.diffusion.objective
         self.objective = objective
         self.self_condition = self.model.self_condition
@@ -463,23 +463,26 @@ class GaussianDiffusion(nn.Module):
                 x_self_cond = self.model_predictions(x, t, cond=cond).pred_x_start
                 x_self_cond.detach_()
         
-        model_out = self.model(x, t, cond = cond, x_self_cond = x_self_cond)
+        with autocast(enabled = self.amp):
+            model_out = self.model(x, t, cond = cond, x_self_cond=x_self_cond)
+            
+            if self.objective == 'pred_noise':
+                target = noise
+            elif self.objective == 'pred_x0':
+                target = x_start
+            elif self.objective == 'pred_v':
+                v = self.predict_v(x_start, t, noise)
+                target = v
+            else:
+                raise ValueError(f'unknown objective {self.objective}')
 
-        if self.objective == 'pred_noise':
-            target = noise
-        elif self.objective == 'pred_x0':
-            target = x_start
-        elif self.objective == 'pred_v':
-            v = self.predict_v(x_start, t, noise)
-            target = v
-        else:
-            raise ValueError(f'unknown objective {self.objective}')
+            loss = F.mse_loss(model_out, target, reduction = 'none')
+            loss = reduce(loss, 'b ... -> b', 'mean')
 
-        loss = F.mse_loss(model_out, target, reduction = 'none')
-        loss = reduce(loss, 'b ... -> b', 'mean')
-
-        loss = loss * extract(self.loss_weight, t, loss.shape)
-        return loss.mean()
+            loss = loss * extract(self.loss_weight, t, loss.shape)
+            loss = loss.mean()
+        
+        return loss
 
     def forward(self, input, cond = None, noises = None, *args, **kwargs):
         B, D, N , device= *input.shape, input.device

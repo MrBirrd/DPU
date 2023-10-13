@@ -4,37 +4,42 @@ from torch import nn
 from torch.cuda.amp import autocast
 from tqdm import tqdm
 
-#from .unet_mink import MinkUnet
+from .unet_mink import MinkUnet
 from .unet_pointvoxel import PVCLion
+from gecco_torch.models.linear_lift import LinearLift
+from gecco_torch.models.set_transformer import SetTransformer
 import math
 
 
 class PVD(nn.Module):
     def __init__(
-        self, args, loss_type: str, model_mean_type: str, model_var_type: str, device=None,
+        self, cfg, loss_type: str, model_mean_type: str, model_var_type: str, device=None,
     ):
         super(PVD, self).__init__()
-        betas = get_betas(args.diffusion.schedule, args.diffusion.beta_start, args.diffusion.beta_end, args.diffusion.timesteps)
-        self.diffusion = GaussianDiffusion(betas, loss_type, model_mean_type, model_var_type, device=device, amp=args.training.amp)
-        self.num_sample_steps = args.diffusion.sampling_timesteps
-        self.ddim = args.diffusion.sampling_strategy == "DDIM"
+        betas = get_betas(cfg.diffusion.schedule, cfg.diffusion.beta_start, cfg.diffusion.beta_end, cfg.diffusion.timesteps)
+        self.diffusion = GaussianDiffusion(betas, loss_type, model_mean_type, model_var_type, device=device, amp=cfg.training.amp)
+        self.num_sample_steps = cfg.diffusion.sampling_timesteps
+        self.ddim = cfg.diffusion.sampling_strategy == "DDIM"
 
-        if args.model.type == "PVD":
+        if cfg.model.type == "PVD":
             self.model = PVCLion(
-                out_dim=args.data.nc,
-                input_dim=args.data.nc,
-                npoints=args.data.npoints,
-                embed_dim=args.model.time_embed_dim,
-                use_att=args.model.use_attention,
-                dropout=args.model.dropout,
-                extra_feature_channels=args.model.extra_feature_channels,
+                out_dim=cfg.data.nc,
+                input_dim=cfg.data.nc,
+                npoints=cfg.data.npoints,
+                embed_dim=cfg.model.time_embed_dim,
+                use_att=cfg.model.use_attention,
+                dropout=cfg.model.dropout,
+                extra_feature_channels=cfg.model.extra_feature_channels,
             )
-        elif args.model.type == "Mink":
+        elif cfg.model.type == "Mink":
             self.model = MinkUnet(
-                dim=args.model.time_embed_dim, D=1, out_dim=args.model.out_dim, in_channels=args.model.in_dim + args.model.extra_feature_channels, dim_mults=(1, 2, 4, 8), use_attention=args.model.use_attention
+                dim=cfg.model.time_embed_dim, D=1, out_dim=cfg.model.out_dim, in_channels=cfg.model.in_dim + cfg.model.extra_feature_channels, dim_mults=(1, 2, 4, 8), use_attention=cfg.model.use_attention
             )
+        elif cfg.model.type == "SetTransformer":
+            set_transformer = SetTransformer(n_layers=cfg.model.ST.layers, feature_dim=cfg.model.ST.fdim, num_inducers=cfg.model.ST.inducers, t_embed_dim=1).cuda()
+            self.model = LinearLift(inner=set_transformer, feature_dim=cfg.model.ST.fdim, in_dim=cfg.model.in_dim + cfg.model.extra_feature_channels, out_dim=cfg.model.out_dim,).cuda()
         else:
-            raise NotImplementedError(args.model.type)
+            raise NotImplementedError(cfg.model.type)
 
     def prior_kl(self, x0):
         return self.diffusion._prior_bpd(x0)
@@ -56,9 +61,7 @@ class PVD(nn.Module):
         assert data.dtype == torch.float
         assert t.shape == torch.Size([B]) and t.dtype == torch.int64
 
-        if cond is not None:
-            data = torch.cat([data, cond], dim=1)
-        out = self.model(data, t)
+        out = self.model(data, t, cond=cond)
 
         assert out.shape == torch.Size([B, D, N])
         return out

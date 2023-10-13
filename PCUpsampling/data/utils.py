@@ -5,6 +5,8 @@ import numpy as np
 from modules.functional import trilinear_devoxelize
 from modules.voxelization import Voxelization
 from scipy import spatial
+import random
+
 
 class FeatureVoxelConcatenation(nn.Module):
     """
@@ -24,6 +26,25 @@ class FeatureVoxelConcatenation(nn.Module):
 
         return torch.cat([x1_features, devox_mixed], dim=1)
 
+
+def random_local_sample(x1, x2, k=None, radius=None):
+    """
+    Takes a random point and then takes k closest points within around that point.
+    """
+    center = random.choice(x1)
+    # build KDTree for x1 and x2
+    tree1 = spatial.cKDTree(x1)
+    tree2 = spatial.cKDTree(x2)
+    # query tree for x1
+    indices1 = tree1.query_ball_point(center, r=radius, p=1)
+    # query tree for x2
+    indices2 = tree2.query_ball_point(center, r=radius, p=1)
+    # extract points
+    x1_sample = x1[indices1]
+    x2_sample = x2[indices2]
+    return x1_sample, x2_sample, center
+    
+    
 def concat_nn(x1, x2):
     """
     Concatenate two point clouds by nearest neighbor search. This means that for each point in x1 it searches it's closest point in x2 and appends the features of that point to the features of the point in x1.
@@ -35,6 +56,7 @@ def concat_nn(x1, x2):
     dists, indices = tree.query(x1)
     # concatenate x1 and x2
     return np.concatenate((x1, x2[indices]), axis=1)
+
 
 def cut_by_bounding_box(reference, target):
     """

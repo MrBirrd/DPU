@@ -110,6 +110,8 @@ def train(gpu, cfg, output_dir, noises_init):
     else:
         lr_scheduler = optim.lr_scheduler.ConstantLR(optimizer, factor=1.0)
 
+    ampscaler = torch.cuda.amp.GradScaler(enabled=cfg.training.amp)
+    
     if cfg.model_path != "":
         ckpt = torch.load(cfg.model)
         model.load_state_dict(ckpt["model_state"])
@@ -154,9 +156,10 @@ def train(gpu, cfg, output_dir, noises_init):
                 x = x.cuda()
                 noises_batch = noises_batch.cuda()
                 lowres = lowres.cuda()
-
+            
+            # forward pass
             loss = model(x, cond=lowres, noises=noises_batch) / cfg.training.accumulation_steps
-            loss.backward()
+            ampscaler.scale(loss).backward()
 
         # get gradient norms for debugging and logging
         if not cfg.model.type == "Mink":
@@ -167,7 +170,8 @@ def train(gpu, cfg, output_dir, noises_init):
         if cfg.training.grad_clip.enabled:
             torch.nn.utils.clip_grad_norm_(model.parameters(), cfg.training.grad_clip.value)
 
-        optimizer.step()
+        ampscaler.step(optimizer)
+        ampscaler.update()
         optimizer.zero_grad()
 
         if step % cfg.training.log_interval == 0 and is_main_process:
@@ -195,12 +199,19 @@ def train(gpu, cfg, output_dir, noises_init):
 
             model.eval()
             with torch.no_grad():
+                
+                if cfg.sampling.bs == 1:
+                    cond = lowres[0].unsqueeze(0)
+                else:
+                    cond = lowres[:cfg.sampling.bs]
+                
                 x_gen_eval = model.sample(
                     shape=new_x_chain(x, cfg.sampling.bs).shape,
                     device=x.device,
-                    cond=lowres if not cfg.training.overfit else lowres[0].unsqueeze(0),
+                    cond=cond,
                     clip_denoised=False,
                 )
+                
                 x_gen_list = model.sample(
                     shape=new_x_chain(x, 1).shape,
                     device=x.device,

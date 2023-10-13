@@ -1,9 +1,9 @@
 data:
   data_dir: ../3d/
   dataset: "Indoor"
-  workers: 2
-  npoints: 50000
-  voxel_size: 0.05
+  workers: 4
+  npoints: 16384
+  voxel_size: 0.01
   nc: 3 # number of features (x, y, z)
   upsample_frac: 8 # when downsampling from the ground truth
   batch_size_eval: 1
@@ -11,7 +11,7 @@ data:
 diffusion:
   timesteps: 1000
   sampling_timesteps: 50
-  formulation: LUCID # PVD ¦ LUCID ¦ EDM
+  formulation: PVD # PVD ¦ LUCID ¦ EDM
   objective: pred_v # pred_noise ¦ pred_v ¦ pred_x0
   schedule: sigmoid # linear ¦ sigmoid ¦ cosine
   min_snr_gamma: 5
@@ -25,17 +25,21 @@ diffusion:
 model:
   type: SetTransformer # Mink ¦ PVD
   in_dim: 3
-  extra_feature_channels: 3 # no extra dim => append the points not features
+  extra_feature_channels: 0 # no extra dim => append the points not features
   out_dim: 3
   time_embed_dim: 64
   use_attention: true
   dropout: 0.1
   EMA:
     decay: 0.999
+  ST:
+    fdim: 256
+    inducers: 1024
+    layers: 6
 training:
   optimizer:
     type: AdamW
-    lr: 1.e-4
+    lr: 2.e-4
     beta1: 0.9
     beta2: 0.99
     weight_decay: 0.
@@ -45,11 +49,11 @@ training:
   grad_clip:
     enabled: false
     value: 10.0
-  bs: 8
-  accumulation_steps: 2
-  overfit: true
+  bs: 4
+  accumulation_steps: 4
+  overfit: false
   amp: true
-  steps: 10000
+  steps: 100000
   log_interval: 10
   save_interval: 1000
   viz_interval: 1000
