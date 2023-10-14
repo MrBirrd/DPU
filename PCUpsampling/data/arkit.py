@@ -1,7 +1,10 @@
 from torch.utils.data import Dataset
 import torch
 import numpy as np
-import open3d as o3d
+try:
+    import open3d as o3d
+except:
+    pass
 from .utils import concat_nn, cut_by_bounding_box, normalize_lowres_hires_pair, random_local_sample
 from loguru import logger
 import os
@@ -240,12 +243,6 @@ class ArkitScans(Dataset):
         if self.npoints < scan.shape[0]:
             idxs = np.random.choice(scan.shape[0], self.npoints)
             scan = scan[idxs, :]
-        
-        # substract center
-        center = scan.mean(axis=0)
-        scan -= center
-        # put in unit sphere
-        scan /= np.max(np.abs(scan))
 
         # upsample if needed
         if self.npoints > scan.shape[0]:
@@ -253,6 +250,12 @@ class ArkitScans(Dataset):
             idxs = np.random.choice(scan.shape[0], points_difference)
             scan = np.concatenate((scan, scan[idxs, :]), axis=0)
 
+        # substract center
+        center = scan.mean(axis=0)
+        scan -= center
+        # put in unit sphere
+        scan /= np.max(np.abs(scan))
+        
         scan = torch.from_numpy(scan).float()
 
         out = {
