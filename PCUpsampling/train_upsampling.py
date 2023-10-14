@@ -20,7 +20,7 @@ import sys
 import wandb
 import json
 
-def train(gpu, cfg, output_dir, noises_init):
+def train(gpu, cfg, output_dir, noises_init=None):
     set_seed(cfg)
     torch.cuda.empty_cache()
 
@@ -116,7 +116,7 @@ def train(gpu, cfg, output_dir, noises_init):
     ampscaler = torch.cuda.amp.GradScaler(enabled=cfg.training.amp)
     
     if cfg.model_path != "":
-        ckpt = torch.load(cfg.model)
+        ckpt = torch.load(cfg.model_path)
         model.load_state_dict(ckpt["model_state"])
         optimizer.load_state_dict(ckpt["optimizer_state"])
 
@@ -145,7 +145,7 @@ def train(gpu, cfg, output_dir, noises_init):
             data = next(train_iter)
 
             x = data["train_points"].transpose(1, 2)
-            noises_batch = noises_init[data["idx"]].transpose(1, 2)
+            #noises_batch = noises_init[data["idx"]].transpose(1, 2)
             lowres = data["train_points_lowres"].transpose(1, 2) if "train_points_lowres" in data else None
 
             # move data to gpu
@@ -153,15 +153,15 @@ def train(gpu, cfg, output_dir, noises_init):
                 cfg.distribution_type is None and gpu is not None
             ):
                 x = x.cuda(gpu)
-                noises_batch = noises_batch.cuda(gpu)
+                #noises_batch = noises_batch.cuda(gpu)
                 lowres = lowres.cuda(gpu) if lowres is not None else None
             elif cfg.distribution_type == "single":
                 x = x.cuda()
-                noises_batch = noises_batch.cuda()
+                #noises_batch = noises_batch.cuda()
                 lowres = lowres.cuda() if lowres is not None else None
             
             # forward pass
-            loss = model(x, cond=lowres, noises=noises_batch) / cfg.training.accumulation_steps
+            loss = model(x, cond=lowres) / cfg.training.accumulation_steps
             ampscaler.scale(loss).backward()
 
         # get gradient norms for debugging and logging
@@ -331,20 +331,16 @@ def main():
     #logger.add(sys.stdout, format="{time} {level} {message}", level="INFO")
     #logger.add("file_{time}.log")
 
-    """ workaround TODO inspect this for future versions"""
-    loader, _, _, _ = get_dataloader(opt)
-    noises_init = torch.randn(len(loader.dataset), opt.data.npoints, opt.data.nc)
-
     if opt.dist_url == "env://" and opt.world_size == -1:
         opt.world_size = int(os.environ["WORLD_SIZE"])
 
     if opt.distribution_type == "multi":
         opt.ngpus_per_node = torch.cuda.device_count()
         opt.world_size = opt.ngpus_per_node * opt.world_size
-        mp.spawn(train, nprocs=opt.ngpus_per_node, args=(opt, output_dir, noises_init))
+        mp.spawn(train, nprocs=opt.ngpus_per_node, args=(opt, output_dir))
     else:
         opt.gpu = None
-        train(opt.gpu, opt, output_dir, noises_init)
+        train(opt.gpu, opt, output_dir)
 
 
 def parse_args():

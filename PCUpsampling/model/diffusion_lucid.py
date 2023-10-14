@@ -10,7 +10,11 @@ from torch import nn
 from torch.cuda.amp import autocast
 from tqdm import tqdm
 
-from .unet_mink import MinkUnet
+try:
+    from .unet_mink import MinkUnet
+except:
+    pass
+
 from .unet_pointvoxel import PVCLion
 from gecco_torch.models.linear_lift import LinearLift
 from gecco_torch.models.set_transformer import SetTransformer

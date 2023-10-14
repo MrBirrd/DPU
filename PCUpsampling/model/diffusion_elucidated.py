@@ -8,7 +8,10 @@ from torch import einsum, nn
 from tqdm import tqdm
 import math
 from torch import Tensor
-from .unet_mink import MinkUnet
+try:
+    from .unet_mink import MinkUnet
+except:
+    pass
 from .unet_pointvoxel import PVCLion
 from gecco_torch.models.linear_lift import LinearLift
 from gecco_torch.models.set_transformer import SetTransformer

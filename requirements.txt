@@ -6,3 +6,5 @@ pandas
 scipy
 einops
 opencv-python
+loguru
+einops
