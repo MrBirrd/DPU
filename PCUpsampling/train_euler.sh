@@ -1,0 +1,1 @@
+python train_upsampling.py --config configs/st_base.yml --save_dir /cluster/scratch/matvogel/DPU/ --data.data_dir /cluster/scratch/matvogel/ShapeNetCore.v2.PC15k/

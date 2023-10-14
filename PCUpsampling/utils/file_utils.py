@@ -20,8 +20,8 @@ def copy_source(file, output_dir):
 
 
 
-def get_output_dir(prefix, exp_id, cfg):
-    output_dir = os.path.join(prefix, 'output/' + exp_id, cfg.name)
+def get_output_dir(prefix, cfg):
+    output_dir = os.path.join(prefix, cfg.name)
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
     return output_dir

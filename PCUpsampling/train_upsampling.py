@@ -316,12 +316,9 @@ def train(gpu, cfg, output_dir, noises_init=None):
 def main():
     opt = parse_args()
 
-    exp_id = os.path.splitext(os.path.basename(__file__))[0]
-    dir_id = os.path.dirname(__file__)
-
     # generating output dir
-    output_dir = get_output_dir(dir_id, exp_id, opt)
-    output_dir = os.path.join(opt.save_dir, output_dir)
+    output_dir = get_output_dir(opt.save_dir, opt)
+
     os.makedirs(os.path.dirname(output_dir), exist_ok=True)
 
     # save the opt to output_dir
@@ -401,7 +398,6 @@ def parse_args():
     # set name
     if opt.name == "":
         opt.name = os.path.splitext(os.path.basename(opt.config))[0]
-    
     return opt
 
 
