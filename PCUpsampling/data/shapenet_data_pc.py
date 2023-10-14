@@ -2,7 +2,6 @@ import os
 import random
 
 import numpy as np
-import open3d as o3d
 import torch
 from torch.utils.data import Dataset
 
