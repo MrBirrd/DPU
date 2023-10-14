@@ -8,3 +8,6 @@ einops
 opencv-python
 loguru
 einops
+ema-pytorch
+h5py
+lion-pytorch

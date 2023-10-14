@@ -224,20 +224,21 @@ class ArkitScans(Dataset):
         folders = os.listdir(self.root)
         logger.info("Setting up arkit scans dataset")
         folders = [f for f in folders if os.path.isdir(os.path.join(self.root, f))]
-        self.scans = []
+        self.files = []
         for f in tqdm(folders, desc="Loading scans"):
-            if os.path.exists(os.path.join(self.root, f, "arkit.npy")):
-                scan = np.load(os.path.join(self.root, f, "arkit.npy"))
-                self.scans.append(scan)
+            file = os.path.join(self.root, f, "arkit.npy")
+            if os.path.exists(file):
+                self.files.append(file)
 
-        logger.info("Found {} folders with arkit scans".format(len(self.scans)))
+        logger.info("Found {} folders with arkit scans".format(len(self.files)))
         
     def __len__(self):
-        return len(self.scans)
+        return len(self.files)
 
     def __getitem__(self, idx):
         # read ply
-        scan = self.scans[idx]
+        file = self.files[idx]
+        scan = np.load(file)
         
         # subsample if needed
         if self.npoints < scan.shape[0]:
