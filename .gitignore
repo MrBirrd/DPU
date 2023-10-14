@@ -19,3 +19,4 @@ LION
 ShapeNetCore*
 *.sampling_viz
 build
+*.out

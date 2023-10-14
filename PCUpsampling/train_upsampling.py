@@ -21,6 +21,10 @@ import wandb
 import json
 
 def train(gpu, cfg, output_dir, noises_init=None):
+    # set gpu
+    if cfg.distribution_type == "multi":
+        cfg.gpu = gpu
+    
     set_seed(cfg)
     torch.cuda.empty_cache()
 
@@ -44,12 +48,11 @@ def train(gpu, cfg, output_dir, noises_init=None):
             rank=cfg.rank,
         )
 
-        cfg.bs = int(cfg.bs / cfg.ngpus_per_node)
-        cfg.workers = 0
+        cfg.training.bs = int(cfg.training.bs / cfg.ngpus_per_node)
+        cfg.data.workers = 0
 
-        cfg.saveIter = int(cfg.saveIter / cfg.ngpus_per_node)
-        cfg.diagIter = int(cfg.diagIter / cfg.ngpus_per_node)
-        cfg.vizIter = int(cfg.vizIter / cfg.ngpus_per_node)
+        cfg.training.save_interval = int(cfg.training.save_interval/ cfg.ngpus_per_node)
+        cfg.training.viz_interval = int(cfg.training.viz_interval / cfg.ngpus_per_node)
 
     """ data """
     dataloader, _, train_sampler, _ = get_dataloader(cfg)
