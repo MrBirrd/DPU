@@ -4,6 +4,8 @@ import numpy as np
 import open3d as o3d
 from .utils import concat_nn, cut_by_bounding_box, normalize_lowres_hires_pair, random_local_sample
 from loguru import logger
+import os
+from tqdm import tqdm
 
 def ply_to_np(pcd):
     """Converts a ply file to a numpy array with points and colors"""
@@ -202,6 +204,60 @@ class IndoorScenesCut(Dataset):
             'idx': idx,
             'train_points': hires,
             'train_points_lowres': lowres,
+        }
+        
+        return out
+
+
+class ArkitScans(Dataset):
+    def __init__(self, root_dir, npoints=10000, voxel_size=0.03, normalize=False):
+        self.root = root_dir
+        self.npoints = int(npoints)
+        self.voxel_size = voxel_size
+        self.normalize = normalize
+
+
+        # specific paths
+        folders = os.listdir(self.root)
+        logger.info("Setting up arkit scans dataset")
+        folders = [f for f in folders if os.path.isdir(os.path.join(self.root, f))]
+        self.scans = []
+        for f in tqdm(folders, desc="Loading scans"):
+            if os.path.exists(os.path.join(self.root, f, "arkit.npy")):
+                scan = np.load(os.path.join(self.root, f, "arkit.npy"))
+                self.scans.append(scan)
+
+        logger.info("Found {} folders with arkit scans".format(len(self.scans)))
+        
+    def __len__(self):
+        return len(self.scans)
+
+    def __getitem__(self, idx):
+        # read ply
+        scan = self.scans[idx]
+        
+        # subsample if needed
+        if self.npoints < scan.shape[0]:
+            idxs = np.random.choice(scan.shape[0], self.npoints)
+            scan = scan[idxs, :]
+        
+        # substract center
+        center = scan.mean(axis=0)
+        scan -= center
+        # put in unit sphere
+        scan /= np.max(np.abs(scan))
+
+        # upsample if needed
+        if self.npoints > scan.shape[0]:
+            points_difference = self.npoints - scan.shape[0]
+            idxs = np.random.choice(scan.shape[0], points_difference)
+            scan = np.concatenate((scan, scan[idxs, :]), axis=0)
+
+        scan = torch.from_numpy(scan).float()
+
+        out = {
+            'idx': idx,
+            'train_points': scan,
         }
         
         return out

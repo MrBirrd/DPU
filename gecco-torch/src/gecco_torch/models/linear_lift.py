@@ -45,8 +45,6 @@ class LinearLift(nn.Module):
     ) -> tuple[Tensor, list[Tensor] | None]:
 
         n = geometry.shape[-1]
-        m = cond.shape[-1]
-
 
         if cond is not None and self.in_dim == 3:
             geometry = cat([geometry, cond], dim=-1)

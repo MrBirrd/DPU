@@ -9,6 +9,7 @@ from einops import repeat
 from model.diffusion_elucidated import ElucidatedDiffusion
 from model.diffusion_lucid import GaussianDiffusion as LUCID
 from model.diffusion_pointvoxel import PVD
+from model.diffusion_rin import GaussianDiffusion as RINDIFFUSION
 from omegaconf import DictConfig, OmegaConf
 from utils.file_utils import *
 from utils.ops import *
@@ -65,7 +66,9 @@ def train(gpu, cfg, output_dir, noises_init):
         model = ElucidatedDiffusion(args=cfg)
     elif cfg.diffusion.formulation == "LUCID":
         model = LUCID(cfg=cfg)
-
+    elif cfg.diffusion.formulation == "RIN":
+        model = RINDIFFUSION(cfg=cfg)
+        
     if cfg.distribution_type == "multi":  # Multiple processes, single GPU per process
 
         def _transform_(m):
@@ -143,7 +146,7 @@ def train(gpu, cfg, output_dir, noises_init):
 
             x = data["train_points"].transpose(1, 2)
             noises_batch = noises_init[data["idx"]].transpose(1, 2)
-            lowres = data["train_points_lowres"].transpose(1, 2)
+            lowres = data["train_points_lowres"].transpose(1, 2) if "train_points_lowres" in data else None
 
             # move data to gpu
             if cfg.distribution_type == "multi" or (
@@ -151,18 +154,18 @@ def train(gpu, cfg, output_dir, noises_init):
             ):
                 x = x.cuda(gpu)
                 noises_batch = noises_batch.cuda(gpu)
-                lowres = lowres.cuda(gpu)
+                lowres = lowres.cuda(gpu) if lowres is not None else None
             elif cfg.distribution_type == "single":
                 x = x.cuda()
                 noises_batch = noises_batch.cuda()
-                lowres = lowres.cuda()
+                lowres = lowres.cuda() if lowres is not None else None
             
             # forward pass
             loss = model(x, cond=lowres, noises=noises_batch) / cfg.training.accumulation_steps
             ampscaler.scale(loss).backward()
 
         # get gradient norms for debugging and logging
-        if not cfg.model.type == "Mink":
+        if not (cfg.model.type == "Mink" or cfg.model.type == "RIN"):
             netpNorm, netgradNorm = getGradNorm(model)
         else:
             netpNorm, netgradNorm = 0, 0
@@ -201,9 +204,9 @@ def train(gpu, cfg, output_dir, noises_init):
             with torch.no_grad():
                 
                 if cfg.sampling.bs == 1:
-                    cond = lowres[0].unsqueeze(0)
+                    cond = lowres[0].unsqueeze(0) if lowres is not None else None
                 else:
-                    cond = lowres[:cfg.sampling.bs]
+                    cond = lowres[:cfg.sampling.bs] if lowres is not None else None
                 
                 x_gen_eval = model.sample(
                     shape=new_x_chain(x, cfg.sampling.bs).shape,
@@ -215,7 +218,7 @@ def train(gpu, cfg, output_dir, noises_init):
                 x_gen_list = model.sample(
                     shape=new_x_chain(x, 1).shape,
                     device=x.device,
-                    cond=lowres[0].unsqueeze(0),
+                    cond=lowres[0].unsqueeze(0) if lowres is not None else None,
                     freq=0.1,
                     clip_denoised=False,
                 )
@@ -251,13 +254,14 @@ def train(gpu, cfg, output_dir, noises_init):
                 None,
             )
 
-            visualize_pointcloud_batch(
-                "%s/step_%03d_lowres.png" % (outf_syn, step),
-                lowres.transpose(1, 2),
-                None,
-                None,
-                None,
-            )
+            if lowres is not None:
+                visualize_pointcloud_batch(
+                    "%s/step_%03d_lowres.png" % (outf_syn, step),
+                    lowres.transpose(1, 2),
+                    None,
+                    None,
+                    None,
+                )
 
             visualize_pointcloud_batch(
                 "%s/step_%03d_highres.png" % (outf_syn, step),
@@ -266,10 +270,11 @@ def train(gpu, cfg, output_dir, noises_init):
                 None,
                 None,
             )
+            
             # log the saved images to wandb
             samps_eval = wandb.Image("%s/step_%03d_samples_eval.png" % (outf_syn, step))
             samps_eval_all = wandb.Image("%s/step_%03d_samples_eval_all.png" % (outf_syn, step))
-            samps_lowres = wandb.Image("%s/step_%03d_lowres.png" % (outf_syn, step))
+            samps_lowres = wandb.Image("%s/step_%03d_lowres.png" % (outf_syn, step)) if lowres is not None else None
             samps_highres = wandb.Image("%s/step_%03d_highres.png" % (outf_syn, step))
             wandb.log(
                 {

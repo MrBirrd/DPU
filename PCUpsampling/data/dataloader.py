@@ -1,7 +1,9 @@
 import torch
-from .arkit import IndoorScenes, IndoorScenesCut
+from .arkit import IndoorScenes, IndoorScenesCut, ArkitScans
 from .shapenet_data_pc import get_dataset_shapenet
 from loguru import logger
+import os
+from torch.utils.data import Dataset, DataLoader
 
 def save_iter(dataloader, sampler):
     """Return a save iterator over the loader, which supports multi-gpu training using a distributed sampler."""
@@ -46,7 +48,9 @@ def get_dataloader(opt, sampling=False):
         train_dataset = IndoorScenes(opt.data.data_dir, opt.data.npoints, voxel_size=opt.data.voxel_size, normalize=opt.data.normalize)
     elif opt.data.dataset == "IndoorCut":
         train_dataset = IndoorScenesCut(opt.data.data_dir, opt.data.npoints, voxel_size=opt.data.voxel_size, normalize=opt.data.normalize)
-    
+    elif opt.data.dataset == "Arkit":
+        train_dataset = ArkitScans(os.path.join(opt.data.data_dir, "Training"), opt.data.npoints, voxel_size=opt.data.voxel_size, normalize=opt.data.normalize)
+        
     if opt.distribution_type == "multi":
         train_sampler = torch.utils.data.distributed.DistributedSampler(
             train_dataset, num_replicas=opt.world_size, rank=opt.rank
@@ -61,22 +65,24 @@ def get_dataloader(opt, sampling=False):
         train_sampler = None
         test_sampler = None
 
-    train_dataloader = torch.utils.data.DataLoader(
+    train_dataloader = DataLoader(
         train_dataset,
         batch_size=opt.training.bs if not sampling else opt.sampling.bs,
         sampler=train_sampler,
         shuffle=train_sampler is None,
         num_workers=int(opt.data.workers),
+        prefetch_factor=4,
         drop_last=True,
     )
 
     if test_dataset is not None:
-        test_dataloader = torch.utils.data.DataLoader(
+        test_dataloader = DataLoader(
             train_dataset,
             batch_size=opt.training.bs if not sampling else opt.sampling.bs,
             sampler=test_sampler,
             shuffle=False,
             num_workers=int(opt.data.workers),
+            prefetch_factor=2,
             drop_last=False,
         )
     else:

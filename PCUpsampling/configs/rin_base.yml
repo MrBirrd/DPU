@@ -1,0 +1,61 @@
+data:
+  data_dir: ../ShapeNetCore.v2.PC15k
+  dataset: "ShapeNet"
+  workers: 2
+  npoints: 8192
+  nc: 3 # number of features (x, y, z)
+  upsample_frac: 8 # when downsampling from the ground truth
+  batch_size_eval: 1
+  normalize: false # this is normalization to 0-1
+diffusion:
+  timesteps: 1000
+  sampling_timesteps: 50
+  formulation: RIN # PVD ¦ LUCID ¦ EDM
+  objective: pred_v # pred_noise ¦ pred_v ¦ pred_x0
+  schedule: sigmoid # linear ¦ sigmoid ¦ cosine
+  min_snr_gamma: 5
+  sampling_strategy: DDIM
+  ddim_sampling_eta: 0.
+  loss_type: mse
+  dynamic_threshold: true
+  beta_start: 0.0001
+  beta_end: 0.02
+model:
+  type: RIN # Mink ¦ PVD
+  in_dim: 3
+  extra_feature_channels: 3
+  out_dim: 3
+  time_embed_dim: 64
+  use_attention: true
+  dropout: 0.1
+  EMA:
+    decay: 0.999
+  ST:
+    fdim: 128
+    inducers: 256
+    layers: 6
+training:
+  optimizer:
+    type: AdamW
+    lr: 1.e-4
+    beta1: 0.9
+    beta2: 0.999
+    weight_decay: 1.e-7
+  scheduler:
+    type: constant
+    lr_gamma: 0.999
+  grad_clip:
+    enabled: false
+    value: 10.0
+  bs: 16
+  overfit: false
+  amp: true
+  steps: 5000
+  accumulation_steps: 1
+  log_interval: 100 # steps
+  save_interval: 5000
+  viz_interval: 1
+  seed: 42
+sampling:
+  bs: 16
+  num_iter: 1

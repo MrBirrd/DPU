@@ -111,7 +111,7 @@ def sample(gpu, cfg, output_dir, noises_init):
         data = next(ds_iter)
         x = data["train_points"].transpose(1, 2)
         noises_batch = noises_init[data["idx"]].transpose(1, 2)
-        lowres = data["train_points_lowres"].transpose(1, 2)
+        lowres = data["train_points_lowres"].transpose(1, 2) if "train_points_lowres" in data else None
 
 
         if cfg.distribution_type == "multi" or (
@@ -119,11 +119,11 @@ def sample(gpu, cfg, output_dir, noises_init):
         ):
             x = x.cuda(gpu)
             noises_batch = noises_batch.cuda(gpu)
-            lowres = lowres.cuda(gpu)
+            lowres = lowres.cuda(gpu) if lowres is not None else None
         elif cfg.distribution_type == "single":
             x = x.cuda()
             noises_batch = noises_batch.cuda()
-            lowres = lowres.cuda()
+            lowres = lowres.cuda() if lowres is not None else None
 
         with torch.no_grad():
             x_gen_eval = model.sample(
@@ -135,7 +135,7 @@ def sample(gpu, cfg, output_dir, noises_init):
             x_gen_list = model.sample(
                 shape=new_x_chain(x, 1).shape,
                 device=x.device,
-                cond=lowres[0].unsqueeze(0),
+                cond=lowres[0].unsqueeze(0) if lowres is not None else None,
                 freq=0.1,
                 clip_denoised=cfg.diffusion.clip,
             )
@@ -166,13 +166,14 @@ def sample(gpu, cfg, output_dir, noises_init):
                 None,
             )
 
-            visualize_pointcloud_batch(
-                "%s/epoch_%03d_lowres.png" % (out_sampling, sampling_iter),
-                lowres.transpose(1, 2),
-                None,
-                None,
-                None,
-            )
+            if lowres is not None:
+                visualize_pointcloud_batch(
+                    "%s/epoch_%03d_lowres.png" % (out_sampling, sampling_iter),
+                    lowres.transpose(1, 2),
+                    None,
+                    None,
+                    None,
+                )
 
             visualize_pointcloud_batch(
                 "%s/epoch_%03d_highres.png" % (out_sampling, sampling_iter),
@@ -181,6 +182,13 @@ def sample(gpu, cfg, output_dir, noises_init):
                 None,
                 None,
             )
+            
+            # save the clouds
+            np.save("%s/epoch_%03d_samples_eval.npy" % (out_sampling, sampling_iter), x_gen_eval.cpu().numpy())
+            np.save("%s/epoch_%03d_samples_eval_all.npy" % (out_sampling, sampling_iter), x_gen_all.cpu().numpy())
+            np.save("%s/epoch_%03d_highres.npy" % (out_sampling, sampling_iter), x.cpu().numpy())
+            
+            
 
     if cfg.distribution_type == "multi":
         dist.destroy_process_group()
