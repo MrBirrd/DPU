@@ -2,7 +2,11 @@ import torch.nn.functional as F
 import torch
 
 
-def projection_loss(cloud_gt, cloud_pred, grid_size=0.01, range_x=[-1, 1], range_y=[-1, 1]):
+def get_scaling(snr):
+    snr_scaled = torch.log(1 + snr)
+    return snr_scaled
+
+def projection_loss(cloud_gt, cloud_pred, grid_size=0.01, range_x=[-1, 1], range_y=[-1, 1], reduction='none'):
     """
     Computes the projection loss between the ground truth and the predicted pointcloud.
     Pointclouds should be of shape (batch_size, num_points, 3) and normalized to [-1, 1]
@@ -11,7 +15,7 @@ def projection_loss(cloud_gt, cloud_pred, grid_size=0.01, range_x=[-1, 1], range
     gt_hist = soft_histogram(cloud_gt, grid_size=grid_size, range_x=range_x, range_y=range_y)
     pred_hist = soft_histogram(cloud_pred, grid_size=grid_size, range_x=range_x, range_y=range_y)
     
-    loss = F.mse_loss(pred_hist, gt_hist)
+    loss = F.mse_loss(pred_hist, gt_hist, reduction=reduction)
     return loss
 
 def project_to_plane(points):

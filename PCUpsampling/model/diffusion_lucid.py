@@ -9,7 +9,7 @@ from einops import rearrange, reduce
 from torch import nn
 from torch.cuda.amp import autocast
 from tqdm import tqdm
-
+from utils.losses import get_scaling, projection_loss
 try:
     from .unet_mink import MinkUnet
 except:
@@ -120,6 +120,7 @@ class GaussianDiffusion(nn.Module):
         sampling_timesteps = cfg.diffusion.sampling_timesteps
         ddim_sampling_eta = cfg.diffusion.ddim_sampling_eta
         min_snr_gamma = cfg.diffusion.min_snr_gamma
+        self.reg_scale = 1e-3
 
         # setup networks
         if cfg.model.type == "PVD":
@@ -433,13 +434,15 @@ class GaussianDiffusion(nn.Module):
         return img
 
     @autocast(enabled = False)
-    def q_sample(self, x_start, t, noise = None):
+    def q_sample(self, x_start, t, noise = None, return_alphas_simgas = False):
         noise = default(noise, lambda: torch.randn_like(x_start))
-
-        return (
-            extract(self.sqrt_alphas_cumprod, t, x_start.shape) * x_start +
-            extract(self.sqrt_one_minus_alphas_cumprod, t, x_start.shape) * noise
-        )
+        alphas = extract(self.sqrt_alphas_cumprod, t, x_start.shape)
+        sigmas = extract(self.sqrt_one_minus_alphas_cumprod, t, x_start.shape)
+        noised_x = alphas * x_start + sigmas * noise
+        if return_alphas_simgas:
+            return noised_x, alphas, sigmas
+        else:
+            return noised_x
 
     def p_losses(self, x_start, t, cond = None, noise = None, offset_noise_strength = None):
 
@@ -454,8 +457,7 @@ class GaussianDiffusion(nn.Module):
             noise += offset_noise_strength * rearrange(offset_noise, 'b c -> b c 1 1')
 
         # noise sample
-
-        x = self.q_sample(x_start = x_start, t = t, noise = noise)
+        x, alphas, sigmas = self.q_sample(x_start = x_start, t = t, noise = noise, return_alphas_simgas=True)
         
         # if doing self-conditioning, 50% of the time, predict x_start from current set of times
         # and condition with unet with that
@@ -480,11 +482,19 @@ class GaussianDiffusion(nn.Module):
             else:
                 raise ValueError(f'unknown objective {self.objective}')
 
-            loss = F.mse_loss(model_out, target, reduction = 'none')
-            loss = reduce(loss, 'b ... -> b', 'mean')
-
-            loss = loss * extract(self.loss_weight, t, loss.shape)
-            loss = loss.mean()
+            mse_loss = F.mse_loss(model_out, target, reduction = 'none')
+            mse_loss = reduce(mse_loss, 'b ... -> b', 'mean')
+            mse_loss = mse_loss * extract(self.loss_weight, t, mse_loss.shape)
+            mse_loss = mse_loss.mean()
+            
+            # calculate additional projectiom loss
+            proj_loss = projection_loss(target, model_out)
+            proj_loss_scale = get_scaling(alphas/sigmas)
+            proj_loss_scale = torch.where(t >= 800, torch.zeros_like(proj_loss_scale), proj_loss_scale)
+            proj_loss = proj_loss * proj_loss_scale
+            proj_loss = proj_loss.mean()
+            
+            loss = mse_loss + self.reg_scale * proj_loss
         
         return loss
 
