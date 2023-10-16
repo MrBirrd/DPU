@@ -213,11 +213,12 @@ class IndoorScenesCut(Dataset):
 
 
 class ArkitScans(Dataset):
-    def __init__(self, root_dir, npoints=10000, voxel_size=0.03, normalize=False):
+    def __init__(self, root_dir, npoints=10000, voxel_size=0.03, normalize=False, unconditional=False):
         self.root = root_dir
         self.npoints = int(npoints)
         self.voxel_size = voxel_size
         self.normalize = normalize
+        self.unconditional = unconditional
 
 
         # specific paths
@@ -243,26 +244,41 @@ class ArkitScans(Dataset):
         # subsample if needed
         if self.npoints < scan.shape[0]:
             idxs = np.random.choice(scan.shape[0], self.npoints)
-            scan = scan[idxs, :]
-
+            target = scan[idxs, :]
+            
+            idxs = np.random.choice(scan.shape[0], self.npoints)
+            cond = scan[idxs, :]
+        
         # upsample if needed
         if self.npoints > scan.shape[0]:
             points_difference = self.npoints - scan.shape[0]
+            
             idxs = np.random.choice(scan.shape[0], points_difference)
-            scan = np.concatenate((scan, scan[idxs, :]), axis=0)
-
+            target = np.concatenate((scan, scan[idxs, :]), axis=0)
+            
+            idxs = np.random.choice(scan.shape[0], points_difference)
+            cond = np.concatenate((scan, scan[idxs, :]), axis=0)
+            
         # substract center
-        center = scan.mean(axis=0)
-        scan -= center
-        # put in unit sphere
-        scan /= np.max(np.abs(scan))
+        center = target.mean(axis=0)
+        target -= center
+        cond -= center
         
-        scan = torch.from_numpy(scan).float()
-
+        # put in unit sphere
+        max_target = np.max(np.abs(target))
+        target /= max_target   
+        cond /= max_target
+        
+        target = torch.from_numpy(target).float()
+        cond = torch.from_numpy(cond).float()
+        
         out = {
             'idx': idx,
-            'train_points': scan,
+            'train_points': target,
         }
+        
+        if not self.unconditional:
+            out['train_points_lowres'] = cond
         
         return out
 

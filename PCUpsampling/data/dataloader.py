@@ -49,7 +49,13 @@ def get_dataloader(opt, sampling=False):
     elif opt.data.dataset == "IndoorCut":
         train_dataset = IndoorScenesCut(opt.data.data_dir, opt.data.npoints, voxel_size=opt.data.voxel_size, normalize=opt.data.normalize)
     elif opt.data.dataset == "Arkit":
-        train_dataset = ArkitScans(os.path.join(opt.data.data_dir, "Training"), opt.data.npoints, voxel_size=opt.data.voxel_size, normalize=opt.data.normalize)
+        train_dataset = ArkitScans(
+            os.path.join(opt.data.data_dir, "Training"),
+            opt.data.npoints,
+            voxel_size=opt.data.voxel_size,
+            normalize=opt.data.normalize,
+            unconditional=opt.data.unconditional,
+            )
         
     if opt.distribution_type == "multi":
         train_sampler = torch.utils.data.distributed.DistributedSampler(

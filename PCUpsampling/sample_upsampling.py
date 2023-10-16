@@ -16,7 +16,7 @@ from loguru import logger
 import wandb
 #from metrics.evaluation_metrics import compute_all_metrics
 
-def sample(gpu, cfg, output_dir, noises_init):
+def sample(gpu, cfg, output_dir):
     set_seed(cfg)
     torch.cuda.empty_cache()
 
@@ -110,7 +110,7 @@ def sample(gpu, cfg, output_dir, noises_init):
     for sampling_iter in range(cfg.sampling.num_iter):
         data = next(ds_iter)
         x = data["train_points"].transpose(1, 2)
-        noises_batch = noises_init[data["idx"]].transpose(1, 2)
+        #noises_batch = noises_init[data["idx"]].transpose(1, 2)
         lowres = data["train_points_lowres"].transpose(1, 2) if "train_points_lowres" in data else None
 
 
@@ -118,11 +118,11 @@ def sample(gpu, cfg, output_dir, noises_init):
             cfg.distribution_type is None and gpu is not None
         ):
             x = x.cuda(gpu)
-            noises_batch = noises_batch.cuda(gpu)
+            #noises_batch = noises_batch.cuda(gpu)
             lowres = lowres.cuda(gpu) if lowres is not None else None
         elif cfg.distribution_type == "single":
             x = x.cuda()
-            noises_batch = noises_batch.cuda()
+            #noises_batch = noises_batch.cuda()
             lowres = lowres.cuda() if lowres is not None else None
 
         with torch.no_grad():
@@ -196,20 +196,16 @@ def sample(gpu, cfg, output_dir, noises_init):
 def main():
     opt = parse_args()
 
-    """ workaround TODO inspect this for future versions"""
-    loader, _, _, _ = get_dataloader(opt)
-    noises_init = torch.randn(len(loader.dataset), opt.data.npoints, opt.data.nc)
-
     if opt.dist_url == "env://" and opt.world_size == -1:
         opt.world_size = int(os.environ["WORLD_SIZE"])
 
     if opt.distribution_type == "multi":
         opt.ngpus_per_node = torch.cuda.device_count()
         opt.world_size = opt.ngpus_per_node * opt.world_size
-        mp.spawn(sample, nprocs=opt.ngpus_per_node, args=(opt, opt.output_dir, noises_init))
+        mp.spawn(sample, nprocs=opt.ngpus_per_node, args=(opt, opt.output_dir))
     else:
         opt.gpu = None
-        sample(opt.gpu, opt, opt.output_dir, noises_init)
+        sample(opt.gpu, opt, opt.output_dir)
 
 
 def parse_args():
