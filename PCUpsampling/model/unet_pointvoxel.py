@@ -61,8 +61,6 @@ class PVCNN2Unet(nn.Module):
                 nn.Linear(embed_dim, embed_dim),
             )
 
-        self.in_channels = input_dim + extra_feature_channels
-
         (
             sa_layers,
             sa_in_channels,
@@ -90,7 +88,7 @@ class PVCNN2Unet(nn.Module):
         )
 
         # only use extra features in the last fp module
-        sa_in_channels[0] = extra_feature_channels + input_dim - 3
+        sa_in_channels[0] = extra_feature_channels + input_dim - 6 #-6 if we have conditional PC
         
         fp_layers, channels_fp_features = create_pointnet2_fp_modules(
             fp_blocks=self.fp_blocks,
@@ -134,9 +132,7 @@ class PVCNN2Unet(nn.Module):
         return emb
 
     def forward(self, inputs, t, cond = None, x_self_cond = None):
-        # Input: coords: B3N
-        print(inputs.shape)
-        
+        # Input: coords: B3N       
         B = inputs.shape[0]
         coords = inputs[:, : self.input_dim, :].contiguous()
         features = inputs
@@ -160,13 +156,15 @@ class PVCNN2Unet(nn.Module):
             if i > 0 and temb is not None:
                 # TODO: implement a sa_blocks forward function; check if is PVConv layer and kwargs get grid_emb, take as additional input
                 features = torch.cat([features, temb], dim=1)
-                features, coords, temb, _ = sa_blocks((features, coords, temb, cond))
+                features, coords, temb, _ = sa_blocks((features, coords, temb, None))
             else:  # i == 0 or temb is None
-                features, coords, temb, _ = sa_blocks((features, coords, temb, cond))
+                features, coords, temb, _ = sa_blocks((features, coords, temb, None))
 
         in_features_list[0] = inputs[:, 3:, :].contiguous()
+        
         if self.global_att is not None:
             features = self.global_att(features)
+        
         for fp_idx, fp_blocks in enumerate(self.fp_layers):
             if temb is not None:
                 features, coords, temb, _ = fp_blocks(
@@ -176,7 +174,7 @@ class PVCNN2Unet(nn.Module):
                         torch.cat([features, temb], dim=1),
                         in_features_list[-1 - fp_idx],
                         temb,
-                        cond,
+                        None,
                     )
                 )
             else:
@@ -187,13 +185,13 @@ class PVCNN2Unet(nn.Module):
                         features,
                         in_features_list[-1 - fp_idx],
                         temb,
-                        cond,
+                        None,
                     )
                 )
 
         for l in self.classifier:
             if isinstance(l, SharedMLP):
-                features = l(features, cond)
+                features = l(features, None)
             else:
                 features = l(features)
         return features
