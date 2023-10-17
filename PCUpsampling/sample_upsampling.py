@@ -13,7 +13,6 @@ from utils.file_utils import *
 from utils.ops import *
 from utils.visualize import *
 from loguru import logger
-import wandb
 #from metrics.evaluation_metrics import compute_all_metrics
 
 def sample(gpu, cfg, output_dir):
@@ -25,7 +24,18 @@ def sample(gpu, cfg, output_dir):
     else:
         is_main_process = True
     if is_main_process:
-        scheduler_info = "_".join([cfg.diffusion.sampling_strategy, str(cfg.diffusion.sampling_timesteps), f"dts_{cfg.diffusion.dynamic_threshold}"])
+        scheduler_info = "_".join([cfg.diffusion.sampling_strategy, str(cfg.diffusion.sampling_timesteps)])
+        
+        # add clipping information to scheduler info
+        if cfg.diffusion.clip:
+            if cfg.diffusion.dynamic_threshold:
+                clip = "_clip_dynamic"
+            else:
+                clip = "_clip"
+        else:
+            clip = ""
+        scheduler_info += clip
+        
         out_sampling = os.path.join(output_dir, "sampling", scheduler_info)
         #os.makedirs(output_dir, out_sampling, exist_ok=True)
 
@@ -50,7 +60,7 @@ def sample(gpu, cfg, output_dir):
         cfg.vizIter = int(cfg.vizIter / cfg.ngpus_per_node)
 
     """ data """
-    dataloader, _, train_sampler, _ = get_dataloader(cfg, sampling=True)
+    dataloader, *_ = get_dataloader(cfg, sampling=True)
 
     """
     create networks
@@ -93,7 +103,6 @@ def sample(gpu, cfg, output_dir):
 
     if is_main_process:
         logger.info(cfg)
-        wandb.init(project="pvdup", config=cfg, entity="matvogel")
 
     if cfg.model_path != "":
         ckpt = torch.load(cfg.model_path)
@@ -111,8 +120,12 @@ def sample(gpu, cfg, output_dir):
         data = next(ds_iter)
         x = data["train_points"].transpose(1, 2)
         #noises_batch = noises_init[data["idx"]].transpose(1, 2)
-        lowres = data["train_points_lowres"].transpose(1, 2) if "train_points_lowres" in data else None
+        lowres = data["train_points_lowres"].transpose(1, 2) if "train_points_lowres" in data.keys() else None
 
+        print("lowres is none: ", lowres is None)
+        if lowres is None:
+            print(data.keys())
+            exit(0)
 
         if cfg.distribution_type == "multi" or (
             cfg.distribution_type is None and gpu is not None
@@ -187,8 +200,6 @@ def sample(gpu, cfg, output_dir):
             np.save("%s/epoch_%03d_samples_eval.npy" % (out_sampling, sampling_iter), x_gen_eval.cpu().numpy())
             np.save("%s/epoch_%03d_samples_eval_all.npy" % (out_sampling, sampling_iter), x_gen_all.cpu().numpy())
             np.save("%s/epoch_%03d_highres.npy" % (out_sampling, sampling_iter), x.cpu().numpy())
-            
-            
 
     if cfg.distribution_type == "multi":
         dist.destroy_process_group()
@@ -257,7 +268,7 @@ def parse_args():
                     value = float(value)
                 # handle bools
                 elif value in ['True', 'False', 'true', 'false']:
-                    value = value.capitalize() == 'True'
+                    value = value.lower() == 'true'
                 else:
                     value = int(value)
             except ValueError:

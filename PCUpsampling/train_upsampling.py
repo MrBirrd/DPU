@@ -98,8 +98,8 @@ def train(gpu, cfg, output_dir, noises_init=None):
     if is_main_process:
         pretty_cfg = json.dumps(OmegaConf.to_container(cfg, resolve=True), indent=4, sort_keys=False)
         logger.info("Configuration used:\n{}", pretty_cfg)
-        wandb.init(project="pvdup", config=cfg, entity="matvogel")
-
+        wandb.init(project="pvdup", config=cfg, entity="matvogel", settings=wandb.Settings(start_method='fork'))
+        
     if cfg.training.optimizer.type == "Adam":
         optimizer = optim.Adam(
             model.parameters(), lr=cfg.training.optimizer.lr, weight_decay=cfg.training.optimizer.weight_decay, betas=(cfg.training.optimizer.beta1, cfg.training.optimizer.beta2)
@@ -326,10 +326,6 @@ def main():
 
     # save the opt to output_dir
     OmegaConf.save(opt, os.path.join(output_dir, "opt.yaml"))
-    
-    #logger.remove() # remove stderr handler
-    #logger.add(sys.stdout, format="{time} {level} {message}", level="INFO")
-    #logger.add("file_{time}.log")
 
     if opt.dist_url == "env://" and opt.world_size == -1:
         opt.world_size = int(os.environ["WORLD_SIZE"])

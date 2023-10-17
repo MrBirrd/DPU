@@ -120,19 +120,19 @@ class GaussianDiffusion(nn.Module):
         sampling_timesteps = cfg.diffusion.sampling_timesteps
         ddim_sampling_eta = cfg.diffusion.ddim_sampling_eta
         min_snr_gamma = cfg.diffusion.min_snr_gamma
-        self.reg_scale = 1e-3
+        self.reg_scale = cfg.diffusion.reg_scale
 
         # setup networks
         if cfg.model.type == "PVD":
             self.model = PVCLion(
-                out_dim=cfg.nc,
-                input_dim=cfg.nc,
-                npoints=cfg.npoints,
-                embed_dim=cfg.embed_dim,
-                use_att=cfg.attention,
-                dropout=cfg.dropout,
-                extra_feature_channels=cfg.mogel.extra_feature_channels,
-            )
+                out_dim=cfg.model.out_dim,
+                input_dim=cfg.model.in_dim,
+                npoints=cfg.data.npoints,
+                embed_dim=cfg.model.time_embed_dim,
+                use_att=cfg.model.use_attention,
+                dropout=cfg.model.dropout,
+                extra_feature_channels=cfg.model.extra_feature_channels,
+            ).cuda()
         elif cfg.model.type == "Mink":
             self.model = MinkUnet(
                 dim=cfg.model.time_embed_dim, D=1, out_dim=cfg.model.out_dim, in_channels=cfg.model.in_dim + cfg.model.extra_feature_channels, dim_mults=(1, 2, 4, 8), use_attention=cfg.model.use_attention
@@ -288,9 +288,15 @@ class GaussianDiffusion(nn.Module):
     def model_predictions(self, x, t, cond=None, x_self_cond = None, clip_x_start = False, rederive_pred_noise = True):
         model_output = self.model(x, t, cond=cond, x_self_cond = x_self_cond)
 
-        # setup clipping
+        pred_noise, x_start = self.to_noise_and_xstart(model_output, x, t, clip_x_start=clip_x_start, rederive_pred_noise=rederive_pred_noise)
+
+        return ModelPrediction(pred_noise, x_start)
+
+    def to_noise_and_xstart(self, model_output, x, t, clip_x_start=False, rederive_pred_noise=False):
+        
+         # setup clipping
         if not self.dynamic_threshold:
-            maybe_clip = partial(torch.clamp, min = -1., max = 1.) if clip_x_start else identity
+            maybe_clip = partial(torch.clamp, min = -3., max = 3.) if clip_x_start else identity
         else:
             maybe_clip = dynamic_threshold_percentile if clip_x_start else identity
 
@@ -312,9 +318,9 @@ class GaussianDiffusion(nn.Module):
             x_start = self.predict_start_from_v(x, t, v)
             x_start = maybe_clip(x_start)
             pred_noise = self.predict_noise_from_start(x, t, x_start)
-
-        return ModelPrediction(pred_noise, x_start)
-
+        
+        return pred_noise, x_start
+    
     def p_mean_variance(self, x, t, cond=None, x_self_cond = None, clip_denoised = False):
         preds = self.model_predictions(x, t, cond=cond, x_self_cond=x_self_cond, clip_x_start=clip_denoised)
         x_start = preds.pred_x_start
@@ -411,6 +417,11 @@ class GaussianDiffusion(nn.Module):
             save_every = 0
         
         sample_fn = self.p_sample_loop if not self.is_ddim_sampling else self.ddim_sample
+        
+        # fix ddpm steps to 1000
+        if not self.is_ddim_sampling:
+            self.sampling_timesteps = 1000
+        
         return sample_fn(shape, cond = cond, save_every = save_every, clip = clip, *args, **kwargs)
 
     @torch.inference_mode()
@@ -486,15 +497,17 @@ class GaussianDiffusion(nn.Module):
             mse_loss = reduce(mse_loss, 'b ... -> b', 'mean')
             mse_loss = mse_loss * extract(self.loss_weight, t, mse_loss.shape)
             mse_loss = mse_loss.mean()
+            loss = mse_loss
             
-            # calculate additional projectiom loss
-            proj_loss = projection_loss(target, model_out)
-            proj_loss_scale = get_scaling(alphas/sigmas)
-            proj_loss_scale = torch.where(t >= 800, torch.zeros_like(proj_loss_scale), proj_loss_scale)
-            proj_loss = proj_loss * proj_loss_scale
-            proj_loss = proj_loss.mean()
-            
-            loss = mse_loss + self.reg_scale * proj_loss
+            if self.reg_scale > 0:
+                # calculate additional projectiom loss on the x0
+                model_pred_noise, model_pred_x0 = self.to_noise_and_xstart(model_out, x, t, clip_x_start=False, rederive_pred_noise=False)
+                proj_loss = projection_loss(x_start, model_pred_x0)
+                proj_loss_scale = get_scaling(alphas/sigmas)
+                proj_loss_scale = torch.where(t >= 800, torch.zeros_like(proj_loss_scale), proj_loss_scale)
+                proj_loss = proj_loss * proj_loss_scale
+                proj_loss = proj_loss.mean()
+                loss += self.reg_scale * proj_loss
         
         return loss
 

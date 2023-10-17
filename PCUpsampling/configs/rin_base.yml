@@ -20,6 +20,7 @@ diffusion:
   dynamic_threshold: true
   beta_start: 0.0001
   beta_end: 0.02
+  reg_scale: 0
 model:
   type: RIN # Mink ¦ PVD
   in_dim: 3

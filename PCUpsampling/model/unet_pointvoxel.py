@@ -24,9 +24,9 @@ class PVCNN2Unet(nn.Module):
 
     def __init__(
         self,
-        out_dim,
-        embed_dim,
-        use_att,
+        out_dim=3,
+        embed_dim=64,
+        use_att=True,
         dropout=0.1,
         extra_feature_channels=3,
         input_dim=3,
@@ -61,7 +61,7 @@ class PVCNN2Unet(nn.Module):
                 nn.Linear(embed_dim, embed_dim),
             )
 
-        self.in_channels = extra_feature_channels + 3
+        self.in_channels = input_dim + extra_feature_channels
 
         (
             sa_layers,
@@ -91,6 +91,7 @@ class PVCNN2Unet(nn.Module):
 
         # only use extra features in the last fp module
         sa_in_channels[0] = extra_feature_channels + input_dim - 3
+        
         fp_layers, channels_fp_features = create_pointnet2_fp_modules(
             fp_blocks=self.fp_blocks,
             in_channels=channels_sa_features,
@@ -134,6 +135,8 @@ class PVCNN2Unet(nn.Module):
 
     def forward(self, inputs, t, cond = None, x_self_cond = None):
         # Input: coords: B3N
+        print(inputs.shape)
+        
         B = inputs.shape[0]
         coords = inputs[:, : self.input_dim, :].contiguous()
         features = inputs
@@ -222,19 +225,37 @@ class PVCLion(PVCNN2Unet):
 
     def __init__(
         self,
-        out_dim,
-        input_dim,
-        embed_dim,
-        npoints,
-        use_att,
-        dropout,
-        extra_feature_channels=3,
-        width_multiplier=1,
-        voxel_resolution_multiplier=1,
-        self_cond=False,
+        out_dim: int = 3,
+        input_dim: int = 3,
+        embed_dim: int = 64,
+        npoints: int = 2048,
+        use_att: bool = True,
+        dropout: float = 0.1,
+        extra_feature_channels: int = 3,
+        width_multiplier: int = 1,
+        voxel_resolution_multiplier: int = 1,
+        self_cond:bool = False,
     ):
-        sa_blocks, fp_blocks = get_sa_fp_parameters(npoints=npoints)
-
+        sa_blocks = [
+        # conv vfg  , sa config
+        (
+            (32, 2, 32),
+            (1024, 0.1, 32, (32, 64)),
+        ),  # out channels, num blocks, voxel resolution | num_centers, radius, num_neighbors, out_channels
+        ((64, 3, 16), (256, 0.2, 32, (64, 128))),
+        ((128, 3, 8), (64, 0.4, 32, (128, 256))),
+        (None, (16, 0.8, 32, (256, 256, 512))),
+        ]
+        fp_blocks = [
+            (
+                (256, 256),
+                (256, 3, 8),
+            ),  # in_channels, out_channels X | out_channels, num_blocks, voxel_resolution
+            ((256, 256), (256, 3, 8)),
+            ((256, 128), (128, 2, 16)),
+            ((128, 128, 64), (64, 2, 32)),
+        ]
+        
         super().__init__(
             out_dim=out_dim,
             input_dim=input_dim,

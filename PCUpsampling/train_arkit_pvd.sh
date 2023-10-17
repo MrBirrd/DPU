@@ -10,4 +10,4 @@
 
 module load python_gpu/3.10.4
 
-python train_upsampling.py --name st_arkit_pc2pc --distribution_type multi --config configs/st_arkit.yml --save_dir /cluster/scratch/matvogel/DPU/
+python train_upsampling.py --name pvd_arkit_pc2pc --distribution_type multi --config configs/pvd_arkit.yml --save_dir /cluster/scratch/matvogel/DPU/
