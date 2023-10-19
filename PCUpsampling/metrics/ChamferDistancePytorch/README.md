@@ -1,3 +1,6 @@
+* adapted from https://github.com/ThibaultGROUEIX/ChamferDistancePytorch 
+
+----------------------------------
 # Pytorch Chamfer Distance.
 
 Include a **CUDA** version, and a **PYTHON** version with pytorch standard operations.

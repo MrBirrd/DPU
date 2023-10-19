@@ -1,9 +1,10 @@
 import torch
-from .arkit import IndoorScenes, IndoorScenesCut, ArkitScans
-from .shapenet_data_pc import get_dataset_shapenet
+from .arkitscenes import IndoorScenes, IndoorScenesCut, ArkitScans
+from .shapenet import get_dataset_shapenet
 from loguru import logger
 import os
 from torch.utils.data import Dataset, DataLoader
+
 
 def save_iter(dataloader, sampler):
     """Return a save iterator over the loader, which supports multi-gpu training using a distributed sampler."""
@@ -42,12 +43,14 @@ def get_dataloader(opt, sampling=False):
             overfit=opt.training.overfit,
         )
     elif opt.data.dataset == "Indoor":
-        logger.info(
-            "Loading IndoorScenes dataset, which is currently only for overfitting on one scene!"
+        logger.info("Loading IndoorScenes dataset, which is currently only for overfitting on one scene!")
+        train_dataset = IndoorScenes(
+            opt.data.data_dir, opt.data.npoints, voxel_size=opt.data.voxel_size, normalize=opt.data.normalize
         )
-        train_dataset = IndoorScenes(opt.data.data_dir, opt.data.npoints, voxel_size=opt.data.voxel_size, normalize=opt.data.normalize)
     elif opt.data.dataset == "IndoorCut":
-        train_dataset = IndoorScenesCut(opt.data.data_dir, opt.data.npoints, voxel_size=opt.data.voxel_size, normalize=opt.data.normalize)
+        train_dataset = IndoorScenesCut(
+            opt.data.data_dir, opt.data.npoints, voxel_size=opt.data.voxel_size, normalize=opt.data.normalize
+        )
     elif opt.data.dataset == "Arkit":
         train_dataset = ArkitScans(
             os.path.join(opt.data.data_dir, "Training"),
@@ -55,8 +58,8 @@ def get_dataloader(opt, sampling=False):
             voxel_size=opt.data.voxel_size,
             normalize=opt.data.normalize,
             unconditional=opt.data.unconditional,
-            )
-        
+        )
+
     if opt.distribution_type == "multi":
         train_sampler = torch.utils.data.distributed.DistributedSampler(
             train_dataset, num_replicas=opt.world_size, rank=opt.rank

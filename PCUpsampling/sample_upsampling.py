@@ -13,7 +13,9 @@ from utils.file_utils import *
 from utils.ops import *
 from utils.visualize import *
 from loguru import logger
-#from metrics.evaluation_metrics import compute_all_metrics
+
+# from metrics.evaluation_metrics import compute_all_metrics
+
 
 def sample(gpu, cfg, output_dir):
     set_seed(cfg)
@@ -25,7 +27,7 @@ def sample(gpu, cfg, output_dir):
         is_main_process = True
     if is_main_process:
         scheduler_info = "_".join([cfg.diffusion.sampling_strategy, str(cfg.diffusion.sampling_timesteps)])
-        
+
         # add clipping information to scheduler info
         if cfg.diffusion.clip:
             if cfg.diffusion.dynamic_threshold:
@@ -35,9 +37,9 @@ def sample(gpu, cfg, output_dir):
         else:
             clip = ""
         scheduler_info += clip
-        
+
         out_sampling = os.path.join(output_dir, "sampling", scheduler_info)
-        #os.makedirs(output_dir, out_sampling, exist_ok=True)
+        # os.makedirs(output_dir, out_sampling, exist_ok=True)
 
     if cfg.distribution_type == "multi":
         if cfg.dist_url == "env://" and cfg.rank == -1:
@@ -119,7 +121,7 @@ def sample(gpu, cfg, output_dir):
     for sampling_iter in range(cfg.sampling.num_iter):
         data = next(ds_iter)
         x = data["train_points"].transpose(1, 2)
-        #noises_batch = noises_init[data["idx"]].transpose(1, 2)
+        # noises_batch = noises_init[data["idx"]].transpose(1, 2)
         lowres = data["train_points_lowres"].transpose(1, 2) if "train_points_lowres" in data.keys() else None
 
         print("lowres is none: ", lowres is None)
@@ -127,15 +129,13 @@ def sample(gpu, cfg, output_dir):
             print(data.keys())
             exit(0)
 
-        if cfg.distribution_type == "multi" or (
-            cfg.distribution_type is None and gpu is not None
-        ):
+        if cfg.distribution_type == "multi" or (cfg.distribution_type is None and gpu is not None):
             x = x.cuda(gpu)
-            #noises_batch = noises_batch.cuda(gpu)
+            # noises_batch = noises_batch.cuda(gpu)
             lowres = lowres.cuda(gpu) if lowres is not None else None
         elif cfg.distribution_type == "single":
             x = x.cuda()
-            #noises_batch = noises_batch.cuda()
+            # noises_batch = noises_batch.cuda()
             lowres = lowres.cuda() if lowres is not None else None
 
         with torch.no_grad():
@@ -158,11 +158,11 @@ def sample(gpu, cfg, output_dir):
             gen_eval_range = [x_gen_eval.min().item(), x_gen_eval.max().item()]
             print("gen_stats: ", gen_stats)
             print("gen_eval_range: ", gen_eval_range)
-            
+
             # calculate metrics
-            #metrics = compute_all_metrics(x_gen_eval, gt_multiple, cfg.sampling.bs)
-            #print("Metrics:", metrics)
-            
+            # metrics = compute_all_metrics(x_gen_eval, gt_multiple, cfg.sampling.bs)
+            # print("Metrics:", metrics)
+
             visualize_pointcloud_batch(
                 "%s/epoch_%03d_samples_eval.png" % (out_sampling, sampling_iter),
                 x_gen_eval.transpose(1, 2),
@@ -195,7 +195,7 @@ def sample(gpu, cfg, output_dir):
                 None,
                 None,
             )
-            
+
             # save the clouds
             np.save("%s/epoch_%03d_samples_eval.npy" % (out_sampling, sampling_iter), x_gen_eval.cpu().numpy())
             np.save("%s/epoch_%03d_samples_eval_all.npy" % (out_sampling, sampling_iter), x_gen_all.cpu().numpy())
@@ -203,6 +203,7 @@ def sample(gpu, cfg, output_dir):
 
     if cfg.distribution_type == "multi":
         dist.destroy_process_group()
+
 
 def main():
     opt = parse_args()
@@ -222,7 +223,7 @@ def main():
 def parse_args():
     # make parser which accepts optinal arguments
     parser = argparse.ArgumentParser()
-    #parser.add_argument("--config", type=str, help="Path to the config file.")
+    # parser.add_argument("--config", type=str, help="Path to the config file.")
     parser.add_argument("--name", type=str, default="", help="Name of the experiment.")
     parser.add_argument("--save_dir", default=".")
     parser.add_argument("--model_path", default="", help="path to model (to continue training)")
@@ -259,16 +260,16 @@ def parse_args():
 
     if remaining_argv:
         for i in range(0, len(remaining_argv), 2):
-            key = remaining_argv[i].lstrip('--')
+            key = remaining_argv[i].lstrip("--")
             value = remaining_argv[i + 1]
-            
+
             # Convert numerical strings to appropriate number types handling scientific notation
             try:
-                if '.' in remaining_argv[i + 1] or 'e' in remaining_argv[i + 1]:
+                if "." in remaining_argv[i + 1] or "e" in remaining_argv[i + 1]:
                     value = float(value)
                 # handle bools
-                elif value in ['True', 'False', 'true', 'false']:
-                    value = value.lower() == 'true'
+                elif value in ["True", "False", "true", "false"]:
+                    value = value.lower() == "true"
                 else:
                     value = int(value)
             except ValueError:
@@ -276,7 +277,7 @@ def parse_args():
 
             # Update the config using OmegaConf's select and set methods
             OmegaConf.update(opt, key, value, merge=False)
-    
+
     return opt
 
 

@@ -1,30 +1,22 @@
 import torch
-# from backend import emd_cuda_dynamic as emd_cuda # jit compiling 
+#import emd_cuda
+# from evaluation.PyTorchEMD import emd_cuda 
 from .backend import emd_cuda_dynamic as emd_cuda 
-from torch.cuda.amp import autocast, GradScaler, custom_fwd, custom_bwd 
 
-class EarthMoverDistanceFunction(torch.autograd.Function):
+
+class EarthMoverDistanceFunctionNoGrad(torch.autograd.Function):
     @staticmethod
-    @custom_fwd(cast_inputs=torch.float32) 
     def forward(ctx, xyz1, xyz2):
         xyz1 = xyz1.contiguous()
         xyz2 = xyz2.contiguous()
         assert xyz1.is_cuda and xyz2.is_cuda, "Only support cuda currently."
         match = emd_cuda.approxmatch_forward(xyz1, xyz2)
         cost = emd_cuda.matchcost_forward(xyz1, xyz2, match)
-        ctx.save_for_backward(xyz1, xyz2, match)
+        # ctx.save_for_backward(xyz1, xyz2, match)
         return cost
 
-    @staticmethod
-    @custom_bwd
-    def backward(ctx, grad_cost):
-        xyz1, xyz2, match = ctx.saved_tensors
-        grad_cost = grad_cost.contiguous()
-        grad_xyz1, grad_xyz2 = emd_cuda.matchcost_backward(grad_cost, xyz1, xyz2, match)
-        return grad_xyz1, grad_xyz2
 
-
-def earth_mover_distance(xyz1, xyz2, transpose=True):
+def earth_mover_distance_nograd(xyz1, xyz2, transpose=True):
     """Earth Mover Distance (Approx)
 
     Args:
@@ -47,6 +39,7 @@ def earth_mover_distance(xyz1, xyz2, transpose=True):
     # xyz1: B,N,3
     N = xyz1.shape[1]
     assert(xyz1.shape[-1] == 3), f'require it to be B,N,3; get: {xyz1.shape}'
-    cost = EarthMoverDistanceFunction.apply(xyz1, xyz2) / float(N)
+    #print('xyz1: ', xyz1.shape, xyz2.shape, xyz1.min(), xyz1.max(), xyz2.min(), xyz2.max())
+    cost = EarthMoverDistanceFunctionNoGrad.apply(xyz1, xyz2) / float(N)
     return cost
 

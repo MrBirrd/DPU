@@ -5,7 +5,7 @@ import modules.functional as F
 from modules.ball_query import BallQuery
 from modules.shared_mlp import SharedMLP
 
-__all__ = ['PointNetAModule', 'PointNetSAModule', 'PointNetFPModule']
+__all__ = ["PointNetAModule", "PointNetSAModule", "PointNetFPModule"]
 
 
 class PointNetAModule(nn.Module):
@@ -20,8 +20,9 @@ class PointNetAModule(nn.Module):
         total_out_channels = 0
         for _out_channels in out_channels:
             mlps.append(
-                SharedMLP(in_channels=in_channels + (3 if include_coordinates else 0),
-                          out_channels=_out_channels, dim=1)
+                SharedMLP(
+                    in_channels=in_channels + (3 if include_coordinates else 0), out_channels=_out_channels, dim=1
+                )
             )
             total_out_channels += _out_channels[-1]
 
@@ -43,7 +44,7 @@ class PointNetAModule(nn.Module):
             return self.mlps[0](features).max(dim=-1, keepdim=True).values, coords
 
     def extra_repr(self):
-        return f'out_channels={self.out_channels}, include_coordinates={self.include_coordinates}'
+        return f"out_channels={self.out_channels}, include_coordinates={self.include_coordinates}"
 
 
 class PointNetSAModule(nn.Module):
@@ -67,8 +68,9 @@ class PointNetSAModule(nn.Module):
                 BallQuery(radius=_radius, num_neighbors=_num_neighbors, include_coordinates=include_coordinates)
             )
             mlps.append(
-                SharedMLP(in_channels=in_channels + (3 if include_coordinates else 0),
-                          out_channels=_out_channels, dim=2)
+                SharedMLP(
+                    in_channels=in_channels + (3 if include_coordinates else 0), out_channels=_out_channels, dim=2
+                )
             )
             total_out_channels += _out_channels[-1]
 
@@ -90,7 +92,7 @@ class PointNetSAModule(nn.Module):
             return features_list[0], centers_coords, temb.max(dim=-1).values if temb.shape[1] > 0 else temb
 
     def extra_repr(self):
-        return f'num_centers={self.num_centers}, out_channels={self.out_channels}'
+        return f"num_centers={self.num_centers}, out_channels={self.out_channels}"
 
 
 class PointNetFPModule(nn.Module):

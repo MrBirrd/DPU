@@ -178,27 +178,21 @@ class Uniform15KPC(Dataset):
             B, N = self.all_points.shape[:2]
             self.all_points_mean = self.all_points.mean(axis=1).reshape(B, 1, input_dim)
             if normalize_std_per_axis:
-                self.all_points_std = (
-                    self.all_points.reshape(B, N, -1).std(axis=1).reshape(B, 1, input_dim)
-                )
+                self.all_points_std = self.all_points.reshape(B, N, -1).std(axis=1).reshape(B, 1, input_dim)
             else:
                 self.all_points_std = self.all_points.reshape(B, -1).std(axis=1).reshape(B, 1, 1)
         elif self.box_per_shape:
             B, N = self.all_points.shape[:2]
             self.all_points_mean = self.all_points.min(axis=1).reshape(B, 1, input_dim)
 
-            self.all_points_std = self.all_points.max(axis=1).reshape(
-                B, 1, input_dim
-            ) - self.all_points.min(axis=1).reshape(B, 1, input_dim)
+            self.all_points_std = self.all_points.max(axis=1).reshape(B, 1, input_dim) - self.all_points.min(
+                axis=1
+            ).reshape(B, 1, input_dim)
 
         else:  # normalize across the dataset
-            self.all_points_mean = (
-                self.all_points.reshape(-1, input_dim).mean(axis=0).reshape(1, 1, input_dim)
-            )
+            self.all_points_mean = self.all_points.reshape(-1, input_dim).mean(axis=0).reshape(1, 1, input_dim)
             if normalize_std_per_axis:
-                self.all_points_std = (
-                    self.all_points.reshape(-1, input_dim).std(axis=0).reshape(1, 1, input_dim)
-                )
+                self.all_points_std = self.all_points.reshape(-1, input_dim).std(axis=0).reshape(1, 1, input_dim)
             else:
                 self.all_points_std = self.all_points.reshape(-1).std(axis=0).reshape(1, 1, 1)
 
@@ -211,9 +205,7 @@ class Uniform15KPC(Dataset):
         self.tr_sample_size = min(10000, tr_sample_size)
         self.te_sample_size = min(5000, te_sample_size)
         print("Total number of data:%d" % len(self.train_points))
-        print(
-            "Min number of points: (train)%d (test)%d" % (self.tr_sample_size, self.te_sample_size)
-        )
+        print("Min number of points: (train)%d (test)%d" % (self.tr_sample_size, self.te_sample_size))
         assert self.scale == 1, "Scale (!= 1) is deprecated"
 
     def get_pc_stats(self, idx):

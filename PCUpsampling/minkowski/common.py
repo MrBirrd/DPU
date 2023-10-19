@@ -32,7 +32,7 @@ def get_norm(norm_type, n_channels, D, bn_momentum=0.1):
     else:
         raise ValueError(f"Norm type: {norm_type} not supported")
 
-        
+
 class AdaGN(nn.Module):
     def __init__(
         self,
@@ -83,7 +83,7 @@ class AdaGN(nn.Module):
                 out,
                 coordinate_map_key=x_sparse.coordinate_map_key,
                 coordinate_manager=x_sparse.coordinate_manager,
-            ) 
+            )
 
 
 class ConvType(Enum):
@@ -191,9 +191,7 @@ def conv(
     D=-1,
 ):
     assert D > 0, "Dimension must be a positive integer"
-    region_type, axis_types, kernel_size = convert_conv_type(
-        conv_type, kernel_size, D
-    )
+    region_type, axis_types, kernel_size = convert_conv_type(conv_type, kernel_size, D)
     kernel_generator = ME.KernelGenerator(
         kernel_size,
         stride,
@@ -226,9 +224,7 @@ def conv_tr(
     D=-1,
 ):
     assert D > 0, "Dimension must be a positive integer"
-    region_type, axis_types, kernel_size = convert_conv_type(
-        conv_type, kernel_size, D
-    )
+    region_type, axis_types, kernel_size = convert_conv_type(conv_type, kernel_size, D)
     kernel_generator = ME.KernelGenerator(
         kernel_size,
         upsample_stride,
@@ -259,9 +255,7 @@ def avg_pool(
     D=-1,
 ):
     assert D > 0, "Dimension must be a positive integer"
-    region_type, axis_types, kernel_size = convert_conv_type(
-        conv_type, kernel_size, D
-    )
+    region_type, axis_types, kernel_size = convert_conv_type(conv_type, kernel_size, D)
     kernel_generator = ME.KernelGenerator(
         kernel_size,
         stride,
@@ -280,13 +274,9 @@ def avg_pool(
     )
 
 
-def avg_unpool(
-    kernel_size, stride=1, dilation=1, conv_type=ConvType.HYPERCUBE, D=-1
-):
+def avg_unpool(kernel_size, stride=1, dilation=1, conv_type=ConvType.HYPERCUBE, D=-1):
     assert D > 0, "Dimension must be a positive integer"
-    region_type, axis_types, kernel_size = convert_conv_type(
-        conv_type, kernel_size, D
-    )
+    region_type, axis_types, kernel_size = convert_conv_type(conv_type, kernel_size, D)
     kernel_generator = ME.KernelGenerator(
         kernel_size,
         stride,
@@ -305,13 +295,9 @@ def avg_unpool(
     )
 
 
-def sum_pool(
-    kernel_size, stride=1, dilation=1, conv_type=ConvType.HYPERCUBE, D=-1
-):
+def sum_pool(kernel_size, stride=1, dilation=1, conv_type=ConvType.HYPERCUBE, D=-1):
     assert D > 0, "Dimension must be a positive integer"
-    region_type, axis_types, kernel_size = convert_conv_type(
-        conv_type, kernel_size, D
-    )
+    region_type, axis_types, kernel_size = convert_conv_type(conv_type, kernel_size, D)
     kernel_generator = ME.KernelGenerator(
         kernel_size,
         stride,

@@ -8,11 +8,44 @@ from scipy import spatial
 import random
 
 
+def ply_to_np(pcd):
+    """Converts a ply file to a numpy array with points and colors"""
+    points = np.asarray(pcd.points)
+    colors = np.asarray(pcd.colors)
+    stacked = np.hstack((points, colors))
+    return stacked
+
+
+def apply_transform(array, transformation):
+    """Transforms a numpy array of points with a transformation matrix"""
+    ones = np.ones((array.shape[0], 1))
+    stacked = np.hstack((array, ones))
+    transformed = np.dot(transformation, stacked.T)
+    transformed = transformed.T[..., :3]
+    return transformed
+
+
+def fp_to_color(array):
+    colors = array * 255
+    colors = colors.astype(np.uint8)
+    return colors
+
+
+def inverse_T(transformation):
+    R = transformation[:3, :3]
+    t = transformation[:3, 3]
+    inv = np.zeros((4, 4))
+    inv[:3, :3] = R.T
+    inv[:3, 3] = -R.T @ t
+    inv[3, 3] = 1
+    return inv
+
 class FeatureVoxelConcatenation(nn.Module):
     """
     FeatureVoxelConcatenation
     assumes tensors of shape (B, C, N)
     """
+
     def __init__(self, resolution, normalize=True):
         super().__init__()
         self.resolution = resolution
@@ -43,8 +76,8 @@ def random_local_sample(x1, x2, k=None, radius=None):
     x1_sample = x1[indices1]
     x2_sample = x2[indices2]
     return x1_sample, x2_sample, center
-    
-    
+
+
 def concat_nn(x1, x2):
     """
     Concatenate two point clouds by nearest neighbor search. This means that for each point in x1 it searches it's closest point in x2 and appends the features of that point to the features of the point in x1.
@@ -85,9 +118,7 @@ def cut_by_bounding_box(reference, target):
     return target
 
 
-def normalize_lowres_hires_pair(
-    lowres: np.ndarray, hires: np.ndarray
-) -> Tuple[np.ndarray, np.ndarray]:
+def normalize_lowres_hires_pair(lowres: np.ndarray, hires: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
     """
     Normalize a pair of low-resolution and high-resolution point clouds by centering them around their centroid and scaling them by their maximum distance from the centroid.
 

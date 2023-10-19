@@ -11,6 +11,7 @@ from model.diffusion_lucid import GaussianDiffusion as LUCID
 from model.diffusion_pointvoxel import PVD
 from model.diffusion_rin import GaussianDiffusion as RINDIFFUSION
 from omegaconf import DictConfig, OmegaConf
+from utils.evaluation import *
 from utils.file_utils import *
 from utils.ops import *
 from utils.visualize import *
@@ -20,14 +21,17 @@ import sys
 import wandb
 import json
 
+
 def train(gpu, cfg, output_dir, noises_init=None):
     # set gpu
     if cfg.distribution_type == "multi":
         cfg.gpu = gpu
-    
+
+    # set seed
     set_seed(cfg)
     torch.cuda.empty_cache()
 
+    # evaluate main process and set output dir
     if cfg.distribution_type == "multi":
         is_main_process = gpu == 0
     else:
@@ -35,6 +39,7 @@ def train(gpu, cfg, output_dir, noises_init=None):
     if is_main_process:
         (outf_syn,) = setup_output_subdirs(output_dir, "syn")
 
+    # set multi gpu training variables
     if cfg.distribution_type == "multi":
         if cfg.dist_url == "env://" and cfg.rank == -1:
             cfg.rank = int(os.environ["RANK"])
@@ -51,12 +56,13 @@ def train(gpu, cfg, output_dir, noises_init=None):
         cfg.training.bs = int(cfg.training.bs / cfg.ngpus_per_node)
         cfg.data.workers = 0
 
-        cfg.training.save_interval = int(cfg.training.save_interval/ cfg.ngpus_per_node)
+        cfg.training.save_interval = int(cfg.training.save_interval / cfg.ngpus_per_node)
         cfg.training.viz_interval = int(cfg.training.viz_interval / cfg.ngpus_per_node)
 
-    """ data """
+    # setup data loader and sampler
     dataloader, _, train_sampler, _ = get_dataloader(cfg)
 
+    # setup model
     if cfg.diffusion.formulation == "PVD":
         model = PVD(
             cfg,
@@ -71,8 +77,9 @@ def train(gpu, cfg, output_dir, noises_init=None):
         model = LUCID(cfg=cfg)
     elif cfg.diffusion.formulation == "RIN":
         model = RINDIFFUSION(cfg=cfg)
-        
-    if cfg.distribution_type == "multi":  # Multiple processes, single GPU per process
+
+    # setup DDP model
+    if cfg.distribution_type == "multi":
 
         def _transform_(m):
             return nn.parallel.DistributedDataParallel(m, device_ids=[gpu], output_device=gpu)
@@ -81,6 +88,7 @@ def train(gpu, cfg, output_dir, noises_init=None):
         model.cuda(gpu)
         model.multi_gpu_wrapper(_transform_)
 
+    # setup data parallel model
     elif cfg.distribution_type == "single":
 
         def _transform_(m):
@@ -89,58 +97,77 @@ def train(gpu, cfg, output_dir, noises_init=None):
         model = model.cuda()
         model.multi_gpu_wrapper(_transform_)
 
+    # setup single gpu model
     elif gpu is not None:
         torch.cuda.set_device(gpu)
         model = model.cuda(gpu)
     else:
         raise ValueError("distribution_type = multi | single | None")
 
+    # initialize config and wandb
     if is_main_process:
         pretty_cfg = json.dumps(OmegaConf.to_container(cfg, resolve=True), indent=4, sort_keys=False)
         logger.info("Configuration used:\n{}", pretty_cfg)
-        wandb.init(project="pvdup", config=cfg, entity="matvogel", settings=wandb.Settings(start_method='fork'))
-        
+        wandb.init(project="pvdup", config=cfg, entity="matvogel", settings=wandb.Settings(start_method="fork"))
+
+    # setup optimizers
     if cfg.training.optimizer.type == "Adam":
         optimizer = optim.Adam(
-            model.parameters(), lr=cfg.training.optimizer.lr, weight_decay=cfg.training.optimizer.weight_decay, betas=(cfg.training.optimizer.beta1, cfg.training.optimizer.beta2)
+            model.parameters(),
+            lr=cfg.training.optimizer.lr,
+            weight_decay=cfg.training.optimizer.weight_decay,
+            betas=(cfg.training.optimizer.beta1, cfg.training.optimizer.beta2),
         )
     elif cfg.training.optimizer.type == "Lion":
-        optimizer = Lion(model.parameters(), lr=cfg.training.optimizer.lr, weight_decay=cfg.training.optimizer.weight_decay, betas=(cfg.training.optimizer.beta1, cfg.training.optimizer.beta2))
+        optimizer = Lion(
+            model.parameters(),
+            lr=cfg.training.optimizer.lr,
+            weight_decay=cfg.training.optimizer.weight_decay,
+            betas=(cfg.training.optimizer.beta1, cfg.training.optimizer.beta2),
+        )
     elif cfg.training.optimizer.type == "AdamW":
         optimizer = optim.AdamW(
-            model.parameters(), lr=cfg.training.optimizer.lr, weight_decay=cfg.training.optimizer.weight_decay, betas=(cfg.training.optimizer.beta1, cfg.training.optimizer.beta2)
+            model.parameters(),
+            lr=cfg.training.optimizer.lr,
+            weight_decay=cfg.training.optimizer.weight_decay,
+            betas=(cfg.training.optimizer.beta1, cfg.training.optimizer.beta2),
         )
-    
+
+    # setup lr scheduler
     if cfg.training.scheduler.type == "ExponentialLR":
         lr_scheduler = optim.lr_scheduler.ExponentialLR(optimizer, cfg.training.scheduler.lr_gamma)
     else:
         lr_scheduler = optim.lr_scheduler.ConstantLR(optimizer, factor=1.0)
 
+    # setup amp scaler
     ampscaler = torch.cuda.amp.GradScaler(enabled=cfg.training.amp)
-    
+
+    # load model
     if cfg.model_path != "":
         ckpt = torch.load(cfg.model_path)
         model.load_state_dict(ckpt["model_state"])
         optimizer.load_state_dict(ckpt["optimizer_state"])
 
+    # set start step
     if cfg.model_path != "":
         start_step = torch.load(cfg.model_path)["step"] + 1
     else:
         start_step = 0
 
+    # helper for chain of samples
     def new_x_chain(x, num_chain):
         return torch.randn(num_chain, *x.shape[1:], device=x.device)
 
+    # train loop
     train_iter = save_iter(dataloader, train_sampler)
 
     for step in range(start_step, cfg.training.steps):
-        
         # chek if we have a new epoch
         if cfg.distribution_type == "multi":
             train_sampler.set_epoch(step // len(dataloader))
 
         # update scheduler
-        if (step+1) % len(dataloader) == 0:
+        if (step + 1) % len(dataloader) == 0:
             lr_scheduler.step()
 
         for accum_iter in range(cfg.training.accumulation_steps):
@@ -148,21 +175,19 @@ def train(gpu, cfg, output_dir, noises_init=None):
             data = next(train_iter)
 
             x = data["train_points"].transpose(1, 2)
-            #noises_batch = noises_init[data["idx"]].transpose(1, 2)
+            # noises_batch = noises_init[data["idx"]].transpose(1, 2)
             lowres = data["train_points_lowres"].transpose(1, 2) if "train_points_lowres" in data else None
 
             # move data to gpu
-            if cfg.distribution_type == "multi" or (
-                cfg.distribution_type is None and gpu is not None
-            ):
+            if cfg.distribution_type == "multi" or (cfg.distribution_type is None and gpu is not None):
                 x = x.cuda(gpu)
-                #noises_batch = noises_batch.cuda(gpu)
+                # noises_batch = noises_batch.cuda(gpu)
                 lowres = lowres.cuda(gpu) if lowres is not None else None
             elif cfg.distribution_type == "single":
                 x = x.cuda()
-                #noises_batch = noises_batch.cuda()
+                # noises_batch = noises_batch.cuda()
                 lowres = lowres.cuda() if lowres is not None else None
-            
+
             # forward pass
             loss = model(x, cond=lowres) / cfg.training.accumulation_steps
             ampscaler.scale(loss).backward()
@@ -182,14 +207,12 @@ def train(gpu, cfg, output_dir, noises_init=None):
 
         if step % cfg.training.log_interval == 0 and is_main_process:
             logger.info(
-                "[{:>3d}/{:>3d}]\tloss: {:>10.4f},\t"
-                "netpNorm: {:>10.2f},\tnetgradNorm: {:>10.2f}\t",
-                    step,
-                    cfg.training.steps,
-                    loss.item(),
-                    netpNorm,
-                    netgradNorm,
-                
+                "[{:>3d}/{:>3d}]\tloss: {:>10.4f},\t" "netpNorm: {:>10.2f},\tnetgradNorm: {:>10.2f}\t",
+                step,
+                cfg.training.steps,
+                loss.item(),
+                netpNorm,
+                netgradNorm,
             )
             wandb.log(
                 {
@@ -200,24 +223,23 @@ def train(gpu, cfg, output_dir, noises_init=None):
                 step=step,
             )
 
-        if (step+1) % cfg.training.viz_interval == 0 and is_main_process:
+        if (step + 1) % cfg.training.viz_interval == 0 and is_main_process:
             logger.info("Generation: eval")
 
             model.eval()
             with torch.no_grad():
-                
                 if cfg.sampling.bs == 1:
                     cond = lowres[0].unsqueeze(0) if lowres is not None else None
                 else:
-                    cond = lowres[:cfg.sampling.bs] if lowres is not None else None
-                
+                    cond = lowres[: cfg.sampling.bs] if lowres is not None else None
+
                 x_gen_eval = model.sample(
                     shape=new_x_chain(x, cfg.sampling.bs).shape,
                     device=x.device,
                     cond=cond,
                     clip_denoised=False,
                 )
-                
+
                 x_gen_list = model.sample(
                     shape=new_x_chain(x, 1).shape,
                     device=x.device,
@@ -225,55 +247,33 @@ def train(gpu, cfg, output_dir, noises_init=None):
                     freq=0.1,
                     clip_denoised=False,
                 )
+
                 x_gen_all = torch.cat(x_gen_list, dim=0)
 
-                gen_stats = [x_gen_eval.mean(), x_gen_eval.std()]
-                gen_eval_range = [x_gen_eval.min().item(), x_gen_eval.max().item()]
-
-                logger.info(
-                    "[{:>3d}/{:>3d}]\t"
-                    "eval_gen_range: [{:>10.4f}, {:>10.4f}]\t"
-                    "eval_gen_stats: [mean={:>10.4f}, std={:>10.4f}]\t",
-                        step,
-                        cfg.training.steps,
-                        *gen_eval_range,
-                        *gen_stats,
-
-                )
+                print_stats(x_gen_eval, "x_gen_eval")
+                print_stats(x_gen_all, "x_gen_all")
 
             visualize_pointcloud_batch(
                 "%s/step_%03d_samples_eval.png" % (outf_syn, step),
                 x_gen_eval.transpose(1, 2),
-                None,
-                None,
-                None,
             )
 
             visualize_pointcloud_batch(
                 "%s/step_%03d_samples_eval_all.png" % (outf_syn, step),
                 x_gen_all.transpose(1, 2),
-                None,
-                None,
-                None,
             )
 
             if lowres is not None:
                 visualize_pointcloud_batch(
                     "%s/step_%03d_lowres.png" % (outf_syn, step),
                     lowres.transpose(1, 2),
-                    None,
-                    None,
-                    None,
                 )
 
             visualize_pointcloud_batch(
                 "%s/step_%03d_highres.png" % (outf_syn, step),
                 x.transpose(1, 2),
-                None,
-                None,
-                None,
             )
-            
+
             # log the saved images to wandb
             samps_eval = wandb.Image("%s/step_%03d_samples_eval.png" % (outf_syn, step))
             samps_eval_all = wandb.Image("%s/step_%03d_samples_eval_all.png" % (outf_syn, step))
@@ -315,6 +315,7 @@ def train(gpu, cfg, output_dir, noises_init=None):
     if cfg.distribution_type == "multi":
         dist.destroy_process_group()
         wandb.finish()
+
 
 def main():
     opt = parse_args()
@@ -376,16 +377,16 @@ def parse_args():
 
     if remaining_argv:
         for i in range(0, len(remaining_argv), 2):
-            key = remaining_argv[i].lstrip('--')
+            key = remaining_argv[i].lstrip("--")
             value = remaining_argv[i + 1]
-            
+
             # Convert numerical strings to appropriate number types handling scientific notation
             try:
-                if '.' in remaining_argv[i + 1] or 'e' in remaining_argv[i + 1]:
+                if "." in remaining_argv[i + 1] or "e" in remaining_argv[i + 1]:
                     value = float(value)
                 # handle bools
-                elif value in ['True', 'False', 'true', 'false']:
-                    value = value.capitalize() == 'True'
+                elif value in ["True", "False", "true", "false"]:
+                    value = value.capitalize() == "True"
                 else:
                     value = int(value)
             except ValueError:

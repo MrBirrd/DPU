@@ -3,18 +3,20 @@ import warnings
 
 from scipy.stats import entropy
 
+
 def iterate_in_chunks(l, n):
-    '''Yield successive 'n'-sized chunks from iterable 'l'.
+    """Yield successive 'n'-sized chunks from iterable 'l'.
     Note: last chunk will be smaller than l if n doesn't divide l perfectly.
-    '''
+    """
     for i in range(0, len(l), n):
-        yield l[i:i + n]
+        yield l[i : i + n]
+
 
 def unit_cube_grid_point_cloud(resolution, clip_sphere=False):
-    '''Returns the center coordinates of each cell of a 3D grid with resolution^3 cells,
+    """Returns the center coordinates of each cell of a 3D grid with resolution^3 cells,
     that is placed in the unit-cube.
     If clip_sphere it True it drops the "corner" cells that lie outside the unit-sphere.
-    '''
+    """
     grid = np.ndarray((resolution, resolution, resolution, 3), np.float32)
     spacing = 1.0 / float(resolution - 1)
     for i in range(resolution):
@@ -30,9 +32,11 @@ def unit_cube_grid_point_cloud(resolution, clip_sphere=False):
 
     return grid, spacing
 
-def minimum_mathing_distance(sample_pcs, ref_pcs, batch_size, normalize=True, sess=None, verbose=False, use_sqrt=False,
-                             use_EMD=False):
-    '''Computes the MMD between two sets of point-clouds.
+
+def minimum_mathing_distance(
+    sample_pcs, ref_pcs, batch_size, normalize=True, sess=None, verbose=False, use_sqrt=False, use_EMD=False
+):
+    """Computes the MMD between two sets of point-clouds.
     Args:
         sample_pcs (numpy array SxKx3): the S point-clouds, each of K points that will be matched and
             compared to a set of "reference" point-clouds.
@@ -49,17 +53,17 @@ def minimum_mathing_distance(sample_pcs, ref_pcs, batch_size, normalize=True, se
         use_EMD (boolean: If true, the matchings are based on the EMD.
     Returns:
         A tuple containing the MMD and all the matched distances of which the MMD is their mean.
-    '''
+    """
 
     n_ref, n_pc_points, pc_dim = ref_pcs.shape
     _, n_pc_points_s, pc_dim_s = sample_pcs.shape
 
     if n_pc_points != n_pc_points_s or pc_dim != pc_dim_s:
-        raise ValueError('Incompatible size of point-clouds.')
+        raise ValueError("Incompatible size of point-clouds.")
 
-    ref_pl, sample_pl, best_in_batch, _, sess = minimum_mathing_distance_tf_graph(n_pc_points, normalize=normalize,
-                                                                                  sess=sess, use_sqrt=use_sqrt,
-                                                                                  use_EMD=use_EMD)
+    ref_pl, sample_pl, best_in_batch, _, sess = minimum_mathing_distance_tf_graph(
+        n_pc_points, normalize=normalize, sess=sess, use_sqrt=use_sqrt, use_EMD=use_EMD
+    )
     matched_dists = []
     for i in range(n_ref):
         best_in_all_batches = []
@@ -75,9 +79,18 @@ def minimum_mathing_distance(sample_pcs, ref_pcs, batch_size, normalize=True, se
     return mmd, matched_dists
 
 
-def coverage(sample_pcs, ref_pcs, batch_size, normalize=True, sess=None, verbose=False, use_sqrt=False, use_EMD=False,
-             ret_dist=False):
-    '''Computes the Coverage between two sets of point-clouds.
+def coverage(
+    sample_pcs,
+    ref_pcs,
+    batch_size,
+    normalize=True,
+    sess=None,
+    verbose=False,
+    use_sqrt=False,
+    use_EMD=False,
+    ret_dist=False,
+):
+    """Computes the Coverage between two sets of point-clouds.
     Args:
         sample_pcs (numpy array SxKx3): the S point-clouds, each of K points that will be matched
             and compared to a set of "reference" point-clouds.
@@ -97,18 +110,16 @@ def coverage(sample_pcs, ref_pcs, batch_size, normalize=True, sess=None, verbose
         Returns: the coverage score (int),
                  the indices of the ref_pcs that are matched with each sample_pc
                  and optionally the matched distances of the samples_pcs.
-    '''
+    """
     n_ref, n_pc_points, pc_dim = ref_pcs.shape
     n_sam, n_pc_points_s, pc_dim_s = sample_pcs.shape
 
     if n_pc_points != n_pc_points_s or pc_dim != pc_dim_s:
-        raise ValueError('Incompatible Point-Clouds.')
+        raise ValueError("Incompatible Point-Clouds.")
 
-    ref_pl, sample_pl, best_in_batch, loc_of_best, sess = minimum_mathing_distance_tf_graph(n_pc_points,
-                                                                                            normalize=normalize,
-                                                                                            sess=sess,
-                                                                                            use_sqrt=use_sqrt,
-                                                                                            use_EMD=use_EMD)
+    ref_pl, sample_pl, best_in_batch, loc_of_best, sess = minimum_mathing_distance_tf_graph(
+        n_pc_points, normalize=normalize, sess=sess, use_sqrt=use_sqrt, use_EMD=use_EMD
+    )
     matched_gt = []
     matched_dist = []
     for i in xrange(n_sam):
@@ -140,12 +151,12 @@ def coverage(sample_pcs, ref_pcs, batch_size, normalize=True, sess=None, verbose
 
 
 def jsd_between_point_cloud_sets(sample_pcs, ref_pcs, resolution=28):
-    '''Computes the JSD between two sets of point-clouds, as introduced in the paper ```Learning Representations And Generative Models For 3D Point Clouds```.
+    """Computes the JSD between two sets of point-clouds, as introduced in the paper ```Learning Representations And Generative Models For 3D Point Clouds```.
     Args:
         sample_pcs: (np.ndarray S1xR2x3) S1 point-clouds, each of R1 points.
         ref_pcs: (np.ndarray S2xR2x3) S2 point-clouds, each of R2 points.
         resolution: (int) grid-resolution. Affects granularity of measurements.
-    '''
+    """
     in_unit_sphere = True
     sample_grid_var = entropy_of_occupancy_grid(sample_pcs, resolution, in_unit_sphere)[1]
     ref_grid_var = entropy_of_occupancy_grid(ref_pcs, resolution, in_unit_sphere)[1]
@@ -153,19 +164,19 @@ def jsd_between_point_cloud_sets(sample_pcs, ref_pcs, resolution=28):
 
 
 def entropy_of_occupancy_grid(pclouds, grid_resolution, in_sphere=False):
-    '''Given a collection of point-clouds, estimate the entropy of the random variables
+    """Given a collection of point-clouds, estimate the entropy of the random variables
     corresponding to occupancy-grid activation patterns.
     Inputs:
         pclouds: (numpy array) #point-clouds x points per point-cloud x 3
         grid_resolution (int) size of occupancy grid that will be used.
-    '''
+    """
     epsilon = 10e-4
     bound = 0.5 + epsilon
     if abs(np.max(pclouds)) > bound or abs(np.min(pclouds)) > bound:
-        warnings.warn('Point-clouds are not in unit cube.')
+        warnings.warn("Point-clouds are not in unit cube.")
 
-    if in_sphere and np.max(np.sqrt(np.sum(pclouds ** 2, axis=2))) > bound:
-        warnings.warn('Point-clouds are not in unit sphere.')
+    if in_sphere and np.max(np.sqrt(np.sum(pclouds**2, axis=2))) > bound:
+        warnings.warn("Point-clouds are not in unit sphere.")
 
     grid_coordinates, _ = unit_cube_grid_point_cloud(grid_resolution, in_sphere)
     grid_coordinates = grid_coordinates.reshape(-1, 3)
@@ -192,13 +203,14 @@ def entropy_of_occupancy_grid(pclouds, grid_resolution, in_sphere=False):
 
     return acc_entropy / len(grid_counters), grid_counters
 
+
 def jensen_shannon_divergence(P, Q):
     if np.any(P < 0) or np.any(Q < 0):
-        raise ValueError('Negative values.')
+        raise ValueError("Negative values.")
     if len(P) != len(Q):
-        raise ValueError('Non equal size.')
+        raise ValueError("Non equal size.")
 
-    P_ = P / np.sum(P)      # Ensure probabilities.
+    P_ = P / np.sum(P)  # Ensure probabilities.
     Q_ = Q / np.sum(Q)
 
     e1 = entropy(P_, base=2)
@@ -209,13 +221,14 @@ def jensen_shannon_divergence(P, Q):
     res2 = _jsdiv(P_, Q_)
 
     if not np.allclose(res, res2, atol=10e-5, rtol=0):
-        warnings.warn('Numerical values of two JSD methods don\'t agree.')
+        warnings.warn("Numerical values of two JSD methods don't agree.")
 
     return res
 
 
 def _jsdiv(P, Q):
-    '''another way of computing JSD'''
+    """another way of computing JSD"""
+
     def _kldiv(A, B):
         a = A.copy()
         b = B.copy()

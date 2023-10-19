@@ -4,36 +4,36 @@ import torch
 import importlib
 import os
 
-chamfer_found = importlib.find_loader("chamfer_5D") is not None
+chamfer_found = importlib.find_loader("chamfer_6D") is not None
 if not chamfer_found:
     ## Cool trick from https://github.com/chrdiller
-    print("Jitting Chamfer 5D")
+    print("Jitting Chamfer 6D")
     cur_path = os.path.dirname(os.path.abspath(__file__))
-    build_path = cur_path.replace('chamfer5D', 'tmp')
+    build_path = cur_path.replace('chamfer6D', 'tmp')
     os.makedirs(build_path, exist_ok=True)
 
     from torch.utils.cpp_extension import load
-    chamfer_5D = load(name="chamfer_5D",
+    chamfer_6D = load(name="chamfer_6D",
                       sources=[
                           "/".join(os.path.abspath(__file__).split('/')[:-1] + ["chamfer_cuda.cpp"]),
-                          "/".join(os.path.abspath(__file__).split('/')[:-1] + ["chamfer5D.cu"]),
+                          "/".join(os.path.abspath(__file__).split('/')[:-1] + ["chamfer6D.cu"]),
                       ], build_directory=build_path)
-    print("Loaded JIT 5D CUDA chamfer distance")
+    print("Loaded JIT 6D CUDA chamfer distance")
 
 else:
-    import chamfer_5D
-    print("Loaded compiled 5D CUDA chamfer distance")
+    import chamfer_6D
+    print("Loaded compiled 6D CUDA chamfer distance")
 
 
 # Chamfer's distance module @thibaultgroueix
 # GPU tensors only
-class chamfer_5DFunction(Function):
+class chamfer_6DFunction(Function):
     @staticmethod
     def forward(ctx, xyz1, xyz2):
         batchsize, n, dim = xyz1.size()
-        assert dim==5, "Wrong last dimension for the chamfer distance 's input! Check with .size()"
+        assert dim==6, "Wrong last dimension for the chamfer distance 's input! Check with .size()"
         _, m, dim = xyz2.size()
-        assert dim==5, "Wrong last dimension for the chamfer distance 's input! Check with .size()"
+        assert dim==6, "Wrong last dimension for the chamfer distance 's input! Check with .size()"
         device = xyz1.device
 
         device = xyz1.device
@@ -50,7 +50,7 @@ class chamfer_5DFunction(Function):
         idx2 = idx2.to(device)
         torch.cuda.set_device(device)
 
-        chamfer_5D.forward(xyz1, xyz2, dist1, dist2, idx1, idx2)
+        chamfer_6D.forward(xyz1, xyz2, dist1, dist2, idx1, idx2)
         ctx.save_for_backward(xyz1, xyz2, idx1, idx2)
         return dist1, dist2, idx1, idx2
 
@@ -66,17 +66,17 @@ class chamfer_5DFunction(Function):
 
         gradxyz1 = gradxyz1.to(device)
         gradxyz2 = gradxyz2.to(device)
-        chamfer_5D.backward(
+        chamfer_6D.backward(
             xyz1, xyz2, gradxyz1, gradxyz2, graddist1, graddist2, idx1, idx2
         )
         return gradxyz1, gradxyz2
 
 
-class chamfer_5DDist(nn.Module):
+class chamfer_6DDist(nn.Module):
     def __init__(self):
-        super(chamfer_5DDist, self).__init__()
+        super(chamfer_6DDist, self).__init__()
 
     def forward(self, input1, input2):
         input1 = input1.contiguous()
         input2 = input2.contiguous()
-        return chamfer_5DFunction.apply(input1, input2)
+        return chamfer_6DFunction.apply(input1, input2)

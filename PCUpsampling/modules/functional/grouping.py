@@ -3,7 +3,7 @@ from torch.autograd import Function
 # from modules.functional.backend import _backend
 from modules.functional.backend import _backend
 
-__all__ = ['grouping']
+__all__ = ["grouping"]
 
 
 class Grouping(Function):
@@ -24,9 +24,8 @@ class Grouping(Function):
 
     @staticmethod
     def backward(ctx, grad_output):
-        indices, = ctx.saved_tensors
-        grad_features = _backend.grouping_backward(grad_output.contiguous(),
-                                                   indices, ctx.num_points)
+        (indices,) = ctx.saved_tensors
+        grad_features = _backend.grouping_backward(grad_output.contiguous(), indices, ctx.num_points)
         return grad_features, None
 
 

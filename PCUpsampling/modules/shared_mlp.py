@@ -1,12 +1,13 @@
 import torch.nn as nn
 import torch
 
-__all__ = ['SharedMLP']
+__all__ = ["SharedMLP"]
 
 
 class Swish(nn.Module):
-    def forward(self,x):
-        return  x * torch.sigmoid(x)
+    def forward(self, x):
+        return x * torch.sigmoid(x)
+
 
 class SharedMLP(nn.Module):
     def __init__(self, in_channels, out_channels, dim=1):
@@ -23,11 +24,13 @@ class SharedMLP(nn.Module):
             out_channels = [out_channels]
         layers = []
         for oc in out_channels:
-            layers.extend([
-                conv(in_channels, oc, 1),
-                bn(8, oc),
-                Swish(),
-            ])
+            layers.extend(
+                [
+                    conv(in_channels, oc, 1),
+                    bn(8, oc),
+                    Swish(),
+                ]
+            )
             in_channels = oc
         self.layers = nn.Sequential(*layers)
 

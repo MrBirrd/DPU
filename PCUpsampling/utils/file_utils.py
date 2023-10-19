@@ -7,17 +7,16 @@ import torch
 
 import numpy as np
 
+
 def set_global_gpu_env(opt):
-
-    os.environ['CUDA_DEVICE_ORDER'] = 'PCI_BUS_ID'
-    os.environ['CUDA_VISIBLE_DEVICES'] = str(opt.gpu)
-
+    os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
+    os.environ["CUDA_VISIBLE_DEVICES"] = str(opt.gpu)
 
     torch.cuda.set_device(opt.gpu)
 
+
 def copy_source(file, output_dir):
     copyfile(file, os.path.join(output_dir, os.path.basename(file)))
-
 
 
 def get_output_dir(prefix, cfg):
@@ -27,9 +26,7 @@ def get_output_dir(prefix, cfg):
     return output_dir
 
 
-
 def set_seed(opt):
-
     if opt.training.seed is None:
         opt.training.seed = random.randint(1, 10000)
     logger.info("Random Seed: ", opt.training.seed)
@@ -41,8 +38,8 @@ def set_seed(opt):
         torch.backends.cudnn.deterministic = True
         torch.backends.cudnn.benchmark = True
 
-def setup_output_subdirs(output_dir, *subfolders):
 
+def setup_output_subdirs(output_dir, *subfolders):
     output_subdirs = output_dir
     try:
         os.makedirs(output_subdirs)

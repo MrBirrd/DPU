@@ -49,9 +49,7 @@ class ResNetBase(Model):
             bn_momentum=bn_momentum,
         )
         self.relu = ME.MinkowskiReLU(inplace=True)
-        self.pool = sum_pool(
-            kernel_size=space_n_time_m(2, 1), stride=space_n_time_m(2, 1), D=D
-        )
+        self.pool = sum_pool(kernel_size=space_n_time_m(2, 1), stride=space_n_time_m(2, 1), D=D)
 
         self.layer1 = self._make_layer(
             self.BLOCK,
@@ -192,7 +190,6 @@ class ResNet101(ResNetBase):
 
 
 class STResNetBase(ResNetBase):
-
     CONV_TYPE = ConvType.SPATIAL_HYPERCUBE_TEMPORAL_HYPERCROSS
 
     def __init__(self, in_channels, out_channels, config, D=4, **kwargs):

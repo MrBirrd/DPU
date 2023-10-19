@@ -1,3 +1,6 @@
+* adapted from https://github.com/daerduoCarey/PyTorchEMD 
+
+---------------------------------
 # PyTorch Wrapper for Point-cloud Earth-Mover-Distance (EMD)
 
 ## Dependency

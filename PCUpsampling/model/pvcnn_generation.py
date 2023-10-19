@@ -359,10 +359,13 @@ class PVCNN2Base(nn.Module):
 class PVCNNFeatures(nn.Module):
     sa_blocks = [
         # conv vfg  ,   sa config
-        ((32,  2, 32), (1024, 0.1, 32, (32, 64))),  # out channels, num blocks, voxel resolution | num_centers, radius, num_neighbors, out_channels
-        ((64,  3, 16), (256,  0.2, 32, (64, 128))),
-        ((128, 3, 8),  (64,   0.4, 32, (128, 256))),
-        (None,         (16,   0.8, 32, (256, 256, 512))),
+        (
+            (32, 2, 32),
+            (1024, 0.1, 32, (32, 64)),
+        ),  # out channels, num blocks, voxel resolution | num_centers, radius, num_neighbors, out_channels
+        ((64, 3, 16), (256, 0.2, 32, (64, 128))),
+        ((128, 3, 8), (64, 0.4, 32, (128, 256))),
+        (None, (16, 0.8, 32, (256, 256, 512))),
     ]
 
     fp_blocks = [
@@ -371,7 +374,7 @@ class PVCNNFeatures(nn.Module):
         ((256, 128), (128, 2, 16)),
         ((128, 128, 64), (64, 2, 32)),
     ]
-    
+
     def __init__(
         self,
         dropout=0.1,
@@ -405,7 +408,7 @@ class PVCNNFeatures(nn.Module):
 
         # only use extra features in the last fp module
         sa_in_channels[0] = extra_feature_channels
-        
+
         fp_layers, channels_fp_features = create_pointnet2_fp_modules(
             fp_blocks=self.fp_blocks,
             in_channels=channels_sa_features,
@@ -420,13 +423,11 @@ class PVCNNFeatures(nn.Module):
         self.fp_layers = nn.ModuleList(fp_layers)
 
     def forward(self, inputs):
-        
-
         # inputs : [B, in_channels + S, N]
         coords, features = inputs[:, : self.input_dim, :].contiguous(), inputs
         coords_list, in_features_list, out_feature_list = [], [], []
         temb = torch.zeros_like(features)
-        
+
         for i, sa_blocks in enumerate(self.sa_layers):
             in_features_list.append(features)
             coords_list.append(coords)

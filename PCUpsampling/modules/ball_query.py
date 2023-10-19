@@ -3,7 +3,7 @@ import torch.nn as nn
 from torch.cuda.amp import custom_fwd, custom_bwd
 import modules.functional as F
 
-__all__ = ['BallQuery']
+__all__ = ["BallQuery"]
 
 
 class BallQuery(nn.Module):
@@ -16,7 +16,7 @@ class BallQuery(nn.Module):
     @custom_bwd
     def backward(self, *args, **kwargs):
         return super().backward(*args, **kwargs)
-    
+
     @custom_fwd(cast_inputs=torch.float32)
     def forward(self, points_coords, centers_coords, temb, points_features=None):
         points_coords = points_coords.contiguous()
@@ -26,7 +26,7 @@ class BallQuery(nn.Module):
         neighbor_coordinates = neighbor_coordinates - centers_coords.unsqueeze(-1)
 
         if points_features is None:
-            assert self.include_coordinates, 'No Features For Grouping'
+            assert self.include_coordinates, "No Features For Grouping"
             neighbor_features = neighbor_coordinates
         else:
             neighbor_features = F.grouping(points_features, neighbor_indices)
@@ -35,5 +35,6 @@ class BallQuery(nn.Module):
         return neighbor_features, F.grouping(temb, neighbor_indices)
 
     def extra_repr(self):
-        return 'radius={}, num_neighbors={}{}'.format(
-            self.radius, self.num_neighbors, ', include coordinates' if self.include_coordinates else '')
+        return "radius={}, num_neighbors={}{}".format(
+            self.radius, self.num_neighbors, ", include coordinates" if self.include_coordinates else ""
+        )

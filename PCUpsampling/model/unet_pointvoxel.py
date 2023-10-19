@@ -11,9 +11,13 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from .pvcnn2_ada import (LinearAttention, SharedMLP, create_mlp_components,
-                         create_pointnet2_fp_modules,
-                         create_pointnet2_sa_components)
+from .pvcnn2_ada import (
+    LinearAttention,
+    SharedMLP,
+    create_mlp_components,
+    create_pointnet2_fp_modules,
+    create_pointnet2_sa_components,
+)
 from .pvcnn_generation import PVCNN2Base
 
 
@@ -43,7 +47,7 @@ class PVCNN2Unet(nn.Module):
     ):
         super().__init__()
         self.input_dim = input_dim
-        
+
         self.sa_blocks = sa_blocks
         self.fp_blocks = fp_blocks
         self.point_as_feat = point_as_feat
@@ -81,15 +85,11 @@ class PVCNN2Unet(nn.Module):
         )
         self.sa_layers = nn.ModuleList(sa_layers)
 
-        self.global_att = (
-            None
-            if not use_att
-            else LinearAttention(channels_sa_features, 8, verbose=verbose)
-        )
+        self.global_att = None if not use_att else LinearAttention(channels_sa_features, 8, verbose=verbose)
 
         # only use extra features in the last fp module
-        sa_in_channels[0] = extra_feature_channels + input_dim - 6 #-6 if we have conditional PC
-        
+        sa_in_channels[0] = extra_feature_channels + input_dim - 6  # -6 if we have conditional PC
+
         fp_layers, channels_fp_features = create_pointnet2_fp_modules(
             fp_blocks=self.fp_blocks,
             in_channels=channels_sa_features,
@@ -131,22 +131,22 @@ class PVCNN2Unet(nn.Module):
         assert emb.shape == torch.Size([timesteps.shape[0], self.embed_dim])
         return emb
 
-    def forward(self, inputs, t, cond = None, x_self_cond = None):
-        # Input: coords: B3N       
+    def forward(self, inputs, t, cond=None, x_self_cond=None):
+        # Input: coords: B3N
         B = inputs.shape[0]
         coords = inputs[:, : self.input_dim, :].contiguous()
         features = inputs
-        
+
         # additional conditioning
         if cond is not None:
             features = torch.cat([features, cond], dim=1)
-        
+
         if t is not None:
             if t.ndim == 0 and not len(t.shape) == 1:
                 t = t.view(1).expand(B)
-            temb = self.embedf(self.get_timestep_embedding(t, inputs.device))[
-                :, :, None
-            ].expand(-1, -1, inputs.shape[-1])
+            temb = self.embedf(self.get_timestep_embedding(t, inputs.device))[:, :, None].expand(
+                -1, -1, inputs.shape[-1]
+            )
 
         coords_list, in_features_list = [], []
 
@@ -161,10 +161,10 @@ class PVCNN2Unet(nn.Module):
                 features, coords, temb, _ = sa_blocks((features, coords, temb, None))
 
         in_features_list[0] = inputs[:, 3:, :].contiguous()
-        
+
         if self.global_att is not None:
             features = self.global_att(features)
-        
+
         for fp_idx, fp_blocks in enumerate(self.fp_layers):
             if temb is not None:
                 features, coords, temb, _ = fp_blocks(
@@ -204,10 +204,13 @@ def get_sa_fp_parameters(npoints, points_downsampling=[16, 64, 128, 256]):
 
     sa_blocks = [
         # conv vfg  ,   sa config
-        ((32,  2, 32), (1024, 0.1, 32, (32, 64))),  # out channels, num blocks, voxel resolution | num_centers, radius, num_neighbors, out_channels
-        ((64,  3, 16), (256,  0.2, 32, (64, 128))),
-        ((128, 3, 8),  (64,   0.4, 32, (128, 256))),
-        (None,         (16,   0.8, 32, (256, 256, 512))),
+        (
+            (32, 2, 32),
+            (1024, 0.1, 32, (32, 64)),
+        ),  # out channels, num blocks, voxel resolution | num_centers, radius, num_neighbors, out_channels
+        ((64, 3, 16), (256, 0.2, 32, (64, 128))),
+        ((128, 3, 8), (64, 0.4, 32, (128, 256))),
+        (None, (16, 0.8, 32, (256, 256, 512))),
     ]
 
     fp_blocks = [
@@ -219,8 +222,8 @@ def get_sa_fp_parameters(npoints, points_downsampling=[16, 64, 128, 256]):
 
     return sa_blocks, fp_blocks
 
-class PVCLion(PVCNN2Unet):
 
+class PVCLion(PVCNN2Unet):
     def __init__(
         self,
         out_dim: int = 3,
@@ -232,17 +235,17 @@ class PVCLion(PVCNN2Unet):
         extra_feature_channels: int = 3,
         width_multiplier: int = 1,
         voxel_resolution_multiplier: int = 1,
-        self_cond:bool = False,
+        self_cond: bool = False,
     ):
         sa_blocks = [
-        # conv vfg  , sa config
-        (
-            (32, 2, 32),
-            (1024, 0.1, 32, (32, 64)),
-        ),  # out channels, num blocks, voxel resolution | num_centers, radius, num_neighbors, out_channels
-        ((64, 3, 16), (256, 0.2, 32, (64, 128))),
-        ((128, 3, 8), (64, 0.4, 32, (128, 256))),
-        (None, (16, 0.8, 32, (256, 256, 512))),
+            # conv vfg  , sa config
+            (
+                (32, 2, 32),
+                (1024, 0.1, 32, (32, 64)),
+            ),  # out channels, num blocks, voxel resolution | num_centers, radius, num_neighbors, out_channels
+            ((64, 3, 16), (256, 0.2, 32, (64, 128))),
+            ((128, 3, 8), (64, 0.4, 32, (128, 256))),
+            (None, (16, 0.8, 32, (256, 256, 512))),
         ]
         fp_blocks = [
             (
@@ -253,7 +256,7 @@ class PVCLion(PVCNN2Unet):
             ((256, 128), (128, 2, 16)),
             ((128, 128, 64), (64, 2, 32)),
         ]
-        
+
         super().__init__(
             out_dim=out_dim,
             input_dim=input_dim,

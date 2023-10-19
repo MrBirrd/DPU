@@ -11,3 +11,11 @@ einops
 ema-pytorch
 h5py
 lion-pytorch
+omegaconf
+point_cloud_utils
+pyminiply
+scipy
+matplotlib
+wandb
+ipykernel
+ninja

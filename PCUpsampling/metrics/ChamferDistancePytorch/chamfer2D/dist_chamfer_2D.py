@@ -7,13 +7,16 @@ chamfer_found = importlib.find_loader("chamfer_2D") is not None
 if not chamfer_found:
     ## Cool trick from https://github.com/chrdiller
     print("Jitting Chamfer 2D")
+    cur_path = os.path.dirname(os.path.abspath(__file__))
+    build_path = cur_path.replace('chamfer2D', 'tmp')
+    os.makedirs(build_path, exist_ok=True)
 
     from torch.utils.cpp_extension import load
     chamfer_2D = load(name="chamfer_2D",
                   sources=[
                       "/".join(os.path.abspath(__file__).split('/')[:-1] + ["chamfer_cuda.cpp"]),
                       "/".join(os.path.abspath(__file__).split('/')[:-1] + ["chamfer2D.cu"]),
-                  ])
+                  ], build_directory=build_path)
     print("Loaded JIT 2D CUDA chamfer distance")
 
 else:
@@ -25,8 +28,12 @@ else:
 class chamfer_2DFunction(Function):
     @staticmethod
     def forward(ctx, xyz1, xyz2):
-        batchsize, n, _ = xyz1.size()
-        _, m, _ = xyz2.size()
+        batchsize, n, dim = xyz1.size()
+        assert dim==2, "Wrong last dimension for the chamfer distance 's input! Check with .size()"
+        _, m, dim = xyz2.size()
+        assert dim==2, "Wrong last dimension for the chamfer distance 's input! Check with .size()"
+        device = xyz1.device
+
         device = xyz1.device
 
         dist1 = torch.zeros(batchsize, n)

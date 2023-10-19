@@ -161,9 +161,7 @@ class Broadcast(nn.Module):
         super().__init__()
         self.pool = AttentionPool(feature_dim, num_heads, num_inducers)
         self.norm_1 = AdaGN(feature_dim, t_embed_dim)
-        self.mlp = MLP(
-            feature_dim, feature_dim, mlp_blowup * feature_dim, activation=activation
-        )
+        self.mlp = MLP(feature_dim, feature_dim, mlp_blowup * feature_dim, activation=activation)
         self.norm_2 = AdaGN(feature_dim, t_embed_dim)
         self.unpool = nn.MultiheadAttention(feature_dim, num_heads, batch_first=True)
 
@@ -221,9 +219,7 @@ class BroadcastingLayer(nn.Module):
             activation=activation,
         )
         self.mlp_norm = AdaGN(feature_dim, embed_dim)
-        self.mlp = MLP(
-            feature_dim, feature_dim, mlp_blowup * feature_dim, activation=activation
-        )
+        self.mlp = MLP(feature_dim, feature_dim, mlp_blowup * feature_dim, activation=activation)
 
         with torch.no_grad():
             # scale down the skip connection weights

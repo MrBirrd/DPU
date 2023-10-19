@@ -19,5 +19,6 @@ def _wrap_tensor(input, F):
             coordinate_manager=input.coordinate_manager,
         )
 
+
 def group_norm(input, num_groups, *args, **kwargs):
-    return _wrap_tensor(input, F.group_norm(input.F, num_groups=num_groups *args, **kwargs))
+    return _wrap_tensor(input, F.group_norm(input.F, num_groups=num_groups * args, **kwargs))

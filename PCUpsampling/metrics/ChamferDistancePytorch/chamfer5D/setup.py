@@ -9,8 +9,6 @@ setup(
             "/".join(__file__.split('/')[:-1] + ['chamfer5D.cu']),
         ]),
     ],
-
-    extra_cuda_cflags=['--compiler-bindir=/usr/bin/gcc-8'],
     cmdclass={
         'build_ext': BuildExtension
     })

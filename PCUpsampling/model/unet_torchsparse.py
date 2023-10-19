@@ -21,13 +21,13 @@ import math
 def silu(input: SparseTensor, inplace: bool = True) -> SparseTensor:
     return fapply(input, F.silu, inplace=inplace)
 
-class BatchNorm(nn.BatchNorm1d):
 
+class BatchNorm(nn.BatchNorm1d):
     def forward(self, input: SparseTensor) -> SparseTensor:
         return fapply(input, super().forward)
 
-class GroupNorm(nn.GroupNorm):
 
+class GroupNorm(nn.GroupNorm):
     def forward(self, input: SparseTensor) -> SparseTensor:
         coords, feats, stride = input.coords, input.feats, input.stride
 
@@ -52,13 +52,16 @@ class GroupNorm(nn.GroupNorm):
         input.F = nfeats
         return input
 
+
 def exists(x):
     return x is not None
+
 
 def default(val, d):
     if exists(val):
         return val
     return d() if callable(d) else d
+
 
 class ModuleAdapter(nn.Module):
     def __init__(self, module: nn.Module) -> None:
@@ -71,12 +74,14 @@ class ModuleAdapter(nn.Module):
         input.F = feats
         return input
 
+
 class Identity(nn.Module):
     def __init__(self) -> None:
         super().__init__()
 
     def forward(self, input: SparseTensor) -> SparseTensor:
         return input
+
 
 class FunctionToModule(nn.Module):
     def __init__(self, fn: Any) -> None:
@@ -88,6 +93,7 @@ class FunctionToModule(nn.Module):
         feats = self.fn(feats)
         input.F = feats
         return input
+
 
 class ModuleWrapper(nn.Module):
     def __init__(self, func):
@@ -101,11 +107,14 @@ class ModuleWrapper(nn.Module):
 def Upsample(dim, dim_out):
     return spnn.Conv3d(dim, dim_out, kernel_size=2, stride=2, dilation=1, bias=False, transposed=True)
 
+
 def Downsample(dim, dim_out):
     return spnn.Conv3d(dim, dim_out, kernel_size=2, stride=2, dilation=1, bias=False)
 
+
 def DownsampleOld(stride=2, kernel_size=2):
     return ModuleWrapper(partial(spnn.functional.spdownsample, stride=stride, kernel_size=kernel_size))
+
 
 class Residual(nn.Module):
     def __init__(self, fn):
@@ -115,13 +124,15 @@ class Residual(nn.Module):
     def forward(self, x, *args, **kwargs):
         return self.fn(x, *args, **kwargs) + x
 
+
 class RMSNorm(nn.Module):
     def __init__(self, dim):
         super().__init__()
         self.g = nn.Parameter(torch.ones(1, dim, 1, 1))
 
     def forward(self, x):
-        return F.normalize(x, dim = 1) * self.g * (x.shape[1] ** 0.5)
+        return F.normalize(x, dim=1) * self.g * (x.shape[1] ** 0.5)
+
 
 class PreNorm(nn.Module):
     def __init__(self, dim, fn):
@@ -133,15 +144,16 @@ class PreNorm(nn.Module):
         x = self.norm(x)
         return self.fn(x)
 
+
 class Block(nn.Module):
-    def __init__(self, dim, dim_out, groups = 8):
+    def __init__(self, dim, dim_out, groups=8):
         super().__init__()
         self.proj = spnn.Conv3d(dim, dim_out, 3)
-        #self.norm = GroupNorm(groups, dim_out)
+        # self.norm = GroupNorm(groups, dim_out)
         self.norm = BatchNorm(dim_out)
-        #self.act = silu
+        # self.act = silu
 
-    def forward(self, x, scale_shift = None):
+    def forward(self, x, scale_shift=None):
         x = self.proj(x)
         x = self.norm(x)
 
@@ -157,68 +169,68 @@ class Block(nn.Module):
                 bfeats = x_feats[indices]
                 bfeats = bfeats * (scale[k] + 1) + shift[k]
                 scaled_feats[indices] = bfeats
-            
+
             x.F = scaled_feats
 
         silu(x)
 
         return x
 
-class ResnetBlock(nn.Module):
-    def __init__(self, dim, dim_out, *, time_emb_dim = None, groups = 8):
-        super().__init__()
-        self.mlp = nn.Sequential(
-            nn.SiLU(),
-            nn.Linear(time_emb_dim, dim_out * 2)
-        ) if exists(time_emb_dim) else None
 
-        self.block1 = Block(dim, dim_out, groups = groups)
-        self.block2 = Block(dim_out, dim_out, groups = groups)
+class ResnetBlock(nn.Module):
+    def __init__(self, dim, dim_out, *, time_emb_dim=None, groups=8):
+        super().__init__()
+        self.mlp = nn.Sequential(nn.SiLU(), nn.Linear(time_emb_dim, dim_out * 2)) if exists(time_emb_dim) else None
+
+        self.block1 = Block(dim, dim_out, groups=groups)
+        self.block2 = Block(dim_out, dim_out, groups=groups)
         self.res_conv = spnn.Conv3d(dim, dim_out, 1) if dim != dim_out else nn.Identity()
 
-    def forward(self, x, time_emb = None):
-
+    def forward(self, x, time_emb=None):
         scale_shift = None
         if exists(self.mlp) and exists(time_emb):
             time_emb = self.mlp(time_emb)
-            #time_emb = rearrange(time_emb, 'b c -> b c 1')
-            scale_shift = time_emb.chunk(2, dim = 1)
+            # time_emb = rearrange(time_emb, 'b c -> b c 1')
+            scale_shift = time_emb.chunk(2, dim=1)
 
-        h = self.block1(x, scale_shift = scale_shift)
+        h = self.block1(x, scale_shift=scale_shift)
 
         h = self.block2(h)
 
         return h + self.res_conv(x)
 
+
 class Attention(nn.Module):
-    def __init__(self, dim, heads = 4, dim_head = 32):
+    def __init__(self, dim, heads=4, dim_head=32):
         super().__init__()
-        self.scale = dim_head ** -0.5
+        self.scale = dim_head**-0.5
         self.heads = heads
         hidden_dim = dim_head * heads
 
-        self.to_qkv = nn.Conv1d(dim, hidden_dim * 3, 1, bias = False)
+        self.to_qkv = nn.Conv1d(dim, hidden_dim * 3, 1, bias=False)
         self.to_out = nn.Conv1d(hidden_dim, dim, 1)
 
     def forward(self, x):
         b, c, n = x.shape
-        qkv = self.to_qkv(x).chunk(3, dim = 1)
-        q, k, v = map(lambda t: rearrange(t, 'b (h c) n -> b h c n', h = self.heads), qkv)
+        qkv = self.to_qkv(x).chunk(3, dim=1)
+        q, k, v = map(lambda t: rearrange(t, "b (h c) n -> b h c n", h=self.heads), qkv)
 
         q = q * self.scale
 
-        sim = einsum('b h d i, b h d j -> b h i j', q, k)
-        attn = sim.softmax(dim = -1)
-        out = einsum('b h i j, b h d j -> b h i d', attn, v)
+        sim = einsum("b h d i, b h d j -> b h i j", q, k)
+        attn = sim.softmax(dim=-1)
+        out = einsum("b h i j, b h d j -> b h i d", attn, v)
 
-        out = rearrange(out, 'b h n d -> b (h d) n')
+        out = rearrange(out, "b h n d -> b (h d) n")
         return self.to_out(out)
+
 
 class MiddleAttention(nn.Module):
     def __init__(self, mid_dim, attn_dim_head, attn_heads) -> None:
         super().__init__()
-        self.attend = Residual(PreNorm(mid_dim, Attention(mid_dim, dim_head = attn_dim_head, heads = attn_heads)))
+        self.attend = Residual(PreNorm(mid_dim, Attention(mid_dim, dim_head=attn_dim_head, heads=attn_heads)))
         print("Mid dim:", mid_dim)
+
     def forward(self, x):
         x_coords = x.C
         x_feats = x.F
@@ -239,7 +251,7 @@ class MiddleAttention(nn.Module):
 
 
 class SinusoidalPosEmb(nn.Module):
-    def __init__(self, dim, theta = 10000):
+    def __init__(self, dim, theta=10000):
         super().__init__()
         self.dim = dim
         self.theta = theta
@@ -255,27 +267,29 @@ class SinusoidalPosEmb(nn.Module):
 
 
 class RandomOrLearnedSinusoidalPosEmb(nn.Module):
-    """ following @crowsonkb 's lead with random (learned optional) sinusoidal pos emb """
+    """following @crowsonkb 's lead with random (learned optional) sinusoidal pos emb"""
+
     """ https://github.com/crowsonkb/v-diffusion-jax/blob/master/diffusion/models/danbooru_128.py#L8 """
 
-    def __init__(self, dim, is_random = False):
+    def __init__(self, dim, is_random=False):
         super().__init__()
         assert (dim % 2) == 0
         half_dim = dim // 2
-        self.weights = nn.Parameter(torch.randn(half_dim), requires_grad = not is_random)
+        self.weights = nn.Parameter(torch.randn(half_dim), requires_grad=not is_random)
 
     def forward(self, x):
-        x = rearrange(x, 'b -> b 1')
-        freqs = x * rearrange(self.weights, 'd -> 1 d') * 2 * math.pi
-        fouriered = torch.cat((freqs.sin(), freqs.cos()), dim = -1)
-        fouriered = torch.cat((x, fouriered), dim = -1)
+        x = rearrange(x, "b -> b 1")
+        freqs = x * rearrange(self.weights, "d -> 1 d") * 2 * math.pi
+        fouriered = torch.cat((freqs.sin(), freqs.cos()), dim=-1)
+        fouriered = torch.cat((x, fouriered), dim=-1)
         return fouriered
+
 
 def batched_tensors_to_sparse(tensors, voxel_size=1e-3):
     device = tensors.device
     sparse_tensors = []
     for item in tensors:
-        item = rearrange(item, 'c n -> n c')
+        item = rearrange(item, "c n -> n c")
         coords, indices = sparse_quantize(item[:, :3].cpu().numpy(), voxel_size, return_index=True)
         coords = torch.tensor(coords, dtype=torch.int, device=device)
         feats = torch.tensor(item[indices], dtype=torch.float, device=device)
@@ -283,23 +297,24 @@ def batched_tensors_to_sparse(tensors, voxel_size=1e-3):
         sparse_tensors.append(tensor)
     return sparse_collate(sparse_tensors)
 
+
 class TSUnet(nn.Module):
     def __init__(
         self,
         dim,
-        init_dim = None,
-        out_dim = None,
+        init_dim=None,
+        out_dim=None,
         dim_mults=(1, 2, 4, 8),
-        channels = 3,
-        self_condition = False,
-        resnet_block_groups = 8,
-        learned_variance = False,
-        learned_sinusoidal_cond = False,
-        random_fourier_features = False,
-        learned_sinusoidal_dim = 16,
-        sinusoidal_pos_emb_theta = 10000,
-        attn_dim_head = 32,
-        attn_heads = 4
+        channels=3,
+        self_condition=False,
+        resnet_block_groups=8,
+        learned_variance=False,
+        learned_sinusoidal_cond=False,
+        random_fourier_features=False,
+        learned_sinusoidal_dim=16,
+        sinusoidal_pos_emb_theta=10000,
+        attn_dim_head=32,
+        attn_heads=4,
     ):
         super().__init__()
 
@@ -315,7 +330,7 @@ class TSUnet(nn.Module):
         dims = [init_dim, *map(lambda m: dim * m, dim_mults)]
         in_out = list(zip(dims[:-1], dims[1:]))
 
-        block_klass = partial(ResnetBlock, groups = resnet_block_groups)
+        block_klass = partial(ResnetBlock, groups=resnet_block_groups)
 
         # to sparse
         self.to_sparse = batched_tensors_to_sparse
@@ -329,14 +344,11 @@ class TSUnet(nn.Module):
             sinu_pos_emb = RandomOrLearnedSinusoidalPosEmb(learned_sinusoidal_dim, random_fourier_features)
             fourier_dim = learned_sinusoidal_dim + 1
         else:
-            sinu_pos_emb = SinusoidalPosEmb(dim, theta = sinusoidal_pos_emb_theta)
+            sinu_pos_emb = SinusoidalPosEmb(dim, theta=sinusoidal_pos_emb_theta)
             fourier_dim = dim
 
         self.time_mlp = nn.Sequential(
-            sinu_pos_emb,
-            nn.Linear(fourier_dim, time_dim),
-            nn.GELU(),
-            nn.Linear(time_dim, time_dim)
+            sinu_pos_emb, nn.Linear(fourier_dim, time_dim), nn.GELU(), nn.Linear(time_dim, time_dim)
         )
 
         # layers
@@ -348,41 +360,48 @@ class TSUnet(nn.Module):
         for ind, (dim_in, dim_out) in enumerate(in_out):
             is_last = ind >= (num_resolutions - 1)
 
-            self.downs.append(nn.ModuleList([
-                block_klass(dim_in, dim_in, time_emb_dim = time_dim),
-                block_klass(dim_in, dim_in, time_emb_dim = time_dim),
-                #Residual(PreNorm(dim_in, LinearAttention(dim_in))),
-                Identity(),
-                Downsample(dim_in, dim_out) if not is_last else spnn.Conv3d(dim_in, dim_out, kernel_size=3)
-            ]))
+            self.downs.append(
+                nn.ModuleList(
+                    [
+                        block_klass(dim_in, dim_in, time_emb_dim=time_dim),
+                        block_klass(dim_in, dim_in, time_emb_dim=time_dim),
+                        # Residual(PreNorm(dim_in, LinearAttention(dim_in))),
+                        Identity(),
+                        Downsample(dim_in, dim_out) if not is_last else spnn.Conv3d(dim_in, dim_out, kernel_size=3),
+                    ]
+                )
+            )
 
         mid_dim = dims[-1]
-        self.mid_block1 = block_klass(mid_dim, mid_dim, time_emb_dim = time_dim)
+        self.mid_block1 = block_klass(mid_dim, mid_dim, time_emb_dim=time_dim)
         self.mid_attn = MiddleAttention(mid_dim, attn_dim_head, attn_heads)
-        self.mid_block2 = block_klass(mid_dim, mid_dim, time_emb_dim = time_dim)
+        self.mid_block2 = block_klass(mid_dim, mid_dim, time_emb_dim=time_dim)
 
         for ind, (dim_in, dim_out) in enumerate(reversed(in_out)):
             is_last = ind == (len(in_out) - 1)
 
-            self.ups.append(nn.ModuleList([
-                block_klass(dim_out + dim_in, dim_out, time_emb_dim = time_dim),
-                block_klass(dim_out + dim_in, dim_out, time_emb_dim = time_dim),
-                #Residual(PreNorm(dim_out, LinearAttention(dim_out))),
-                Identity(),
-                Upsample(dim_out, dim_in) if not is_last else  spnn.Conv3d(dim_out, dim_in, kernel_size=3)
-            ]))
+            self.ups.append(
+                nn.ModuleList(
+                    [
+                        block_klass(dim_out + dim_in, dim_out, time_emb_dim=time_dim),
+                        block_klass(dim_out + dim_in, dim_out, time_emb_dim=time_dim),
+                        # Residual(PreNorm(dim_out, LinearAttention(dim_out))),
+                        Identity(),
+                        Upsample(dim_out, dim_in) if not is_last else spnn.Conv3d(dim_out, dim_in, kernel_size=3),
+                    ]
+                )
+            )
 
         default_out_dim = channels * (1 if not learned_variance else 2)
         self.out_dim = default(out_dim, default_out_dim)
 
-        self.final_res_block = block_klass(dim * 2, dim, time_emb_dim = time_dim)
+        self.final_res_block = block_klass(dim * 2, dim, time_emb_dim=time_dim)
         self.final_conv = spnn.Conv3d(dim, self.out_dim, kernel_size=1)
 
-    def forward(self, x_coords, time, cond = None, x_self_cond = None):
-        
+    def forward(self, x_coords, time, cond=None, x_self_cond=None):
         # handle conditioning
         if cond is not None:
-            #stacked_feats = self.voxel_feat_cat(x1_features=x_coords, x2_features=cond, x1_coords=x_coords, x2_coords=cond)
+            # stacked_feats = self.voxel_feat_cat(x1_features=x_coords, x2_features=cond, x1_coords=x_coords, x2_coords=cond)
             stacked_coords = torch.cat((x_coords, cond), dim=1)
 
         # generate sparse tensor
@@ -391,7 +410,7 @@ class TSUnet(nn.Module):
         if self.self_condition:
             raise NotImplementedError
             x_self_cond = default(x_self_cond, lambda: torch.zeros_like(x))
-            x = torch.cat((x_self_cond, x), dim = 1)
+            x = torch.cat((x_self_cond, x), dim=1)
 
         x = self.init_conv(x_sparse)
         r = x
@@ -411,20 +430,20 @@ class TSUnet(nn.Module):
             x = downsample(x)
 
         x = self.mid_block1(x, t)
-        #x = self.mid_attn(x)
+        # x = self.mid_attn(x)
         x = self.mid_block2(x, t)
 
         for block1, block2, attn, upsample in self.ups:
-            x = spnn.cat((x, h.pop()), dim = 1)
+            x = spnn.cat((x, h.pop()), dim=1)
             x = block1(x, t)
 
-            x = spnn.cat((x, h.pop()), dim = 1)
+            x = spnn.cat((x, h.pop()), dim=1)
             x = block2(x, t)
             x = attn(x)
 
             x = upsample(x)
 
-        x = spnn.cat((x, r), dim = 1)
+        x = spnn.cat((x, r), dim=1)
 
         x = self.final_res_block(x, t)
         return self.final_conv(x)
