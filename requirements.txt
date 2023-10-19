@@ -1,7 +1,6 @@
 pyviz3d
 numpy
 ipykernel
-open3d
 pandas
 scipy
 einops
