@@ -19,6 +19,8 @@ from .pvcnn2_ada import (
     create_pointnet2_sa_components,
 )
 from .pvcnn_generation import PVCNN2Base
+from .rin import Attention
+from einops import rearrange
 
 
 class PVCNN2Unet(nn.Module):
@@ -85,10 +87,24 @@ class PVCNN2Unet(nn.Module):
         )
         self.sa_layers = nn.ModuleList(sa_layers)
 
-        self.global_att = None if not use_att else LinearAttention(channels_sa_features, 8, verbose=verbose)
+        self.global_att = (
+            None
+            if not use_att
+            # else LinearAttention(channels_sa_features, 8, verbose=verbose)
+            else Attention(
+                dim=channels_sa_features,
+                heads=12,
+                norm=True,
+                flash=True,
+                # time_cond_dim=embed_dim,
+            )
+        )
 
         # only use extra features in the last fp module
-        sa_in_channels[0] = extra_feature_channels + input_dim - 6  # -6 if we have conditional PC
+        print("extra_feature_channels", extra_feature_channels)
+        sa_in_channels[0] = (
+            extra_feature_channels + input_dim - 3 if extra_feature_channels == 0 else 6
+        )
 
         fp_layers, channels_fp_features = create_pointnet2_fp_modules(
             fp_blocks=self.fp_blocks,
@@ -144,9 +160,9 @@ class PVCNN2Unet(nn.Module):
         if t is not None:
             if t.ndim == 0 and not len(t.shape) == 1:
                 t = t.view(1).expand(B)
-            temb = self.embedf(self.get_timestep_embedding(t, inputs.device))[:, :, None].expand(
-                -1, -1, inputs.shape[-1]
-            )
+            temb = self.embedf(self.get_timestep_embedding(t, inputs.device))[
+                :, :, None
+            ].expand(-1, -1, inputs.shape[-1])
 
         coords_list, in_features_list = [], []
 
@@ -163,7 +179,12 @@ class PVCNN2Unet(nn.Module):
         in_features_list[0] = inputs[:, 3:, :].contiguous()
 
         if self.global_att is not None:
-            features = self.global_att(features)
+            if isinstance(self.global_att, LinearAttention):
+                features = self.global_att(features)
+            elif isinstance(self.global_att, Attention):
+                features = rearrange(features, "b n c -> b c n")
+                features = self.global_att(features)
+                features = rearrange(features, "b c n -> b n c")
 
         for fp_idx, fp_blocks in enumerate(self.fp_layers):
             if temb is not None:
@@ -214,7 +235,10 @@ def get_sa_fp_parameters(npoints, points_downsampling=[16, 64, 128, 256]):
     ]
 
     fp_blocks = [
-        ((256, 256), (256, 3, 8)),  # in_channels, out_channels X | out_channels, num_blocks, voxel_resolution
+        (
+            (256, 256),
+            (256, 3, 8),
+        ),  # in_channels, out_channels X | out_channels, num_blocks, voxel_resolution
         ((256, 256), (256, 3, 8)),
         ((256, 128), (128, 2, 16)),
         ((128, 128, 64), (64, 2, 32)),

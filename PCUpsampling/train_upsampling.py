@@ -20,6 +20,7 @@ from loguru import logger
 import sys
 import wandb
 import json
+from point_cloud_utils import chamfer_distance
 
 
 def train(gpu, cfg, output_dir, noises_init=None):
@@ -37,7 +38,7 @@ def train(gpu, cfg, output_dir, noises_init=None):
     else:
         is_main_process = True
     if is_main_process:
-        (outf_syn,) = setup_output_subdirs(output_dir, "syn")
+        (outf_syn,) = setup_output_subdirs(output_dir, "output")
 
     # set multi gpu training variables
     if cfg.distribution_type == "multi":
@@ -56,11 +57,13 @@ def train(gpu, cfg, output_dir, noises_init=None):
         cfg.training.bs = int(cfg.training.bs / cfg.ngpus_per_node)
         cfg.data.workers = 0
 
-        cfg.training.save_interval = int(cfg.training.save_interval / cfg.ngpus_per_node)
+        cfg.training.save_interval = int(
+            cfg.training.save_interval / cfg.ngpus_per_node
+        )
         cfg.training.viz_interval = int(cfg.training.viz_interval / cfg.ngpus_per_node)
 
     # setup data loader and sampler
-    dataloader, _, train_sampler, _ = get_dataloader(cfg)
+    train_loader, val_loader, train_sampler, val_sampler = get_dataloader(cfg)
 
     # setup model
     if cfg.diffusion.formulation == "PVD":
@@ -82,7 +85,9 @@ def train(gpu, cfg, output_dir, noises_init=None):
     if cfg.distribution_type == "multi":
 
         def _transform_(m):
-            return nn.parallel.DistributedDataParallel(m, device_ids=[gpu], output_device=gpu)
+            return nn.parallel.DistributedDataParallel(
+                m, device_ids=[gpu], output_device=gpu
+            )
 
         torch.cuda.set_device(gpu)
         model.cuda(gpu)
@@ -106,9 +111,16 @@ def train(gpu, cfg, output_dir, noises_init=None):
 
     # initialize config and wandb
     if is_main_process:
-        pretty_cfg = json.dumps(OmegaConf.to_container(cfg, resolve=True), indent=4, sort_keys=False)
+        pretty_cfg = json.dumps(
+            OmegaConf.to_container(cfg, resolve=True), indent=4, sort_keys=False
+        )
         logger.info("Configuration used:\n{}", pretty_cfg)
-        wandb.init(project="pvdup", config=cfg, entity="matvogel", settings=wandb.Settings(start_method="fork"))
+        wandb.init(
+            project="pvdup",
+            config=cfg,
+            entity="matvogel",
+            settings=wandb.Settings(start_method="fork"),
+        )
 
     # setup optimizers
     if cfg.training.optimizer.type == "Adam":
@@ -135,7 +147,9 @@ def train(gpu, cfg, output_dir, noises_init=None):
 
     # setup lr scheduler
     if cfg.training.scheduler.type == "ExponentialLR":
-        lr_scheduler = optim.lr_scheduler.ExponentialLR(optimizer, cfg.training.scheduler.lr_gamma)
+        lr_scheduler = optim.lr_scheduler.ExponentialLR(
+            optimizer, cfg.training.scheduler.lr_gamma
+        )
     else:
         lr_scheduler = optim.lr_scheduler.ConstantLR(optimizer, factor=1.0)
 
@@ -159,15 +173,16 @@ def train(gpu, cfg, output_dir, noises_init=None):
         return torch.randn(num_chain, *x.shape[1:], device=x.device)
 
     # train loop
-    train_iter = save_iter(dataloader, train_sampler)
+    train_iter = save_iter(train_loader, train_sampler)
+    eval_iter = save_iter(val_loader, val_sampler)
 
     for step in range(start_step, cfg.training.steps):
         # chek if we have a new epoch
         if cfg.distribution_type == "multi":
-            train_sampler.set_epoch(step // len(dataloader))
+            train_sampler.set_epoch(step // len(train_loader))
 
         # update scheduler
-        if (step + 1) % len(dataloader) == 0:
+        if (step + 1) % len(train_loader) == 0:
             lr_scheduler.step()
 
         for accum_iter in range(cfg.training.accumulation_steps):
@@ -175,17 +190,18 @@ def train(gpu, cfg, output_dir, noises_init=None):
             data = next(train_iter)
 
             x = data["train_points"].transpose(1, 2)
-            # noises_batch = noises_init[data["idx"]].transpose(1, 2)
-            lowres = data["train_points_lowres"].transpose(1, 2) if "train_points_lowres" in data else None
+            lowres = (
+                data["train_points_lowres"].transpose(1, 2)
+                if "train_points_lowres" in data and not cfg.data.unconditional
+                else None
+            )
 
             # move data to gpu
-            if cfg.distribution_type == "multi" or (cfg.distribution_type is None and gpu is not None):
+            if cfg.distribution_type == "multi":
                 x = x.cuda(gpu)
-                # noises_batch = noises_batch.cuda(gpu)
                 lowres = lowres.cuda(gpu) if lowres is not None else None
             elif cfg.distribution_type == "single":
                 x = x.cuda()
-                # noises_batch = noises_batch.cuda()
                 lowres = lowres.cuda() if lowres is not None else None
 
             # forward pass
@@ -199,7 +215,9 @@ def train(gpu, cfg, output_dir, noises_init=None):
             netpNorm, netgradNorm = 0, 0
 
         if cfg.training.grad_clip.enabled:
-            torch.nn.utils.clip_grad_norm_(model.parameters(), cfg.training.grad_clip.value)
+            torch.nn.utils.clip_grad_norm_(
+                model.parameters(), cfg.training.grad_clip.value
+            )
 
         ampscaler.step(optimizer)
         ampscaler.update()
@@ -207,7 +225,8 @@ def train(gpu, cfg, output_dir, noises_init=None):
 
         if step % cfg.training.log_interval == 0 and is_main_process:
             logger.info(
-                "[{:>3d}/{:>3d}]\tloss: {:>10.4f},\t" "netpNorm: {:>10.2f},\tnetgradNorm: {:>10.2f}\t",
+                "[{:>3d}/{:>3d}]\tloss: {:>10.4f},\t"
+                "netpNorm: {:>10.2f},\tnetgradNorm: {:>10.2f}\t",
                 step,
                 cfg.training.steps,
                 loss.item(),
@@ -224,35 +243,78 @@ def train(gpu, cfg, output_dir, noises_init=None):
             )
 
         if (step + 1) % cfg.training.viz_interval == 0 and is_main_process:
-            logger.info("Generation: eval")
+            logger.info("Starting evaluation...")
 
             model.eval()
+
+            eval_data = next(eval_iter)
+
+            x_eval = eval_data["train_points"].transpose(1, 2)
+            lowres_eval = (
+                eval_data["train_points_lowres"].transpose(1, 2)
+                if "train_points_lowres" in eval_data and not cfg.data.unconditional
+                else None
+            )
+
+            # move data to gpu
+            if cfg.distribution_type == "multi":
+                x_eval = x_eval.cuda(gpu)
+                lowres_eval = lowres_eval.cuda(gpu) if lowres_eval is not None else None
+            elif cfg.distribution_type == "single":
+                x_eval = x_eval.cuda()
+                lowres_eval = lowres_eval.cuda() if lowres_eval is not None else None
+
             with torch.no_grad():
                 if cfg.sampling.bs == 1:
-                    cond = lowres[0].unsqueeze(0) if lowres is not None else None
+                    cond = (
+                        lowres_eval[0].unsqueeze(0) if lowres_eval is not None else None
+                    )
                 else:
-                    cond = lowres[: cfg.sampling.bs] if lowres is not None else None
+                    cond = (
+                        lowres_eval[: cfg.sampling.bs]
+                        if lowres_eval is not None
+                        else None
+                    )
 
                 x_gen_eval = model.sample(
-                    shape=new_x_chain(x, cfg.sampling.bs).shape,
-                    device=x.device,
+                    shape=new_x_chain(x_eval, cfg.sampling.bs).shape,
+                    device=x_eval.device,
                     cond=cond,
+                    hint=x_eval if cfg.diffusion.sampling_hint else None,
                     clip_denoised=False,
                 )
 
                 x_gen_list = model.sample(
-                    shape=new_x_chain(x, 1).shape,
-                    device=x.device,
-                    cond=lowres[0].unsqueeze(0) if lowres is not None else None,
+                    shape=new_x_chain(x_eval, 1).shape,
+                    device=x_eval.device,
+                    cond=lowres_eval[0].unsqueeze(0)
+                    if lowres_eval is not None
+                    else None,
+                    hint=x_eval if cfg.diffusion.sampling_hint else None,
                     freq=0.1,
                     clip_denoised=False,
                 )
 
                 x_gen_all = torch.cat(x_gen_list, dim=0)
 
-                print_stats(x_gen_eval, "x_gen_eval")
-                print_stats(x_gen_all, "x_gen_all")
+            # calculate metrics such as min, max, mean, std, etc.
+            print_stats(x_gen_eval, "x_gen_eval")
+            print_stats(x_gen_all, "x_gen_all")
 
+            # calculate the CD
+            cds = []
+            for x_pred, x_gt in zip(x_gen_eval, x_eval):
+                cd = chamfer_distance(
+                    x_pred.cpu().permute(1, 0).numpy(),
+                    x_gt.cpu().permute(1, 0).numpy(),
+                )
+                cds.append(cd)
+            cd = np.mean(cds)
+
+            logger.info("CD: {}", cd)
+            wandb.log({"CD": cd}, step=step)
+
+            # visualize the pointclouds
             visualize_pointcloud_batch(
                 "%s/step_%03d_samples_eval.png" % (outf_syn, step),
                 x_gen_eval.transpose(1, 2),
@@ -263,21 +325,27 @@ def train(gpu, cfg, output_dir, noises_init=None):
                 x_gen_all.transpose(1, 2),
             )
 
-            if lowres is not None:
+            if lowres_eval is not None:
                 visualize_pointcloud_batch(
                     "%s/step_%03d_lowres.png" % (outf_syn, step),
-                    lowres.transpose(1, 2),
+                    lowres_eval.transpose(1, 2),
                 )
 
             visualize_pointcloud_batch(
                 "%s/step_%03d_highres.png" % (outf_syn, step),
-                x.transpose(1, 2),
+                x_eval.transpose(1, 2),
             )
 
             # log the saved images to wandb
             samps_eval = wandb.Image("%s/step_%03d_samples_eval.png" % (outf_syn, step))
-            samps_eval_all = wandb.Image("%s/step_%03d_samples_eval_all.png" % (outf_syn, step))
-            samps_lowres = wandb.Image("%s/step_%03d_lowres.png" % (outf_syn, step)) if lowres is not None else None
+            samps_eval_all = wandb.Image(
+                "%s/step_%03d_samples_eval_all.png" % (outf_syn, step)
+            )
+            samps_lowres = (
+                wandb.Image("%s/step_%03d_lowres.png" % (outf_syn, step))
+                if lowres_eval is not None
+                else None
+            )
             samps_highres = wandb.Image("%s/step_%03d_highres.png" % (outf_syn, step))
             wandb.log(
                 {
@@ -345,18 +413,24 @@ def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", type=str, help="Path to the config file.")
     parser.add_argument("--name", type=str, default="", help="Name of the experiment.")
-    parser.add_argument("--save_dir", default=".")
-    parser.add_argument("--model_path", default="", help="path to model (to continue training)")
+    parser.add_argument("--save_dir", default="checkpoints", help="path to save models")
+    parser.add_argument(
+        "--model_path", default="", help="path to model (to continue training)"
+    )
 
     """distributed"""
-    parser.add_argument("--world_size", default=1, type=int, help="Number of distributed nodes.")
+    parser.add_argument(
+        "--world_size", default=1, type=int, help="Number of distributed nodes."
+    )
     parser.add_argument(
         "--dist_url",
         default="tcp://127.0.0.1:9991",
         type=str,
         help="url used to set up distributed training",
     )
-    parser.add_argument("--dist_backend", default="nccl", type=str, help="distributed backend")
+    parser.add_argument(
+        "--dist_backend", default="nccl", type=str, help="distributed backend"
+    )
     parser.add_argument(
         "--distribution_type",
         default="single",
@@ -366,7 +440,9 @@ def parse_args():
         "fastest way to use PyTorch for either single node or "
         "multi node data parallel training",
     )
-    parser.add_argument("--rank", default=0, type=int, help="node rank for distributed training")
+    parser.add_argument(
+        "--rank", default=0, type=int, help="node rank for distributed training"
+    )
 
     args, remaining_argv = parser.parse_known_args()
     # load config

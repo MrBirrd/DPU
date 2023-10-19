@@ -4,7 +4,6 @@ from functools import partial, wraps
 from random import random
 import torch
 import torch.nn.functional as F
-from beartype import beartype
 from einops import rearrange, reduce, repeat
 from torch import einsum, nn
 from torch.special import expm1
@@ -13,7 +12,9 @@ from torchvision import utils
 from tqdm.auto import tqdm
 from .rin import RIN
 
-FlashAttentionConfig = namedtuple("FlashAttentionConfig", ["enable_flash", "enable_math", "enable_mem_efficient"])
+FlashAttentionConfig = namedtuple(
+    "FlashAttentionConfig", ["enable_flash", "enable_math", "enable_mem_efficient"]
+)
 
 
 # helpers functions
@@ -137,7 +138,6 @@ def gamma_to_log_snr(gamma, scale=1, eps=1e-5):
 # gaussian diffusion
 
 
-@beartype
 class GaussianDiffusion(nn.Module):
     def __init__(
         self,
@@ -172,7 +172,11 @@ class GaussianDiffusion(nn.Module):
         objective = cfg_convert[objective]
         self.out_dim = self.model.out_dim
 
-        assert objective in {"x0", "eps", "v"}, "objective must be either predict x0 or noise"
+        assert objective in {
+            "x0",
+            "eps",
+            "v",
+        }, "objective must be either predict x0 or noise"
         self.objective = objective
 
         self.npoints = npoints
@@ -240,7 +244,9 @@ class GaussianDiffusion(nn.Module):
         x_start = None
         last_latents = None
 
-        for time, time_next in tqdm(time_pairs, desc="sampling loop time step", total=self.timesteps):
+        for time, time_next in tqdm(
+            time_pairs, desc="sampling loop time step", total=self.timesteps
+        ):
             # add the time delay
 
             time_next = (time_next - self.time_difference).clamp(min=0.0)
@@ -263,7 +269,9 @@ class GaussianDiffusion(nn.Module):
 
             gamma = self.gamma_schedule(time)
             gamma_next = self.gamma_schedule(time_next)
-            gamma, gamma_next = map(partial(right_pad_dims_to, img), (gamma, gamma_next))
+            gamma, gamma_next = map(
+                partial(right_pad_dims_to, img), (gamma, gamma_next)
+            )
 
             # get alpha sigma of time and next time
 
@@ -297,7 +305,11 @@ class GaussianDiffusion(nn.Module):
 
             # get noise
 
-            noise = torch.where(rearrange(time_next > 0, "b -> b 1 1 1"), torch.randn_like(img), torch.zeros_like(img))
+            noise = torch.where(
+                rearrange(time_next > 0, "b -> b 1 1 1"),
+                torch.randn_like(img),
+                torch.zeros_like(img),
+            )
 
             img = mean + (0.5 * log_variance).exp() * noise
 
@@ -324,7 +336,9 @@ class GaussianDiffusion(nn.Module):
             gamma = self.gamma_schedule(times)
             gamma_next = self.gamma_schedule(times_next)
 
-            padded_gamma, padded_gamma_next = map(partial(right_pad_dims_to, img), (gamma, gamma_next))
+            padded_gamma, padded_gamma_next = map(
+                partial(right_pad_dims_to, img), (gamma, gamma_next)
+            )
 
             alpha, sigma = gamma_to_alpha_sigma(padded_gamma, self.scale)
             alpha_next, sigma_next = gamma_to_alpha_sigma(padded_gamma_next, self.scale)
@@ -371,7 +385,11 @@ class GaussianDiffusion(nn.Module):
             samples_list.append(rearrange(unnormalize_batch(img), "b n c -> b c n"))
             sample_step += 1
 
-        ret = unnormalize_batch(img) if sample_every == 0 else samples_list[::sample_every]
+        ret = (
+            unnormalize_batch(img)
+            if sample_every == 0
+            else samples_list[::sample_every]
+        )
         ret = rearrange(ret, "b n c-> b c n") if sample_every == 0 else ret
         return ret
 
@@ -379,7 +397,9 @@ class GaussianDiffusion(nn.Module):
     def sample(self, shape=16, cond=None, freq=0, *args, **kwargs):
         n, d = self.npoints, self.out_dim
         sample_fn = self.ddpm_sample if not self.use_ddim else self.ddim_sample
-        sample_every = int(self.timesteps / (self.timesteps * (1 - freq))) if freq > 0 else 0
+        sample_every = (
+            int(self.timesteps / (self.timesteps * (1 - freq))) if freq > 0 else 0
+        )
         return sample_fn((shape[0], d, n), cond=cond, sample_every=sample_every)
 
     def forward(self, x, cond=None, *args, **kwargs):
@@ -422,7 +442,9 @@ class GaussianDiffusion(nn.Module):
 
         if random() < self.train_prob_self_cond:
             with torch.no_grad():
-                model_output, self_latents = self.model(noised_x, times, cond=cond, return_latents=True)
+                model_output, self_latents = self.model(
+                    noised_x, times, cond=cond, return_latents=True
+                )
                 self_latents = self_latents.detach()
 
                 if self.objective == "x0":
@@ -439,7 +461,13 @@ class GaussianDiffusion(nn.Module):
 
         # predict and take gradient step
 
-        pred = self.model(noised_x, times, cond=cond, x_self_cond=self_cond, latent_self_cond=self_latents)
+        pred = self.model(
+            noised_x,
+            times,
+            cond=cond,
+            x_self_cond=self_cond,
+            latent_self_cond=self_latents,
+        )
 
         if self.objective == "eps":
             target = noise

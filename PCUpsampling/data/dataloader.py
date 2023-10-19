@@ -1,5 +1,6 @@
 import torch
 from .arkitscenes import IndoorScenes, IndoorScenesCut, ArkitScans
+from .scannetpp import ScanNetPPCut
 from .shapenet import get_dataset_shapenet
 from loguru import logger
 import os
@@ -43,13 +44,21 @@ def get_dataloader(opt, sampling=False):
             overfit=opt.training.overfit,
         )
     elif opt.data.dataset == "Indoor":
-        logger.info("Loading IndoorScenes dataset, which is currently only for overfitting on one scene!")
+        logger.info(
+            "Loading IndoorScenes dataset, which is currently only for overfitting on one scene!"
+        )
         train_dataset = IndoorScenes(
-            opt.data.data_dir, opt.data.npoints, voxel_size=opt.data.voxel_size, normalize=opt.data.normalize
+            opt.data.data_dir,
+            opt.data.npoints,
+            voxel_size=opt.data.voxel_size,
+            normalize=opt.data.normalize,
         )
     elif opt.data.dataset == "IndoorCut":
         train_dataset = IndoorScenesCut(
-            opt.data.data_dir, opt.data.npoints, voxel_size=opt.data.voxel_size, normalize=opt.data.normalize
+            opt.data.data_dir,
+            opt.data.npoints,
+            voxel_size=opt.data.voxel_size,
+            normalize=opt.data.normalize,
         )
     elif opt.data.dataset == "Arkit":
         train_dataset = ArkitScans(
@@ -59,7 +68,17 @@ def get_dataloader(opt, sampling=False):
             normalize=opt.data.normalize,
             unconditional=opt.data.unconditional,
         )
+    elif opt.data.dataset == "ScanNetPP":
+        train_dataset = ScanNetPPCut(
+            npoints=opt.data.npoints, root=opt.data.data_dir, mode="training"
+        )
+        test_dataset = ScanNetPPCut(
+            npoints=opt.data.npoints, root=opt.data.data_dir, mode="validation"
+        )
+    else:
+        raise NotImplementedError(f"Dataset {opt.data.dataset} not implemented!")
 
+    # setup the samplers
     if opt.distribution_type == "multi":
         train_sampler = torch.utils.data.distributed.DistributedSampler(
             train_dataset, num_replicas=opt.world_size, rank=opt.rank
@@ -74,6 +93,7 @@ def get_dataloader(opt, sampling=False):
         train_sampler = None
         test_sampler = None
 
+    # setup the dataloaders
     train_dataloader = DataLoader(
         train_dataset,
         batch_size=opt.training.bs if not sampling else opt.sampling.bs,
@@ -87,7 +107,7 @@ def get_dataloader(opt, sampling=False):
     if test_dataset is not None:
         test_dataloader = DataLoader(
             train_dataset,
-            batch_size=opt.training.bs if not sampling else opt.sampling.bs,
+            batch_size=opt.sampling.bs if not sampling else opt.sampling.bs,
             sampler=test_sampler,
             shuffle=False,
             num_workers=int(opt.data.workers),

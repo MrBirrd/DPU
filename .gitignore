@@ -20,3 +20,4 @@ ShapeNetCore*
 *.sampling_viz
 build
 *.out
+datasets

@@ -4,7 +4,6 @@ from functools import partial, wraps
 from random import random
 import torch
 import torch.nn.functional as F
-from beartype import beartype
 from einops import rearrange, reduce, repeat
 from einops.layers.torch import Rearrange
 from ema_pytorch import EMA
@@ -17,7 +16,9 @@ from torchvision import utils
 from tqdm.auto import tqdm
 
 # constants
-FlashAttentionConfig = namedtuple("FlashAttentionConfig", ["enable_flash", "enable_math", "enable_mem_efficient"])
+FlashAttentionConfig = namedtuple(
+    "FlashAttentionConfig", ["enable_flash", "enable_math", "enable_mem_efficient"]
+)
 
 # helpers
 
@@ -67,14 +68,23 @@ class Attend(nn.Module):
         device_properties = torch.cuda.get_device_properties(torch.device("cuda"))
 
         if device_properties.major == 8 and device_properties.minor == 0:
-            print_once("A100 GPU detected, using flash attention if input tensor is on cuda")
+            print_once(
+                "A100 GPU detected, using flash attention if input tensor is on cuda"
+            )
             self.cuda_config = FlashAttentionConfig(True, False, False)
         else:
-            print_once("Non-A100 GPU detected, using math or mem efficient attention if input tensor is on cuda")
+            print_once(
+                "Non-A100 GPU detected, using math or mem efficient attention if input tensor is on cuda"
+            )
             self.cuda_config = FlashAttentionConfig(False, True, True)
 
     def flash_attn(self, q, k, v, mask=None):
-        _, heads, q_len, _, k_len, is_cuda, device = *q.shape, k.shape[-2], q.is_cuda, q.device
+        _, heads, q_len, _, k_len, is_cuda, device = (
+            *q.shape,
+            k.shape[-2],
+            q.is_cuda,
+            q.device,
+        )
 
         # Check if mask exists and expand to compatible shape
         # The mask is B L, so it would have to be expanded to B H N L
@@ -90,7 +100,11 @@ class Attend(nn.Module):
 
         with torch.backends.cuda.sdp_kernel(**config._asdict()):
             out = F.scaled_dot_product_attention(
-                q, k, v, attn_mask=mask, dropout_p=self.dropout if self.training else 0.0
+                q,
+                k,
+                v,
+                attn_mask=mask,
+                dropout_p=self.dropout if self.training else 0.0,
             )
 
         return out
@@ -233,7 +247,9 @@ class LearnedSinusoidalPosEmb(nn.Module):
 
 # used for self attention
 class LinearAttention(nn.Module):
-    def __init__(self, dim, heads=4, dim_head=32, norm=False, qk_norm=False, time_cond_dim=None):
+    def __init__(
+        self, dim, heads=4, dim_head=32, norm=False, qk_norm=False, time_cond_dim=None
+    ):
         super().__init__()
         hidden_dim = dim_head * heads
         self.scale = dim_head**-0.5
@@ -242,7 +258,9 @@ class LinearAttention(nn.Module):
         self.time_cond = None
 
         if exists(time_cond_dim):
-            self.time_cond = nn.Sequential(nn.SiLU(), nn.Linear(time_cond_dim, dim * 2), Rearrange("b d -> b 1 d"))
+            self.time_cond = nn.Sequential(
+                nn.SiLU(), nn.Linear(time_cond_dim, dim * 2), Rearrange("b d -> b 1 d")
+            )
 
             nn.init.zeros_(self.time_cond[-2].weight)
             nn.init.zeros_(self.time_cond[-2].bias)
@@ -256,7 +274,9 @@ class LinearAttention(nn.Module):
             self.q_norm = MultiHeadedRMSNorm(dim_head, heads)
             self.k_norm = MultiHeadedRMSNorm(dim_head, heads)
 
-        self.to_out = nn.Sequential(nn.Linear(hidden_dim, dim, bias=False), LayerNorm(dim))
+        self.to_out = nn.Sequential(
+            nn.Linear(hidden_dim, dim, bias=False), LayerNorm(dim)
+        )
 
     def forward(self, x, time=None):
         h = self.heads
@@ -307,7 +327,9 @@ class Attention(nn.Module):
         self.time_cond = None
 
         if exists(time_cond_dim):
-            self.time_cond = nn.Sequential(nn.SiLU(), nn.Linear(time_cond_dim, dim * 2), Rearrange("b d -> b 1 d"))
+            self.time_cond = nn.Sequential(
+                nn.SiLU(), nn.Linear(time_cond_dim, dim * 2), Rearrange("b d -> b 1 d")
+            )
 
             nn.init.zeros_(self.time_cond[-2].weight)
             nn.init.zeros_(self.time_cond[-2].bias)
@@ -365,13 +387,17 @@ class FeedForward(nn.Module):
         self.time_cond = None
 
         if exists(time_cond_dim):
-            self.time_cond = nn.Sequential(nn.SiLU(), nn.Linear(time_cond_dim, dim * 2), Rearrange("b d -> b 1 d"))
+            self.time_cond = nn.Sequential(
+                nn.SiLU(), nn.Linear(time_cond_dim, dim * 2), Rearrange("b d -> b 1 d")
+            )
 
             nn.init.zeros_(self.time_cond[-2].weight)
             nn.init.zeros_(self.time_cond[-2].bias)
 
         inner_dim = int(dim * mult)
-        self.net = nn.Sequential(nn.Linear(dim, inner_dim), nn.GELU(), nn.Linear(inner_dim, dim))
+        self.net = nn.Sequential(
+            nn.Linear(dim, inner_dim), nn.GELU(), nn.Linear(inner_dim, dim)
+        )
 
     def forward(self, x, time=None):
         x = self.norm(x)
@@ -386,7 +412,14 @@ class FeedForward(nn.Module):
 
 # model
 class RINBlock(nn.Module):
-    def __init__(self, pc_dim, latent_self_attn_depth, dim_latent=None, final_norm=True, **attn_kwargs):
+    def __init__(
+        self,
+        pc_dim,
+        latent_self_attn_depth,
+        dim_latent=None,
+        final_norm=True,
+        **attn_kwargs,
+    ):
         super().__init__()
         dim_latent = default(dim_latent, pc_dim)
 
@@ -400,7 +433,12 @@ class RINBlock(nn.Module):
         self.latent_self_attns = nn.ModuleList([])
         for _ in range(latent_self_attn_depth):
             self.latent_self_attns.append(
-                nn.ModuleList([Attention(dim_latent, norm=True, **attn_kwargs), FeedForward(dim_latent)])
+                nn.ModuleList(
+                    [
+                        Attention(dim_latent, norm=True, **attn_kwargs),
+                        FeedForward(dim_latent),
+                    ]
+                )
             )
 
         # final norm for latent K bloks
@@ -468,7 +506,10 @@ class RIN(nn.Module):
         time_output_dim = dim_latent if latent_token_time_cond else time_dim
 
         self.time_mlp = nn.Sequential(
-            sinu_pos_emb, nn.Linear(fourier_dim, time_dim), nn.GELU(), nn.Linear(time_dim, time_output_dim)
+            sinu_pos_emb,
+            nn.Linear(fourier_dim, time_dim),
+            nn.GELU(),
+            nn.Linear(time_dim, time_output_dim),
         )
 
         self.to_points = nn.Sequential(
@@ -480,7 +521,9 @@ class RIN(nn.Module):
 
         nn.init.normal_(self.latents, std=0.02)
 
-        self.init_self_cond_latents = nn.Sequential(FeedForward(dim_latent), LayerNorm(dim_latent))
+        self.init_self_cond_latents = nn.Sequential(
+            FeedForward(dim_latent), LayerNorm(dim_latent)
+        )
 
         nn.init.zeros_(self.init_self_cond_latents[-1].gamma)
 
@@ -490,7 +533,12 @@ class RIN(nn.Module):
 
         self.blocks = nn.ModuleList(
             [
-                RINBlock(in_dim, dim_latent=dim_latent, latent_self_attn_depth=latent_self_attn_depth, **attn_kwargs)
+                RINBlock(
+                    in_dim,
+                    dim_latent=dim_latent,
+                    latent_self_attn_depth=latent_self_attn_depth,
+                    **attn_kwargs,
+                )
                 for _ in range(depth)
             ]
         )
@@ -499,7 +547,15 @@ class RIN(nn.Module):
     def device(self):
         return next(self.parameters()).device
 
-    def forward(self, x, time, cond=None, x_self_cond=None, latent_self_cond=None, return_latents=False):
+    def forward(
+        self,
+        x,
+        time,
+        cond=None,
+        x_self_cond=None,
+        latent_self_cond=None,
+        return_latents=False,
+    ):
         batch, n, c = x.shape
 
         if c > n:
