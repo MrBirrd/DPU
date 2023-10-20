@@ -9,7 +9,7 @@ try:
 except:
     pass
 
-from .unet_pointvoxel import PVCLion
+from .unet_pointvoxel import PVCLionSmall
 from gecco_torch.models.linear_lift import LinearLift
 from gecco_torch.models.set_transformer import SetTransformer
 import math
@@ -35,7 +35,7 @@ class PVD(nn.Module):
         self.ddim = cfg.diffusion.sampling_strategy == "DDIM"
 
         if cfg.model.type == "PVD":
-            self.model = PVCLion(
+            self.model = PVCLionSmall(
                 out_dim=cfg.data.nc,
                 input_dim=cfg.data.nc,
                 npoints=cfg.data.npoints,

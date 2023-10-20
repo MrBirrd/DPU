@@ -13,7 +13,7 @@ try:
     from .unet_mink import MinkUnet
 except:
     pass
-from .unet_pointvoxel import PVCLion
+from .unet_pointvoxel import PVCLionSmall
 from gecco_torch.models.linear_lift import LinearLift
 from gecco_torch.models.set_transformer import SetTransformer
 
@@ -102,7 +102,7 @@ class ElucidatedDiffusion(nn.Module):
 
         # setup networks
         if args.model.type == "PVD":
-            self.net = PVCLion(
+            self.net = PVCLionSmall(
                 out_dim=args.data.nc,
                 input_dim=args.data.nc,
                 npoints=args.data.npoints,

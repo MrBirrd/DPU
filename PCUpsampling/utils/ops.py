@@ -41,8 +41,8 @@ def norm(v, f):
 
 
 def getGradNorm(net):
-    pNorm = torch.sqrt(sum(torch.sum(p**2) for p in net.parameters()))
-    gradNorm = torch.sqrt(sum(torch.sum(p.grad**2) for p in net.parameters()))
+    pNorm = torch.sqrt(sum(torch.sum(p**2) for p in net.parameters() if p.requires_grad))
+    gradNorm = torch.sqrt(sum(torch.sum(p.grad**2) for p in net.parameters() if p.requires_grad))
     return pNorm, gradNorm
 
 

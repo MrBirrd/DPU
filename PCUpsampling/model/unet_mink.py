@@ -89,7 +89,15 @@ def default(val, d):
     return d() if callable(d) else d
 
 
-def mink_conv(dim, dim_out=None, kernel_size=3, stride=1, dimension=-1, bias=True, new_coords=False):
+def mink_conv(
+    dim,
+    dim_out=None,
+    kernel_size=3,
+    stride=1,
+    dimension=-1,
+    bias=True,
+    new_coords=False,
+):
     return ME.MinkowskiConvolution(
         dim,
         default(dim_out, dim),
@@ -101,7 +109,15 @@ def mink_conv(dim, dim_out=None, kernel_size=3, stride=1, dimension=-1, bias=Tru
     )
 
 
-def mink_convtTranspose(dim, dim_out=None, stride=1, kernel_size=3, dimension=-1, bias=True, new_coords=False):
+def mink_convtTranspose(
+    dim,
+    dim_out=None,
+    stride=1,
+    kernel_size=3,
+    dimension=-1,
+    bias=True,
+    new_coords=False,
+):
     if new_coords:
         return ME.MinkowskiGenerativeConvolutionTranspose(
             dim,
@@ -122,35 +138,64 @@ def mink_convtTranspose(dim, dim_out=None, stride=1, kernel_size=3, dimension=-1
         )
 
 
-def DownsampleME(in_planes, out_planes, stride=2, D=-1, ks_p_down=2, ks_c_up=3, batchnorm=False):
-    """Downsamples in two steps via convolution. First the number of points is downsampled, then the features are downsampled."""
+def DownsampleME(in_planes, out_planes, ds_factor=2, D=-1, batchnorm=False):
+    """
+    Downsamples the input tensor using Minkowski Engine.
+
+    Args:
+        in_planes (int): Number of input channels.
+        out_planes (int): Number of output channels.
+        stride (int, optional): Stride of the convolution. Defaults to 2.
+        D (int, optional): Number of spatial dimensions. Defaults to -1.
+        ks_p_down (int, optional): Kernel size of the convolution. Defaults to 2.
+        batchnorm (bool, optional): Whether to use batch normalization. Defaults to False.
+
+    Returns:
+        nn.Sequential: A sequential module containing the convolution and batch normalization layers (if specified).
+    """
     module_list = []
-    module_list.append(
-        mink_conv(in_planes, in_planes, kernel_size=ks_p_down, stride=stride, dimension=D)
-    )  # downsample the number of points
+    # first upsample the channel planes
     module_list.append(
         mink_conv(
             in_planes,
             default(out_planes, in_planes),
-            kernel_size=ks_c_up,
+            kernel_size=3,
             stride=1,
             dimension=D,
         )
-    )  # upsample the number of channels
-    # module_list.append(mink_conv(in_planes, default(out_planes, in_planes), kernel_size=ks_p_down, stride=stride, dimension=D))
+    )
+    # then downsample the spatial dimensions
+    module_list.append(ME.MinkowskiMaxPooling(kernel_size=ds_factor, stride=ds_factor, dimension=D))
     if batchnorm:
         module_list.append(ME.MinkowskiBatchNorm(default(out_planes, in_planes)))
     return nn.Sequential(*module_list)
 
 
-def UpsampleME(in_planes, out_planes=None, stride=2, D=-1, kernel_size=2, batchnorm=False):
+def UpsampleME(in_planes, out_planes=None, upsample_factor=2, D=-1, batchnorm=False):
+    """
+    Upsamples the input tensor by a factor of `stride` using transposed convolution.
+
+    Args:
+        in_planes (int): Number of input channels.
+        out_planes (int, optional): Number of output channels. If not provided, defaults to `in_planes`.
+        stride (int, optional): Upsampling factor. Defaults to 2.
+        D (int, optional): Number of spatial dimensions. Defaults to -1.
+        kernel_size (int, optional): Size of the convolution kernel. Defaults to 2.
+        batchnorm (bool, optional): Whether to apply batch normalization. Defaults to False.
+
+    Returns:
+        nn.Sequential: Sequential module containing the transposed convolution and batch normalization (if applied).
+    """
     module_list = []
+    # first upsample the points
+    module_list.append(ME.MinkowskiPoolingTranspose(kernel_size=upsample_factor, stride=upsample_factor, dimension=D))
+    # then reduce the channels
     module_list.append(
         mink_convtTranspose(
             in_planes,
             out_planes,
-            kernel_size=kernel_size,
-            stride=stride,
+            kernel_size=3,
+            stride=1,
             dimension=D,
             new_coords=False,
         )
@@ -196,7 +241,7 @@ class RandomOrLearnedSinusoidalPosEmb(nn.Module):
 
 
 # building block modules
-class BlockME(nn.Module):
+class BlockMEScaleShift(nn.Module):
     def __init__(self, dim, dim_out, groups=8, D=-1):
         super().__init__()
         self.proj = mink_conv(dim, dim_out, kernel_size=3, dimension=D)
@@ -204,7 +249,7 @@ class BlockME(nn.Module):
         # self.norm = ME.MinkowskiFunctional.group_norm(num_groups=groups)
         self.act = ME.MinkowskiSiLU()
 
-    def forward(self, x, scale_shift=None):
+    def forward(self, x, scale_shift=None, time_emb=None):
         x = self.proj(x)
         # x = self.norm(x)
 
@@ -240,22 +285,69 @@ class BlockME(nn.Module):
         return x
 
 
-class ResnetBlockME(nn.Module):
-    def __init__(self, dim, dim_out, *, D=-1, time_emb_dim=None, groups=8):
+class BlockMEConcat(nn.Module):
+    def __init__(self, dim, dim_out, groups=8, D=-1, use_norm=True):
         super().__init__()
-        self.mlp = nn.Sequential(nn.SiLU(), nn.Linear(time_emb_dim, dim_out * 2)) if exists(time_emb_dim) else None
+        self.proj = mink_conv(dim, dim_out, kernel_size=3, dimension=D)
+        # self.norm = MinkowskiGroupNorm(groups, dim_out)
+        self.norm = ME.MinkowskiBatchNorm(dim_out) if use_norm else MinowskiIdentity()
+        # self.norm = ME.MinkowskiFunctional.group_norm(num_groups=groups)
+        self.act = ME.MinkowskiSiLU()
 
-        self.block1 = BlockME(dim, dim_out, groups=groups, D=D)
-        self.block2 = BlockME(dim_out, dim_out, groups=groups, D=D)
+    def forward(self, x, scale_shift=None, time_emb=None):
+        # if we got a time_emb but no scale shift we should do time feature concatenation
+        if exists(time_emb) and not exists(scale_shift):
+            # extract batch size and the number of points per batch in sparse tensor x
+            b = time_emb.shape[0]
+            n_pts_per_batch = [x.features_at(idx).shape[0] for idx in range(b)]
+
+            time_emb_sparse = ME.SparseTensor(
+                features=torch.cat(
+                    [repeat(item, "f -> c f", c=n_pts_per_batch[idx]) for idx, item in enumerate(time_emb)]
+                ),
+                device=x.device,
+                coordinate_manager=x.coordinate_manager,  # must share the same coordinate manager
+                coordinate_map_key=x.coordinate_map_key,  # must share the same coordinate map key
+            )
+
+            x = ME.cat((x, time_emb_sparse))
+
+        x = self.proj(x)
+        x = self.norm(x)
+        x = self.act(x)
+
+        return x
+
+
+class ResnetBlockME(nn.Module):
+    def __init__(self, dim, dim_out, *, D=-1, time_emb_dim=None, groups=8, concat_time_emb=True):
+        super().__init__()
+        self.mlp = (
+            nn.Sequential(nn.SiLU(), nn.Linear(time_emb_dim, dim_out * 2))
+            if exists(time_emb_dim) and not concat_time_emb
+            else None
+        )
+
+        self.time_emb_concat = concat_time_emb
+
+        if concat_time_emb:
+            self.block1 = BlockMEConcat(dim + time_emb_dim, dim_out, groups=groups, D=D)
+            self.block2 = BlockMEConcat(dim_out, dim_out, groups=groups, D=D)
+
+        else:
+            self.block1 = BlockMEScaleShift(dim, dim_out, groups=groups, D=D)
+            self.block2 = BlockMEScaleShift(dim_out, dim_out, groups=groups, D=D)
+
         self.res_conv = mink_conv(dim, dim_out, kernel_size=1, dimension=D) if dim != dim_out else MinowskiIdentity()
 
     def forward(self, x, time_emb=None):
+        # calculate scale shift parameters if needed
         scale_shift = None
-        if exists(self.mlp) and exists(time_emb):
+        if exists(self.mlp) and exists(time_emb) and not self.time_emb_concat:
             time_emb = self.mlp(time_emb)
             scale_shift = time_emb.chunk(2, dim=1)
 
-        h = self.block1(x, scale_shift=scale_shift)
+        h = self.block1(x, scale_shift=scale_shift, time_emb=time_emb)
 
         h = self.block2(h)
 
@@ -335,12 +427,14 @@ class MinkUnet(nn.Module):
     def __init__(
         self,
         dim,
-        D,
+        D=1,
         init_dim=None,
         init_ds_factor=1,
         out_dim=None,
-        dim_mults=(1, 2, 4, 8),
+        dim_mults=(1, 1, 2, 2, 4, 4),
+        downsampfactors=(4, 1, 4, 1, 4, 1),
         in_channels=3,
+        in_shape=None,
         self_condition=False,
         resnet_block_groups=8,
         learned_variance=False,
@@ -348,25 +442,29 @@ class MinkUnet(nn.Module):
         random_fourier_features=False,
         learned_sinusoidal_dim=16,
         use_attention=False,
+        voxel_feature_concat=False,  # concatenate the conditional pointcloud by per voxel featuress
+        concat_time_emb=True,  # concatenate the time embeddings to the input features, otherwise use scale and shift
     ):
         super().__init__()
 
-        #  setup the sparse conversion
-        if D == 1:
+        # setup functions to generate sparse tensors and handle caching
+        if in_shape is not None:
+            coordinates = ME.dense_coordinates(in_shape)
+            coordinates_b1 = ME.dense_coordinates(torch.Size([1, *in_shape[1:]]))
 
-            def to_sparse(coords, feats=None, voxel_size=None):
-                return to_sparse_all(coords if feats is None else feats)
+            self.to_sparse = ME.MinkowskiToSparseTensor(coordinates=coordinates)
+            self.to_sparse_single = ME.MinkowskiToSparseTensor(coordinates=coordinates_b1)
 
-            self.to_sparse = to_sparse
-        elif D == 3:
-
-            def to_sparse(coords, feats, voxel_size):
-                return to_parse_tensor(coords, feats, voxel_size)
-
-            self.to_sparse = to_sparse
+            self.to_dense = ME.MinkowskiToDenseTensor(torch.Size(in_shape))
+            self.to_dense_single = ME.MinkowskiToDenseTensor(torch.Size([1, *in_shape[1:]]))
+        else:
+            self.to_sparse = ME.MinkowskiToSparseTensor()
+            self.to_dense = ME.MinkowskiToFeature()
 
         # setup voxelwise feature concatenatino
-        self.voxel_feat_cat = FeatureVoxelConcatenation(resolution=64, normalize=False)
+        self.voxel_feat_cat = (
+            FeatureVoxelConcatenation(resolution=64, normalize=False) if voxel_feature_concat else None
+        )
 
         self.channels = in_channels
         self.self_condition = self_condition
@@ -376,13 +474,19 @@ class MinkUnet(nn.Module):
         self.init_conv = mink_conv(input_channels, init_dim, kernel_size=5, stride=init_ds_factor, dimension=D)
 
         dims = [init_dim, *map(lambda m: dim * m, dim_mults)]
-        in_out = list(zip(dims[:-1], dims[1:]))
+        in_out_down = list(zip(dims[:-1], dims[1:], downsampfactors))
+        in_out_up = list(zip(dims[:-1], dims[1:], reversed(downsampfactors)))
 
-        block_klass = partial(ResnetBlockME, D=D, groups=resnet_block_groups)
+        block_klass = partial(
+            ResnetBlockME,
+            D=D,
+            groups=resnet_block_groups,
+            concat_time_emb=concat_time_emb,
+        )
 
         # time embeddings
 
-        time_dim = dim * 4
+        time_dim = dim * 4 if not concat_time_emb else dim
 
         self.random_or_learned_sinusoidal_cond = learned_sinusoidal_cond or random_fourier_features
 
@@ -403,9 +507,9 @@ class MinkUnet(nn.Module):
         # layers
         self.downs = nn.ModuleList([])
         self.ups = nn.ModuleList([])
-        num_resolutions = len(in_out)
+        num_resolutions = len(in_out_down)
 
-        for ind, (dim_in, dim_out) in enumerate(in_out):
+        for ind, (dim_in, dim_out, factor) in enumerate(in_out_down):
             is_last = ind >= (num_resolutions - 1)
 
             self.downs.append(
@@ -413,31 +517,29 @@ class MinkUnet(nn.Module):
                     [
                         block_klass(dim_in, dim_in, time_emb_dim=time_dim),
                         block_klass(dim_in, dim_in, time_emb_dim=time_dim),
-                        # Residual(PreNorm(dim_in, LinearAttention(dim_in))) if use_attention else MinowskiIdentity(),
-                        MinowskiIdentity(),
-                        DownsampleME(dim_in, dim_out, D=D)
+                        DownsampleME(dim_in, dim_out, ds_factor=factor, D=D)
                         if not is_last
                         else mink_conv(dim_in, dim_out, kernel_size=3, dimension=D),
                     ]
                 )
             )
 
+        # middle block which can be used as a bottleneck with atttention
         mid_dim = dims[-1]
         self.mid_block1 = block_klass(mid_dim, mid_dim, time_emb_dim=time_dim)
         self.mid_attn = MinkAttention(mid_dim, embed_dim=mid_dim, num_heads=8) if use_attention else MinowskiIdentity()
         self.mid_block2 = block_klass(mid_dim, mid_dim, time_emb_dim=time_dim)
 
-        for ind, (dim_in, dim_out) in enumerate(reversed(in_out)):
-            is_last = ind == (len(in_out) - 1)
+        # upsampling layers
+        for ind, (dim_in, dim_out, factor) in enumerate(reversed(in_out_up)):
+            is_last = ind == (len(in_out_up) - 1)
 
             self.ups.append(
                 nn.ModuleList(
                     [
                         block_klass(dim_out + dim_in, dim_out, time_emb_dim=time_dim),
                         block_klass(dim_out + dim_in, dim_out, time_emb_dim=time_dim),
-                        # Residual(PreNorm(dim_out, LinearAttention(dim_out))) if use_attention else MinowskiIdentity(),
-                        MinowskiIdentity(),
-                        UpsampleME(dim_out, dim_in, D=D)
+                        UpsampleME(dim_out, dim_in, D=D, upsample_factor=factor)
                         if not is_last
                         else mink_conv(dim_in, dim_out, kernel_size=3, dimension=D),
                     ]
@@ -458,18 +560,24 @@ class MinkUnet(nn.Module):
         else:
             raise ValueError(f"initial downsampling factor must be positive, but is {init_ds_factor}")
 
-        # same as in PVD (to see if it changes the results of generating the final features instead of using the mink_conv)
-        # out_layers, _ = create_mlp_components(dim_in, [dim_in, 0.5, self.out_dim], classifier=True, dim=2)
-        # self.final_layer = nn.Sequential(*out_layers)
-
     def forward(self, x_coords, time, cond=None, x_self_cond=None):
         # handle conditioning
         if cond is not None:
-            # stacked_feats = self.voxel_feat_cat(x1_features=x_coords, x2_features=cond, x1_coords=x_coords, x2_coords=cond)
-            stacked_feats = torch.cat((x_coords, cond), dim=1)
+            if self.voxel_feat_cat is not None:
+                stacked_feats = self.voxel_feat_cat(
+                    x1_features=x_coords,
+                    x2_features=cond,
+                    x1_coords=x_coords,
+                    x2_coords=cond,
+                )
+            else:
+                stacked_feats = torch.cat((x_coords, cond), dim=1)
 
         # generate sparse tensor
-        x_sparse = self.to_sparse(coords=x_coords, feats=x_coords if cond is None else stacked_feats, voxel_size=0.001)
+        if x_coords.shape[0] == 1:
+            x_sparse = self.to_sparse_single(x_coords)
+        else:
+            x_sparse = self.to_sparse(x_coords)
 
         x = self.init_conv(x_sparse)
 
@@ -479,12 +587,11 @@ class MinkUnet(nn.Module):
 
         h = []
 
-        for block1, block2, attn, downsample in self.downs:
+        for block1, block2, downsample in self.downs:
             x = block1(x, t)
             h.append(x)
 
             x = block2(x, t)
-            x = attn(x)
             h.append(x)
 
             x = downsample(x)
@@ -493,7 +600,7 @@ class MinkUnet(nn.Module):
         x = self.mid_attn(x)
         x = self.mid_block2(x, t)
 
-        for block1, block2, attn, upsample in self.ups:
+        for block1, block2, upsample in self.ups:
             skip_x1 = h.pop()
             skip_x2 = h.pop()
 
@@ -502,7 +609,6 @@ class MinkUnet(nn.Module):
 
             x = ME.cat((x, skip_x2))
             x = block2(x, t)
-            x = attn(x)
 
             x = upsample(x)
 
@@ -511,14 +617,12 @@ class MinkUnet(nn.Module):
         x = self.final_res_block(x, t)
         x = self.final_conv(x)
 
-        # do final processing
-        x = x.slice(x_sparse)
-        x = rearrange(x.F, "(b n) c -> b c n", b=time.shape[0])
+        if x_coords.shape[0] == 1:
+            xd = self.to_dense_single(x)
+        else:
+            xd = self.to_dense(x)
 
-        # this activates PVDiffusion final layer
-        # x = self.final_layer(x).permute(0, 2, 1)
-
-        return x
+        return xd
 
 
 def to_parse_tensor(coords, feats=None, voxel_size=0.001):

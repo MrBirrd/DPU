@@ -57,9 +57,7 @@ def train(gpu, cfg, output_dir, noises_init=None):
         cfg.training.bs = int(cfg.training.bs / cfg.ngpus_per_node)
         cfg.data.workers = 0
 
-        cfg.training.save_interval = int(
-            cfg.training.save_interval / cfg.ngpus_per_node
-        )
+        cfg.training.save_interval = int(cfg.training.save_interval / cfg.ngpus_per_node)
         cfg.training.viz_interval = int(cfg.training.viz_interval / cfg.ngpus_per_node)
 
     # setup data loader and sampler
@@ -85,9 +83,7 @@ def train(gpu, cfg, output_dir, noises_init=None):
     if cfg.distribution_type == "multi":
 
         def _transform_(m):
-            return nn.parallel.DistributedDataParallel(
-                m, device_ids=[gpu], output_device=gpu
-            )
+            return nn.parallel.DistributedDataParallel(m, device_ids=[gpu], output_device=gpu)
 
         torch.cuda.set_device(gpu)
         model.cuda(gpu)
@@ -111,9 +107,7 @@ def train(gpu, cfg, output_dir, noises_init=None):
 
     # initialize config and wandb
     if is_main_process:
-        pretty_cfg = json.dumps(
-            OmegaConf.to_container(cfg, resolve=True), indent=4, sort_keys=False
-        )
+        pretty_cfg = json.dumps(OmegaConf.to_container(cfg, resolve=True), indent=4, sort_keys=False)
         logger.info("Configuration used:\n{}", pretty_cfg)
         wandb.init(
             project="pvdup",
@@ -147,9 +141,7 @@ def train(gpu, cfg, output_dir, noises_init=None):
 
     # setup lr scheduler
     if cfg.training.scheduler.type == "ExponentialLR":
-        lr_scheduler = optim.lr_scheduler.ExponentialLR(
-            optimizer, cfg.training.scheduler.lr_gamma
-        )
+        lr_scheduler = optim.lr_scheduler.ExponentialLR(optimizer, cfg.training.scheduler.lr_gamma)
     else:
         lr_scheduler = optim.lr_scheduler.ConstantLR(optimizer, factor=1.0)
 
@@ -185,6 +177,7 @@ def train(gpu, cfg, output_dir, noises_init=None):
         if (step + 1) % len(train_loader) == 0:
             lr_scheduler.step()
 
+        loss_accum = 0.0
         for accum_iter in range(cfg.training.accumulation_steps):
             # get next batch
             data = next(train_iter)
@@ -206,18 +199,14 @@ def train(gpu, cfg, output_dir, noises_init=None):
 
             # forward pass
             loss = model(x, cond=lowres) / cfg.training.accumulation_steps
+            loss_accum += loss.item()
             ampscaler.scale(loss).backward()
 
         # get gradient norms for debugging and logging
-        if not (cfg.model.type == "Mink" or cfg.model.type == "RIN"):
-            netpNorm, netgradNorm = getGradNorm(model)
-        else:
-            netpNorm, netgradNorm = 0, 0
+        netpNorm, netgradNorm = getGradNorm(model)
 
         if cfg.training.grad_clip.enabled:
-            torch.nn.utils.clip_grad_norm_(
-                model.parameters(), cfg.training.grad_clip.value
-            )
+            torch.nn.utils.clip_grad_norm_(model.parameters(), cfg.training.grad_clip.value)
 
         ampscaler.step(optimizer)
         ampscaler.update()
@@ -225,17 +214,16 @@ def train(gpu, cfg, output_dir, noises_init=None):
 
         if step % cfg.training.log_interval == 0 and is_main_process:
             logger.info(
-                "[{:>3d}/{:>3d}]\tloss: {:>10.4f},\t"
-                "netpNorm: {:>10.2f},\tnetgradNorm: {:>10.2f}\t",
+                "[{:>3d}/{:>3d}]\tloss: {:>10.4f},\t" "netpNorm: {:>10.2f},\tnetgradNorm: {:>10.2f}\t",
                 step,
                 cfg.training.steps,
-                loss.item(),
+                loss_accum,
                 netpNorm,
                 netgradNorm,
             )
             wandb.log(
                 {
-                    "loss": loss.item(),
+                    "loss": loss_accum,
                     "netpNorm": netpNorm,
                     "netgradNorm": netgradNorm,
                 },
@@ -266,15 +254,9 @@ def train(gpu, cfg, output_dir, noises_init=None):
 
             with torch.no_grad():
                 if cfg.sampling.bs == 1:
-                    cond = (
-                        lowres_eval[0].unsqueeze(0) if lowres_eval is not None else None
-                    )
+                    cond = lowres_eval[0].unsqueeze(0) if lowres_eval is not None else None
                 else:
-                    cond = (
-                        lowres_eval[: cfg.sampling.bs]
-                        if lowres_eval is not None
-                        else None
-                    )
+                    cond = lowres_eval[: cfg.sampling.bs] if lowres_eval is not None else None
 
                 x_gen_eval = model.sample(
                     shape=new_x_chain(x_eval, cfg.sampling.bs).shape,
@@ -287,9 +269,7 @@ def train(gpu, cfg, output_dir, noises_init=None):
                 x_gen_list = model.sample(
                     shape=new_x_chain(x_eval, 1).shape,
                     device=x_eval.device,
-                    cond=lowres_eval[0].unsqueeze(0)
-                    if lowres_eval is not None
-                    else None,
+                    cond=lowres_eval[0].unsqueeze(0) if lowres_eval is not None else None,
                     hint=x_eval if cfg.diffusion.sampling_hint else None,
                     freq=0.1,
                     clip_denoised=False,
@@ -303,6 +283,12 @@ def train(gpu, cfg, output_dir, noises_init=None):
 
             # calculate the CD
             cds = []
+
+            if cfg.model.type == "Mink":
+                xgnp = x_gen_eval.cpu().numpy()
+                xgnp = np.asfortranarray(xgnp)
+                x_gen_eval = torch.from_numpy(xgnp).cuda()
+
             for x_pred, x_gt in zip(x_gen_eval, x_eval):
                 cd = chamfer_distance(
                     x_pred.cpu().permute(1, 0).numpy(),
@@ -338,13 +324,9 @@ def train(gpu, cfg, output_dir, noises_init=None):
 
             # log the saved images to wandb
             samps_eval = wandb.Image("%s/step_%03d_samples_eval.png" % (outf_syn, step))
-            samps_eval_all = wandb.Image(
-                "%s/step_%03d_samples_eval_all.png" % (outf_syn, step)
-            )
+            samps_eval_all = wandb.Image("%s/step_%03d_samples_eval_all.png" % (outf_syn, step))
             samps_lowres = (
-                wandb.Image("%s/step_%03d_lowres.png" % (outf_syn, step))
-                if lowres_eval is not None
-                else None
+                wandb.Image("%s/step_%03d_lowres.png" % (outf_syn, step)) if lowres_eval is not None else None
             )
             samps_highres = wandb.Image("%s/step_%03d_highres.png" % (outf_syn, step))
             wandb.log(
@@ -414,23 +396,17 @@ def parse_args():
     parser.add_argument("--config", type=str, help="Path to the config file.")
     parser.add_argument("--name", type=str, default="", help="Name of the experiment.")
     parser.add_argument("--save_dir", default="checkpoints", help="path to save models")
-    parser.add_argument(
-        "--model_path", default="", help="path to model (to continue training)"
-    )
+    parser.add_argument("--model_path", default="", help="path to model (to continue training)")
 
     """distributed"""
-    parser.add_argument(
-        "--world_size", default=1, type=int, help="Number of distributed nodes."
-    )
+    parser.add_argument("--world_size", default=1, type=int, help="Number of distributed nodes.")
     parser.add_argument(
         "--dist_url",
         default="tcp://127.0.0.1:9991",
         type=str,
         help="url used to set up distributed training",
     )
-    parser.add_argument(
-        "--dist_backend", default="nccl", type=str, help="distributed backend"
-    )
+    parser.add_argument("--dist_backend", default="nccl", type=str, help="distributed backend")
     parser.add_argument(
         "--distribution_type",
         default="single",
@@ -440,9 +416,7 @@ def parse_args():
         "fastest way to use PyTorch for either single node or "
         "multi node data parallel training",
     )
-    parser.add_argument(
-        "--rank", default=0, type=int, help="node rank for distributed training"
-    )
+    parser.add_argument("--rank", default=0, type=int, help="node rank for distributed training")
 
     args, remaining_argv = parser.parse_known_args()
     # load config
@@ -474,6 +448,11 @@ def parse_args():
     # set name
     if opt.name == "":
         opt.name = os.path.splitext(os.path.basename(opt.config))[0]
+
+    # fix values for DDPM sampling steps
+    if opt.diffusion.sampling_strategy == "DDPM":
+        opt.diffusion.sampling_timesteps = opt.diffusion.timesteps
+
     return opt
 
 
