@@ -213,6 +213,10 @@ def visualize_pointcloud_batch(
         else:
             colour = target[idx]
         pc = pc.cpu().numpy()
+        # subsample points if more than 10k
+        if pc.shape[0] > 10000:
+            pc = pc[np.random.choice(pc.shape[0], 10000, replace=False), :]
+        # plot and save
         ax = fig.add_subplot(nrows, ncols, idx + 1, projection="3d")
         ax.scatter(pc[:, 0], pc[:, 2], pc[:, 1], c=colour, s=5)
         ax.view_init(elev=elev, azim=azim)

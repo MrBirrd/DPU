@@ -1,5 +1,5 @@
 data:
-  data_dir: /cluster/project/cvg/Shared_datasets/scannetpp/data/
+  data_dir: ../datasets/scannetpp/
   dataset: "ScanNetPP"
   unconditional: true
   workers: 4
@@ -26,7 +26,7 @@ diffusion:
   beta_end: 0.02
   reg_scale: 0
 model:
-  type: PVD # Mink ¦ PVD
+  type: Mink # Mink ¦ PVD
   in_dim: 3
   extra_feature_channels: 0
   out_dim: 3
@@ -40,7 +40,7 @@ model:
     inducers: 128
     layers: 6
   Mink:
-    init_ds_factor: 2
+    init_ds_factor: 4
     D: 1
     dim_mults: [1, 2, 4, 8]
     downsampfactors: [4, 4, 4, 4]
@@ -57,15 +57,15 @@ training:
   grad_clip:
     enabled: false
     value: 10.0
-  bs: 16
+  bs: 32
   overfit: false
   amp: false
   steps: 50_000
-  accumulation_steps: 2
+  accumulation_steps: 1
   log_interval: 10 # steps
   save_interval: 5000
   viz_interval: 5000
   seed: 42
 sampling:
-  bs: 16
+  bs: 32
   num_iter: 1

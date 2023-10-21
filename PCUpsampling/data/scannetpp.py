@@ -38,7 +38,7 @@ class ScanNetPPCut(Dataset):
         folders = os.listdir(self.root)
         logger.info("Setting up scannet dataset")
         folders = [f for f in folders if os.path.isdir(os.path.join(self.root, f))]
-        for f in tqdm(folders, desc="Loading scans"):
+        for idx, f in enumerate(tqdm(folders, desc="Loading scans")):
             # skip if not in split
             if f not in scans:
                 continue
@@ -46,8 +46,15 @@ class ScanNetPPCut(Dataset):
             file = os.path.join(self.root, f, "scans", "mesh_aligned_0.05.ply")
             if os.path.exists(file):
                 ply, *_ = pyminiply.read(file)
+                # remove nans or infs
+                ply = ply[~np.isnan(ply).any(axis=1)]
+                ply = ply[~np.isinf(ply).any(axis=1)]
+                # generate the tree
                 pcd_tree = spatial.cKDTree(ply)
                 self.trees.append(pcd_tree)
+
+            if idx > 100:
+                break
 
         logger.info(f"Loaded {len(self.trees)} scans")
 
@@ -73,6 +80,8 @@ class ScanNetPPCut(Dataset):
         data = {
             "idx": index,
             "train_points": torch.from_numpy(points).float(),
+            "train_points_center": center,
+            "train_points_scale": scale,
         }
 
         return data
