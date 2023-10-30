@@ -53,16 +53,13 @@ class ScanNetPPCut(Dataset):
                 pcd_tree = spatial.cKDTree(ply)
                 self.trees.append(pcd_tree)
 
-            if idx > 100:
-                break
-
         logger.info(f"Loaded {len(self.trees)} scans")
 
     def __len__(self):
-        return len(self.trees)
+        return len(self.trees) * 100
 
     def __getitem__(self, index):
-        pcd_tree = self.trees[index]
+        pcd_tree = self.trees[index % len(self.trees)]
         points = pcd_tree.data
 
         # sample k points around randomly chosen point

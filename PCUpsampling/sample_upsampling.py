@@ -62,7 +62,7 @@ def sample(gpu, cfg, output_dir):
         cfg.vizIter = int(cfg.vizIter / cfg.ngpus_per_node)
 
     """ data """
-    dataloader, *_ = get_dataloader(cfg, sampling=True)
+    train_loader, test_loader, _, _ = get_dataloader(cfg, sampling=True)
 
     """
     create networks
@@ -115,7 +115,7 @@ def sample(gpu, cfg, output_dir):
     def new_x_chain(x, num_chain):
         return torch.randn(num_chain, *x.shape[1:], device=x.device)
 
-    ds_iter = iter(dataloader)
+    ds_iter = iter(test_loader)
     model.eval()
 
     for sampling_iter in range(cfg.sampling.num_iter):
@@ -123,11 +123,6 @@ def sample(gpu, cfg, output_dir):
         x = data["train_points"].transpose(1, 2)
         # noises_batch = noises_init[data["idx"]].transpose(1, 2)
         lowres = data["train_points_lowres"].transpose(1, 2) if "train_points_lowres" in data.keys() else None
-
-        print("lowres is none: ", lowres is None)
-        if lowres is None:
-            print(data.keys())
-            exit(0)
 
         if cfg.distribution_type == "multi" or (cfg.distribution_type is None and gpu is not None):
             x = x.cuda(gpu)
@@ -139,19 +134,28 @@ def sample(gpu, cfg, output_dir):
             lowres = lowres.cuda() if lowres is not None else None
 
         with torch.no_grad():
+            if cfg.sampling.bs == 1:
+                cond = lowres[0].unsqueeze(0) if lowres is not None else None
+            else:
+                cond = lowres[: cfg.sampling.bs] if lowres is not None else None
+
             x_gen_eval = model.sample(
                 shape=new_x_chain(x, cfg.sampling.bs).shape,
                 device=x.device,
-                cond=lowres,
-                clip_denoised=cfg.diffusion.clip,
+                cond=cond,
+                hint=x if cfg.diffusion.sampling_hint else None,
+                clip_denoised=False,
             )
+
             x_gen_list = model.sample(
                 shape=new_x_chain(x, 1).shape,
                 device=x.device,
                 cond=lowres[0].unsqueeze(0) if lowres is not None else None,
+                hint=x[0].unsqueeze(0) if cfg.diffusion.sampling_hint else None,
                 freq=0.1,
-                clip_denoised=cfg.diffusion.clip,
+                clip_denoised=False,
             )
+
             x_gen_all = torch.cat(x_gen_list, dim=0)
 
             gen_stats = [x_gen_eval.mean(), x_gen_eval.std()]
