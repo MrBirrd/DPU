@@ -404,7 +404,7 @@ class GaussianDiffusion(nn.Module):
         img = torch.randn(shape, device=self.device)
 
         total_steps = min(self.num_timesteps, self.timesteps_clip)
-        print(shape, hint.shape)
+
         # generate start by hint if hint is not None
         # this is done by diffusing the hint the same way as trainig samples
         if hint is not None:

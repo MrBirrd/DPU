@@ -56,10 +56,10 @@ class ScanNetPPCut(Dataset):
         logger.info(f"Loaded {len(self.trees)} scans")
 
     def __len__(self):
-        return len(self.trees)
+        return len(self.trees) * 100
 
     def __getitem__(self, index):
-        pcd_tree = self.trees[index]
+        pcd_tree = self.trees[index % len(self.trees)]
         points = pcd_tree.data
 
         # sample k points around randomly chosen point

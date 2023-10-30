@@ -291,15 +291,19 @@ def train(gpu, cfg, output_dir, noises_init=None):
                 xgnp = x_gen_eval.cpu().numpy()
                 xgnp = np.asfortranarray(xgnp)
                 x_gen_eval = torch.from_numpy(xgnp).cuda()
-
-            for x_pred, x_gt in zip(x_gen_eval, x_eval):
-                cd = chamfer_distance(
-                    x_pred.cpu().permute(1, 0).numpy(),
-                    x_gt.cpu().permute(1, 0).numpy(),
-                )
-                cds.append(cd)
             
-            cd = np.mean(cds)
+            
+            try:
+                for x_pred, x_gt in zip(x_gen_eval, x_eval):
+                    cd = chamfer_distance(
+                        x_pred.cpu().permute(1, 0).numpy(),
+                        x_gt.cpu().permute(1, 0).numpy(),
+                    )
+                    cds.append(cd)
+                cd = np.mean(cds)
+            except Exception as e:
+                logger.warning(e)
+                cd = np.nan
 
             logger.info("CD: {}", cd)
             wandb.log({"CD": cd}, step=step)

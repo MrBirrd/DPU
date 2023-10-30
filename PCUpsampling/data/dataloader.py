@@ -44,9 +44,7 @@ def get_dataloader(opt, sampling=False):
             overfit=opt.training.overfit,
         )
     elif opt.data.dataset == "Indoor":
-        logger.info(
-            "Loading IndoorScenes dataset, which is currently only for overfitting on one scene!"
-        )
+        logger.info("Loading IndoorScenes dataset, which is currently only for overfitting on one scene!")
         train_dataset = IndoorScenes(
             opt.data.data_dir,
             opt.data.npoints,
@@ -69,50 +67,55 @@ def get_dataloader(opt, sampling=False):
             unconditional=opt.data.unconditional,
         )
     elif opt.data.dataset == "ScanNetPP":
-        train_dataset = ScanNetPPCut(
-            npoints=opt.data.npoints, root=opt.data.data_dir, mode="training"
+        train_dataset = (
+            ScanNetPPCut(npoints=opt.data.npoints, root=opt.data.data_dir, mode="training") if not sampling else None
         )
-        test_dataset = ScanNetPPCut(
-            npoints=opt.data.npoints, root=opt.data.data_dir, mode="validation"
-        )
+        test_dataset = ScanNetPPCut(npoints=opt.data.npoints, root=opt.data.data_dir, mode="validation")
     else:
         raise NotImplementedError(f"Dataset {opt.data.dataset} not implemented!")
 
     # setup the samplers
     if opt.distribution_type == "multi":
-        train_sampler = torch.utils.data.distributed.DistributedSampler(
-            train_dataset, num_replicas=opt.world_size, rank=opt.rank
+        train_sampler = (
+            torch.utils.data.distributed.DistributedSampler(train_dataset, num_replicas=opt.world_size, rank=opt.rank)
+            if train_dataset is not None
+            else None
         )
-        if test_dataset is not None:
-            test_sampler = torch.utils.data.distributed.DistributedSampler(
-                test_dataset, num_replicas=opt.world_size, rank=opt.rank
-            )
-        else:
-            test_sampler = None
+        test_sampler = (
+            torch.utils.data.distributed.DistributedSampler(test_dataset, num_replicas=opt.world_size, rank=opt.rank)
+            if test_dataset is not None
+            else None
+        )
     else:
         train_sampler = None
         test_sampler = None
 
     # setup the dataloaders
-    train_dataloader = DataLoader(
-        train_dataset,
-        batch_size=opt.training.bs if not sampling else opt.sampling.bs,
-        sampler=train_sampler,
-        shuffle=train_sampler is None,
-        num_workers=int(opt.data.workers),
-        drop_last=True,
+    train_dataloader = (
+        DataLoader(
+            train_dataset,
+            batch_size=opt.training.bs if not sampling else opt.sampling.bs,
+            sampler=train_sampler,
+            shuffle=train_sampler is None,
+            num_workers=int(opt.data.workers),
+            prefetch_factor=4 if int(opt.data.workers) > 0 else None,
+            drop_last=True,
+        )
+        if train_dataset is not None
+        else None
     )
 
-    if test_dataset is not None:
-        test_dataloader = DataLoader(
-            train_dataset,
-            batch_size=opt.sampling.bs if not sampling else opt.sampling.bs,
+    test_dataloader = (
+        DataLoader(
+            test_dataset,
+            batch_size=opt.training.bs if not sampling else opt.sampling.bs,
             sampler=test_sampler,
             shuffle=False,
             num_workers=int(opt.data.workers),
             drop_last=False,
         )
-    else:
-        test_dataloader = None
+        if test_dataset is not None
+        else None
+    )
 
     return train_dataloader, test_dataloader, train_sampler, test_sampler
