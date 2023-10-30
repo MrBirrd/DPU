@@ -1,13 +1,11 @@
 #!/bin/bash
 
-#SBATCH -n 4
+#SBATCH -n 2
 #SBATCH --time=24:00:00
-#SBATCH --cpus-per-task=2
-#SBATCH --mem-per-cpu=2G
-#SBATCH --gpus=4
-#SBATCH --gres=gpumem:20g
-#SBATCH -A ls_drzrh
+#SBATCH --cpus-per-task=1
+#SBATCH --mem-per-cpu=32G
+#SBATCH --gpus=2
+#SBATCH --gres=gpumem:30g
+#SBATCH -A ls_polle
 
-module load python_gpu/3.10.4
-
-python train_upsampling.py --name st_arkit_pc2pc --distribution_type multi --config configs/st_arkit.yml --save_dir /cluster/scratch/matvogel/DPU/
+python train_upsampling.py --distribution_type multi --config configs/scannet_cut_mink.yml --save_dir /cluster/scratch/matvogel/DPU/

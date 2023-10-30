@@ -100,7 +100,6 @@ def get_dataloader(opt, sampling=False):
         sampler=train_sampler,
         shuffle=train_sampler is None,
         num_workers=int(opt.data.workers),
-        prefetch_factor=4 if int(opt.data.workers) > 0 else None,
         drop_last=True,
     )
 
@@ -111,7 +110,6 @@ def get_dataloader(opt, sampling=False):
             sampler=test_sampler,
             shuffle=False,
             num_workers=int(opt.data.workers),
-            prefetch_factor=4 if int(opt.data.workers) > 0 else None,
             drop_last=False,
         )
     else:

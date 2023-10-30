@@ -499,6 +499,19 @@ class GaussianDiffusion(nn.Module):
 
         sample_fn = self.p_sample_loop if not self.is_ddim_sampling else self.ddim_sample
 
+        # savety batch size check
+        if cond is not None:
+            if shape[0] != cond.shape[0]:
+                min_bs = min(shape[0], cond.shape[0])
+                shape = (min_bs, *shape[1:])
+                cond = cond[:min_bs]
+        if hint is not None:
+            if shape[0] != hint.shape[0]:
+                min_bs = min(shape[0], hint.shape[0])
+                shape = (min_bs, *shape[1:])
+                hint = hint[:min_bs]
+                cond = cond[:min_bs]
+        
         return sample_fn(
             shape,
             cond=cond,

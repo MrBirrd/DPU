@@ -28,6 +28,8 @@ def train(gpu, cfg, output_dir, noises_init=None):
     if cfg.distribution_type == "multi":
         cfg.gpu = gpu
 
+    logger.info("CUDA available: {}", torch.cuda.is_available())
+    
     # set seed
     set_seed(cfg)
     torch.cuda.empty_cache()
@@ -55,6 +57,7 @@ def train(gpu, cfg, output_dir, noises_init=None):
         )
 
         cfg.training.bs = int(cfg.training.bs / cfg.ngpus_per_node)
+        cfg.sampling.bs = cfg.training.bs
         cfg.data.workers = 0
 
         cfg.training.save_interval = int(cfg.training.save_interval / cfg.ngpus_per_node)
@@ -111,9 +114,9 @@ def train(gpu, cfg, output_dir, noises_init=None):
         logger.info("Configuration used:\n{}", pretty_cfg)
         wandb.init(
             project="pvdup",
-            config=cfg,
+            config=OmegaConf.to_container(cfg, resolve=True),
             entity="matvogel",
-            settings=wandb.Settings(start_method="fork"),
+            #settings=wandb.Settings(start_method="fork"),
         )
 
     # setup optimizers
@@ -295,6 +298,7 @@ def train(gpu, cfg, output_dir, noises_init=None):
                     x_gt.cpu().permute(1, 0).numpy(),
                 )
                 cds.append(cd)
+            
             cd = np.mean(cds)
 
             logger.info("CD: {}", cd)

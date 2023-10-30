@@ -53,9 +53,6 @@ class ScanNetPPCut(Dataset):
                 pcd_tree = spatial.cKDTree(ply)
                 self.trees.append(pcd_tree)
 
-            if idx > 100:
-                break
-
         logger.info(f"Loaded {len(self.trees)} scans")
 
     def __len__(self):

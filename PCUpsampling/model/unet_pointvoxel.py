@@ -9,7 +9,6 @@
 import numpy as np
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
 from .pvcnn2_ada import (
     LinearAttention,
@@ -383,3 +382,12 @@ class PVCNN2(PVCNN2Base):
             width_multiplier=width_multiplier,
             voxel_resolution_multiplier=voxel_resolution_multiplier,
         )
+
+if __name__ == "__main__":
+    net = PVCLionSmall(input_dim=3, extra_feature_channels=0)
+    net = net.cuda()
+    
+    test = torch.rand(1, 3, 2048).cuda()
+    t = torch.rand(1).cuda()
+    test = net(test, t)
+    print(test.shape)
