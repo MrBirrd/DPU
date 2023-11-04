@@ -510,8 +510,8 @@ class GaussianDiffusion(nn.Module):
                 min_bs = min(shape[0], hint.shape[0])
                 shape = (min_bs, *shape[1:])
                 hint = hint[:min_bs]
-                cond = cond[:min_bs]
-        
+                cond = cond[:min_bs] if cond is not None else None
+
         return sample_fn(
             shape,
             cond=cond,

@@ -21,3 +21,4 @@ ShapeNetCore*
 build
 *.out
 datasets
+*.npy

@@ -1,5 +1,6 @@
 import argparse
 import torch.distributed as dist
+import os
 import torch.multiprocessing as mp
 import torch.nn as nn
 import torch.utils.data
@@ -9,9 +10,8 @@ from model.diffusion_elucidated import ElucidatedDiffusion
 from model.diffusion_lucid import GaussianDiffusion as LUCID
 from model.diffusion_pointvoxel import PVD
 from omegaconf import DictConfig, OmegaConf
-from utils.file_utils import *
-from utils.ops import *
-from utils.visualize import *
+from utils.file_utils import set_seed
+from utils.evaluation import evaluate
 from loguru import logger
 
 # from metrics.evaluation_metrics import compute_all_metrics
@@ -21,12 +21,15 @@ def sample(gpu, cfg, output_dir):
     set_seed(cfg)
     torch.cuda.empty_cache()
 
+    # apply timestep clipping
+    timestep = min(cfg.diffusion.timesteps_clip, cfg.diffusion.sampling_timesteps)
+
     if cfg.distribution_type == "multi":
         is_main_process = gpu == 0
     else:
         is_main_process = True
     if is_main_process:
-        scheduler_info = "_".join([cfg.diffusion.sampling_strategy, str(cfg.diffusion.sampling_timesteps)])
+        scheduler_info = f"{cfg.diffusion.sampling_strategy}(T={str(timestep)})"
 
         # add clipping information to scheduler info
         if cfg.diffusion.clip:
@@ -38,7 +41,7 @@ def sample(gpu, cfg, output_dir):
             clip = ""
         scheduler_info += clip
 
-        out_sampling = os.path.join(output_dir, "sampling", scheduler_info)
+        cfg.out_sampling = os.path.join(output_dir, "sampling", scheduler_info)
         # os.makedirs(output_dir, out_sampling, exist_ok=True)
 
     if cfg.distribution_type == "multi":
@@ -112,98 +115,11 @@ def sample(gpu, cfg, output_dir):
     else:
         raise ValueError("model_path must be specified")
 
-    def new_x_chain(x, num_chain):
-        return torch.randn(num_chain, *x.shape[1:], device=x.device)
-
     ds_iter = iter(test_loader)
     model.eval()
 
     for sampling_iter in range(cfg.sampling.num_iter):
-        data = next(ds_iter)
-        x = data["train_points"].transpose(1, 2)
-        # noises_batch = noises_init[data["idx"]].transpose(1, 2)
-        lowres = data["train_points_lowres"].transpose(1, 2) if "train_points_lowres" in data.keys() else None
-
-        if cfg.distribution_type == "multi" or (cfg.distribution_type is None and gpu is not None):
-            x = x.cuda(gpu)
-            # noises_batch = noises_batch.cuda(gpu)
-            lowres = lowres.cuda(gpu) if lowres is not None else None
-        elif cfg.distribution_type == "single":
-            x = x.cuda()
-            # noises_batch = noises_batch.cuda()
-            lowres = lowres.cuda() if lowres is not None else None
-
-        with torch.no_grad():
-            if cfg.sampling.bs == 1:
-                cond = lowres[0].unsqueeze(0) if lowres is not None else None
-            else:
-                cond = lowres[: cfg.sampling.bs] if lowres is not None else None
-
-            x_gen_eval = model.sample(
-                shape=new_x_chain(x, cfg.sampling.bs).shape,
-                device=x.device,
-                cond=cond,
-                hint=x if cfg.diffusion.sampling_hint else None,
-                clip_denoised=False,
-            )
-
-            x_gen_list = model.sample(
-                shape=new_x_chain(x, 1).shape,
-                device=x.device,
-                cond=lowres[0].unsqueeze(0) if lowres is not None else None,
-                hint=x[0].unsqueeze(0) if cfg.diffusion.sampling_hint else None,
-                freq=0.1,
-                clip_denoised=False,
-            )
-
-            x_gen_all = torch.cat(x_gen_list, dim=0)
-
-            gen_stats = [x_gen_eval.mean(), x_gen_eval.std()]
-            gen_eval_range = [x_gen_eval.min().item(), x_gen_eval.max().item()]
-            print("gen_stats: ", gen_stats)
-            print("gen_eval_range: ", gen_eval_range)
-
-            # calculate metrics
-            # metrics = compute_all_metrics(x_gen_eval, gt_multiple, cfg.sampling.bs)
-            # print("Metrics:", metrics)
-
-            visualize_pointcloud_batch(
-                "%s/epoch_%03d_samples_eval.png" % (out_sampling, sampling_iter),
-                x_gen_eval.transpose(1, 2),
-                None,
-                None,
-                None,
-            )
-
-            visualize_pointcloud_batch(
-                "%s/epoch_%03d_samples_eval_all.png" % (out_sampling, sampling_iter),
-                x_gen_all.transpose(1, 2),
-                None,
-                None,
-                None,
-            )
-
-            if lowres is not None:
-                visualize_pointcloud_batch(
-                    "%s/epoch_%03d_lowres.png" % (out_sampling, sampling_iter),
-                    lowres.transpose(1, 2),
-                    None,
-                    None,
-                    None,
-                )
-
-            visualize_pointcloud_batch(
-                "%s/epoch_%03d_highres.png" % (out_sampling, sampling_iter),
-                x.transpose(1, 2),
-                None,
-                None,
-                None,
-            )
-
-            # save the clouds
-            np.save("%s/epoch_%03d_samples_eval.npy" % (out_sampling, sampling_iter), x_gen_eval.cpu().numpy())
-            np.save("%s/epoch_%03d_samples_eval_all.npy" % (out_sampling, sampling_iter), x_gen_all.cpu().numpy())
-            np.save("%s/epoch_%03d_highres.npy" % (out_sampling, sampling_iter), x.cpu().numpy())
+        evaluate(model, ds_iter, cfg, sampling_iter, sampling=True)
 
     if cfg.distribution_type == "multi":
         dist.destroy_process_group()

@@ -5,22 +5,18 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.utils.data
 from data.dataloader import get_dataloader, save_iter
-from einops import repeat
 from model.diffusion_elucidated import ElucidatedDiffusion
 from model.diffusion_lucid import GaussianDiffusion as LUCID
 from model.diffusion_pointvoxel import PVD
 from model.diffusion_rin import GaussianDiffusion as RINDIFFUSION
-from omegaconf import DictConfig, OmegaConf
-from utils.evaluation import *
+from omegaconf import OmegaConf
+from utils.evaluation import evaluate
 from utils.file_utils import *
 from utils.ops import *
-from utils.visualize import *
 from lion_pytorch import Lion
 from loguru import logger
-import sys
 import wandb
 import json
-from point_cloud_utils import chamfer_distance
 
 
 def train(gpu, cfg, output_dir, noises_init=None):
@@ -29,7 +25,7 @@ def train(gpu, cfg, output_dir, noises_init=None):
         cfg.gpu = gpu
 
     logger.info("CUDA available: {}", torch.cuda.is_available())
-    
+
     # set seed
     set_seed(cfg)
     torch.cuda.empty_cache()
@@ -41,6 +37,7 @@ def train(gpu, cfg, output_dir, noises_init=None):
         is_main_process = True
     if is_main_process:
         (outf_syn,) = setup_output_subdirs(output_dir, "output")
+        cfg.outf_syn = outf_syn
 
     # set multi gpu training variables
     if cfg.distribution_type == "multi":
@@ -116,7 +113,7 @@ def train(gpu, cfg, output_dir, noises_init=None):
             project="pvdup",
             config=OmegaConf.to_container(cfg, resolve=True),
             entity="matvogel",
-            #settings=wandb.Settings(start_method="fork"),
+            # settings=wandb.Settings(start_method="fork"),
         )
 
     # setup optimizers
@@ -162,10 +159,6 @@ def train(gpu, cfg, output_dir, noises_init=None):
         start_step = torch.load(cfg.model_path)["step"] + 1
     else:
         start_step = 0
-
-    # helper for chain of samples
-    def new_x_chain(x, num_chain):
-        return torch.randn(num_chain, *x.shape[1:], device=x.device)
 
     # train loop
     train_iter = save_iter(train_loader, train_sampler)
@@ -234,121 +227,7 @@ def train(gpu, cfg, output_dir, noises_init=None):
             )
 
         if (step + 1) % cfg.training.viz_interval == 0 and is_main_process:
-            logger.info("Starting evaluation...")
-
-            model.eval()
-
-            eval_data = next(eval_iter)
-
-            x_eval = eval_data["train_points"].transpose(1, 2)
-            lowres_eval = (
-                eval_data["train_points_lowres"].transpose(1, 2)
-                if "train_points_lowres" in eval_data and not cfg.data.unconditional
-                else None
-            )
-
-            # move data to gpu
-            if cfg.distribution_type == "multi":
-                x_eval = x_eval.cuda(gpu)
-                lowres_eval = lowres_eval.cuda(gpu) if lowres_eval is not None else None
-            elif cfg.distribution_type == "single":
-                x_eval = x_eval.cuda()
-                lowres_eval = lowres_eval.cuda() if lowres_eval is not None else None
-
-            with torch.no_grad():
-                if cfg.sampling.bs == 1:
-                    cond = lowres_eval[0].unsqueeze(0) if lowres_eval is not None else None
-                else:
-                    cond = lowres_eval[: cfg.sampling.bs] if lowres_eval is not None else None
-
-                x_gen_eval = model.sample(
-                    shape=new_x_chain(x_eval, cfg.sampling.bs).shape,
-                    device=x_eval.device,
-                    cond=cond,
-                    hint=x_eval if cfg.diffusion.sampling_hint else None,
-                    clip_denoised=False,
-                )
-
-                x_gen_list = model.sample(
-                    shape=new_x_chain(x_eval, 1).shape,
-                    device=x_eval.device,
-                    cond=lowres_eval[0].unsqueeze(0) if lowres_eval is not None else None,
-                    hint=x_eval if cfg.diffusion.sampling_hint else None,
-                    freq=0.1,
-                    clip_denoised=False,
-                )
-
-                x_gen_all = torch.cat(x_gen_list, dim=0)
-
-            # calculate metrics such as min, max, mean, std, etc.
-            print_stats(x_gen_eval, "x_gen_eval")
-            print_stats(x_gen_all, "x_gen_all")
-
-            # calculate the CD
-            cds = []
-
-            if cfg.model.type == "Mink":
-                xgnp = x_gen_eval.cpu().numpy()
-                xgnp = np.asfortranarray(xgnp)
-                x_gen_eval = torch.from_numpy(xgnp).cuda()
-            
-            
-            try:
-                for x_pred, x_gt in zip(x_gen_eval, x_eval):
-                    cd = chamfer_distance(
-                        x_pred.cpu().permute(1, 0).numpy(),
-                        x_gt.cpu().permute(1, 0).numpy(),
-                    )
-                    cds.append(cd)
-                cd = np.mean(cds)
-            except Exception as e:
-                logger.warning(e)
-                cd = np.nan
-
-            logger.info("CD: {}", cd)
-            wandb.log({"CD": cd}, step=step)
-
-            # visualize the pointclouds
-            visualize_pointcloud_batch(
-                "%s/step_%03d_samples_eval.png" % (outf_syn, step),
-                x_gen_eval.transpose(1, 2),
-            )
-
-            visualize_pointcloud_batch(
-                "%s/step_%03d_samples_eval_all.png" % (outf_syn, step),
-                x_gen_all.transpose(1, 2),
-            )
-
-            if lowres_eval is not None:
-                visualize_pointcloud_batch(
-                    "%s/step_%03d_lowres.png" % (outf_syn, step),
-                    lowres_eval.transpose(1, 2),
-                )
-
-            visualize_pointcloud_batch(
-                "%s/step_%03d_highres.png" % (outf_syn, step),
-                x_eval.transpose(1, 2),
-            )
-
-            # log the saved images to wandb
-            samps_eval = wandb.Image("%s/step_%03d_samples_eval.png" % (outf_syn, step))
-            samps_eval_all = wandb.Image("%s/step_%03d_samples_eval_all.png" % (outf_syn, step))
-            samps_lowres = (
-                wandb.Image("%s/step_%03d_lowres.png" % (outf_syn, step)) if lowres_eval is not None else None
-            )
-            samps_highres = wandb.Image("%s/step_%03d_highres.png" % (outf_syn, step))
-            wandb.log(
-                {
-                    "samples_eval": samps_eval,
-                    "samples_eval_all": samps_eval_all,
-                    "samples_lowres": samps_lowres,
-                    "samples_highres": samps_highres,
-                },
-                step=step,
-            )
-
-            logger.info("Generation: train")
-            model.train()
+            evaluate(model, eval_iter, cfg, step)
 
         if (step + 1) % cfg.training.save_interval == 0:
             if is_main_process:
