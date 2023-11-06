@@ -13,8 +13,9 @@ from omegaconf import DictConfig, OmegaConf
 from utils.file_utils import set_seed
 from utils.evaluation import evaluate
 from loguru import logger
-
-# from metrics.evaluation_metrics import compute_all_metrics
+from utils.args import parse_args
+import pandas as pd
+import numpy as np
 
 
 def sample(gpu, cfg, output_dir):
@@ -28,22 +29,7 @@ def sample(gpu, cfg, output_dir):
         is_main_process = gpu == 0
     else:
         is_main_process = True
-    if is_main_process:
-        scheduler_info = f"{cfg.diffusion.sampling_strategy}(T={str(timestep)})"
-
-        # add clipping information to scheduler info
-        if cfg.diffusion.clip:
-            if cfg.diffusion.dynamic_threshold:
-                clip = "_clip_dynamic"
-            else:
-                clip = "_clip"
-        else:
-            clip = ""
-        scheduler_info += clip
-
-        cfg.out_sampling = os.path.join(output_dir, "sampling", scheduler_info)
-        # os.makedirs(output_dir, out_sampling, exist_ok=True)
-
+    
     if cfg.distribution_type == "multi":
         if cfg.dist_url == "env://" and cfg.rank == -1:
             cfg.rank = int(os.environ["RANK"])
@@ -118,9 +104,15 @@ def sample(gpu, cfg, output_dir):
     ds_iter = iter(test_loader)
     model.eval()
 
+    cds = []
     for sampling_iter in range(cfg.sampling.num_iter):
-        evaluate(model, ds_iter, cfg, sampling_iter, sampling=True)
+        stats = evaluate(model, ds_iter, cfg, sampling_iter, sampling=True)
+        cd = stats["CD"]
+        cds.append(cd)
 
+    cd = np.mean(cds)
+    stats = pd.DataFrame(columns=["CD"], data=[cd])
+    stats.to_csv(os.path.join(cfg.out_sampling, "stats.csv"))
     if cfg.distribution_type == "multi":
         dist.destroy_process_group()
 
@@ -134,71 +126,10 @@ def main():
     if opt.distribution_type == "multi":
         opt.ngpus_per_node = torch.cuda.device_count()
         opt.world_size = opt.ngpus_per_node * opt.world_size
-        mp.spawn(sample, nprocs=opt.ngpus_per_node, args=(opt, opt.output_dir))
+        mp.spawn(sample, nprocs=opt.ngpus_per_node, args=(opt, opt.out_sampling))
     else:
         opt.gpu = None
-        sample(opt.gpu, opt, opt.output_dir)
-
-
-def parse_args():
-    # make parser which accepts optinal arguments
-    parser = argparse.ArgumentParser()
-    # parser.add_argument("--config", type=str, help="Path to the config file.")
-    parser.add_argument("--name", type=str, default="", help="Name of the experiment.")
-    parser.add_argument("--save_dir", default=".")
-    parser.add_argument("--model_path", default="", help="path to model (to continue training)")
-
-    """distributed"""
-    parser.add_argument("--world_size", default=1, type=int, help="Number of distributed nodes.")
-    parser.add_argument(
-        "--dist_url",
-        default="tcp://127.0.0.1:9991",
-        type=str,
-        help="url used to set up distributed training",
-    )
-    parser.add_argument("--dist_backend", default="nccl", type=str, help="distributed backend")
-    parser.add_argument(
-        "--distribution_type",
-        default="single",
-        choices=["multi", "single", None],
-        help="Use multi-processing distributed training to launch "
-        "N processes per node, which has N GPUs. This is the "
-        "fastest way to use PyTorch for either single node or "
-        "multi node data parallel training",
-    )
-    parser.add_argument("--rank", default=0, type=int, help="node rank for distributed training")
-
-    args, remaining_argv = parser.parse_known_args()
-    # load config from eperiment folder
-    experiment_path = os.path.dirname(args.model_path)
-    opt_path = os.path.join(experiment_path, "opt.yaml")
-    cfg = OmegaConf.load(opt_path)
-
-    # merge config with command line arguments
-    opt = OmegaConf.merge(cfg, OmegaConf.create(vars(args)))
-    opt.output_dir = experiment_path
-
-    if remaining_argv:
-        for i in range(0, len(remaining_argv), 2):
-            key = remaining_argv[i].lstrip("--")
-            value = remaining_argv[i + 1]
-
-            # Convert numerical strings to appropriate number types handling scientific notation
-            try:
-                if "." in remaining_argv[i + 1] or "e" in remaining_argv[i + 1]:
-                    value = float(value)
-                # handle bools
-                elif value in ["True", "False", "true", "false"]:
-                    value = value.lower() == "true"
-                else:
-                    value = int(value)
-            except ValueError:
-                pass
-
-            # Update the config using OmegaConf's select and set methods
-            OmegaConf.update(opt, key, value, merge=False)
-
-    return opt
+        sample(opt.gpu, opt, opt.out_sampling)
 
 
 if __name__ == "__main__":

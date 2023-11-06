@@ -38,7 +38,7 @@ class ScanNetPPCut(Dataset):
         folders = os.listdir(self.root)
         logger.info("Setting up scannet dataset")
         folders = [f for f in folders if os.path.isdir(os.path.join(self.root, f))]
-        for idx, f in enumerate(tqdm(folders, desc="Loading scans")):
+        for idx, f in enumerate(tqdm(folders, desc=f"Loading {mode} scans")):
             # skip if not in split
             if f not in scans:
                 continue

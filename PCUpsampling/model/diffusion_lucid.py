@@ -492,8 +492,11 @@ class GaussianDiffusion(nn.Module):
 
     @torch.inference_mode()
     def sample(self, shape, freq=0, cond=None, clip=False, hint=None, *args, **kwargs):
+        steps = min(self.num_timesteps, self.timesteps_clip)
         if freq > 0 and freq <= 1:
-            save_every = int(self.sampling_timesteps * freq)
+            save_every = int(steps * freq)
+            if save_every < steps:
+                save_every = 1
         else:
             save_every = 0
 
