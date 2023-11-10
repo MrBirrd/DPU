@@ -127,12 +127,12 @@ def evaluate(model, eval_iter, cfg, step, sampling=False):
     if not sampling:
         wandb.log({"CD": cd}, step=step)
 
-        samps_eval = wandb.Image("%s/step_%03d_samples_eval.png" % (cfg.outf_syn, step))
-        samps_eval_all = wandb.Image("%s/step_%03d_samples_eval_all.png" % (cfg.outf_syn, step))
+        samps_eval = wandb.Image("%s/%03d_pred.png" % (cfg.outf_syn, step))
+        samps_eval_all = wandb.Image("%s/%03d_pred_all.png" % (cfg.outf_syn, step))
         samps_lowres = (
-            wandb.Image("%s/step_%03d_lowres.png" % (cfg.outf_syn, step)) if lowres_pointcloud is not None else None
+            wandb.Image("%s/%03d_low_quality.png" % (cfg.outf_syn, step)) if lowres_pointcloud is not None else None
         )
-        samps_highres = wandb.Image("%s/step_%03d_highres.png" % (cfg.outf_syn, step))
+        samps_highres = wandb.Image("%s/%03d_high_quality.png" % (cfg.outf_syn, step))
         wandb.log(
             {
                 "samples_eval": samps_eval,

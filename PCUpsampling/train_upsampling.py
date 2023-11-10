@@ -199,11 +199,12 @@ def train(gpu, cfg, output_dir, noises_init=None):
             ampscaler.scale(loss).backward()
 
         # get gradient norms for debugging and logging
+        ampscaler.unscale_(optimizer)
         netpNorm, netgradNorm = getGradNorm(model)
-
+        
         if cfg.training.grad_clip.enabled:
             torch.nn.utils.clip_grad_norm_(model.parameters(), cfg.training.grad_clip.value)
-
+            
         ampscaler.step(optimizer)
         ampscaler.update()
         optimizer.zero_grad()
@@ -227,7 +228,10 @@ def train(gpu, cfg, output_dir, noises_init=None):
             )
 
         if (step + 1) % cfg.training.viz_interval == 0 and is_main_process:
-            evaluate(model, eval_iter, cfg, step)
+            try:
+                evaluate(model, eval_iter, cfg, step)
+            except Exception as e:
+                logger.error("Error during evaluation: {}", e)
 
         if (step + 1) % cfg.training.save_interval == 0:
             if is_main_process:
