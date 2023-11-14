@@ -228,7 +228,7 @@ def train(gpu, cfg, output_dir, noises_init=None):
                 step=step,
             )
 
-        if (step + 1) % cfg.training.viz_interval == 0 and is_main_process:
+        if (step + 1) % cfg.training.viz_interval == 0 and is_main_process and False:
             try:
                 evaluate(model, eval_iter, cfg, step)
             except Exception as e:
@@ -253,9 +253,6 @@ def train(gpu, cfg, output_dir, noises_init=None):
                         map_location=map_location,
                     )["model_state"]
                 )
-
-        if (step + 1) % cfg.training.viz_interval == 0 and is_main_process:
-            evaluate(model, eval_iter, cfg, step)
 
     if cfg.distribution_type == "multi":
         dist.destroy_process_group()
