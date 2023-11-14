@@ -26,8 +26,8 @@ def project_to_plane(points):
 
 def soft_histogram(points, grid_size, range_x, range_y):
     # Create the grid
-    grid_x = torch.linspace(range_x[0], range_x[1], steps=int((range_x[1] - range_x[0]) / grid_size))
-    grid_y = torch.linspace(range_y[0], range_y[1], steps=int((range_y[1] - range_y[0]) / grid_size))
+    grid_x = torch.linspace(range_x[0], range_x[1], steps=int((range_x[1] - range_x[0]) / grid_size)).to(points.device)
+    grid_y = torch.linspace(range_y[0], range_y[1], steps=int((range_y[1] - range_y[0]) / grid_size)).to(points.device)
 
     # Soft assignment to the x and y axis
     points_x = points[:, :, 0:1]  # (Batch_size x N x 1)

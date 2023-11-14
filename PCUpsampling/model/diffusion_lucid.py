@@ -22,6 +22,7 @@ from gecco_torch.models.set_transformer import SetTransformer
 
 ModelPrediction = namedtuple("ModelPrediction", ["pred_noise", "pred_x_start"])
 from loguru import logger
+from ema_pytorch import EMA
 
 
 # gaussian diffusion trainer class
@@ -172,6 +173,12 @@ class GaussianDiffusion(nn.Module):
         logger.info(
             f"Generated model with following number of params (M): {sum(p.numel() for p in self.model.parameters() if p.requires_grad) / 1e6:.2f}"
         )
+
+        # generate ema model
+        if cfg.model.ema:
+            self.model_ema = EMA(model=self.model, inv_gamma=1.0, power=3 / 4)
+        else:
+            self.model_ema = None
 
         # dimensions
         self.channels = cfg.data.nc
@@ -605,11 +612,12 @@ class GaussianDiffusion(nn.Module):
                     model_out, x, t, clip_x_start=False, rederive_pred_noise=False
                 )
                 proj_loss = projection_loss(x_start, model_pred_x0)
-                proj_loss_scale = get_scaling(alphas / sigmas)
-                proj_loss_scale = torch.where(t >= 800, torch.zeros_like(proj_loss_scale), proj_loss_scale)
+                proj_loss = reduce(proj_loss, "b ... -> b", "mean")
+                proj_loss_scale = torch.ones_like(t) - ((1 - 0.75) / self.timesteps_clip) * t
                 proj_loss = proj_loss * proj_loss_scale
                 proj_loss = proj_loss.mean()
-                loss += self.reg_scale * proj_loss
+                proj_loss = proj_loss * self.reg_scale
+                loss += proj_loss
 
         return loss
 

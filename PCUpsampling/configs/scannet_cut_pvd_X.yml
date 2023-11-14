@@ -1,5 +1,5 @@
 data:
-  data_dir: /cluster/project/cvg/Shared_datasets/scannetpp/data/
+  data_dir: ../datasets/scannetpp/
   dataset: "ScanNetPP"
   unconditional: true
   workers: 4
@@ -10,10 +10,10 @@ data:
   normalize: true # unit cube/sphere normalization
 diffusion:
   timesteps: 1000
-  timesteps_clip: 100
-  sampling_timesteps: 100
+  timesteps_clip: 50
+  sampling_timesteps: 1000
   formulation: LUCID # PVD ¦ LUCID ¦ EDM
-  objective: pred_v # pred_noise ¦ pred_v ¦ pred_x0
+  objective: pred_x0 # pred_noise ¦ pred_v ¦ pred_x0
   schedule: cosine # linear ¦ sigmoid ¦ cosine
   min_snr_gamma: 5
   sampling_strategy: DDPM
@@ -21,18 +21,18 @@ diffusion:
   sampling_hint: true
   loss_type: mse
   dynamic_threshold: true
-  clip: true
+  clip: false
   beta_start: 0.0001
   beta_end: 0.02
-  reg_scale: 0
+  reg_scale: 100.0
 model:
-  type: Mink # Mink ¦ PVD
-  ema: false
+  type: PVD # Mink ¦ PVD
+  ema: true
   in_dim: 3
   extra_feature_channels: 0
   out_dim: 3
   time_embed_dim: 64
-  use_attention: false
+  use_attention: true
   dropout: 0.1
   EMA:
     decay: 0.999
@@ -41,7 +41,7 @@ model:
     inducers: 128
     layers: 6
   Mink:
-    init_ds_factor: 1
+    init_ds_factor: 2
     D: 1
     dim_mults: [1, 2, 4, 8]
     downsampfactors: [4, 4, 4, 4]
