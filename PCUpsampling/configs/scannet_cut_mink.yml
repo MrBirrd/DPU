@@ -27,6 +27,7 @@ diffusion:
   reg_scale: 0
 model:
   type: Mink # Mink ¦ PVD
+  ema: false
   in_dim: 3
   extra_feature_channels: 0
   out_dim: 3

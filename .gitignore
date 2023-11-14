@@ -24,3 +24,5 @@ datasets
 *.npy
 checkpoints/
 sampling.sh
+*.egg
+*.egg-info

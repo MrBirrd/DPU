@@ -195,20 +195,27 @@ def train(gpu, cfg, output_dir, noises_init=None):
                 lowres = lowres.cuda() if lowres is not None else None
 
             # forward pass
-            loss = model(x, cond=lowres) / cfg.training.accumulation_steps
+            loss = model(x, cond=lowres)
+
+            loss /= cfg.training.accumulation_steps
+
             loss_accum += loss.item()
             ampscaler.scale(loss).backward()
 
         # get gradient norms for debugging and logging
         ampscaler.unscale_(optimizer)
         netpNorm, netgradNorm = getGradNorm(model)
-        
+
         if cfg.training.grad_clip.enabled:
             torch.nn.utils.clip_grad_norm_(model.parameters(), cfg.training.grad_clip.value)
-            
+
         ampscaler.step(optimizer)
         ampscaler.update()
         optimizer.zero_grad()
+
+        # do ema update
+        if model.model_ema is not None:
+            model.model_ema.update()
 
         if step % cfg.training.log_interval == 0 and is_main_process:
             logger.info(
