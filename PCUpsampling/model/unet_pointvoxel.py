@@ -20,7 +20,7 @@ from .pvcnn2_ada import (
 from .pvcnn_generation import PVCNN2Base
 from .rin import Attention
 from einops import rearrange
-
+from packaging import version
 
 class PVCNN2Unet(nn.Module):
     """
@@ -88,7 +88,7 @@ class PVCNN2Unet(nn.Module):
         self.sa_layers = nn.ModuleList(sa_layers)
 
         if use_att:
-            if flash:
+            if flash and not (version.parse(torch.__version__) < version.parse("2.0.0")):
                 self.global_att = Attention(
                     dim=channels_sa_features,
                     heads=8,
