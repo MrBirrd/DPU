@@ -207,9 +207,10 @@ class BroadcastingLayer(nn.Module):
         num_heads: int = 8,
         mlp_blowup: int = 2,
         activation: nn.Module = nn.ReLU,
+        num_groups: int = 32,
     ):
         super().__init__()
-        self.broadcast_norm = AdaGN(feature_dim, embed_dim)
+        self.broadcast_norm = AdaGN(feature_dim, embed_dim, num_groups)
         self.broadcast = Broadcast(
             feature_dim,
             num_inducers,
@@ -253,6 +254,7 @@ class SetTransformer(nn.Module):
         feature_dim: int,
         num_inducers: int,
         t_embed_dim: int,
+        num_groups: int = 32,
         **kwargs,
     ):
         super().__init__()
@@ -262,6 +264,7 @@ class SetTransformer(nn.Module):
                     feature_dim=feature_dim,
                     num_inducers=num_inducers,
                     embed_dim=t_embed_dim,
+                    num_groups=num_groups,
                     **kwargs,
                 )
                 for _ in range(n_layers)

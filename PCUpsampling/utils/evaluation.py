@@ -4,7 +4,7 @@ from loguru import logger
 import numpy as np
 import wandb
 from utils.visualize import visualize_pointcloud_batch
-from point_cloud_utils import chamfer_distance, earth_movers_distance
+from point_cloud_utils import chamfer_distance
 import json
 
 
@@ -113,8 +113,9 @@ def evaluate(model, eval_iter, cfg, step, sampling=False):
 
         cd = np.mean(cds)
 
-    logger.info("CD: {}", cd)
-    stats = {"CD": cd}
+    loss = model.loss(x_gen_eval, gt_pointcloud).mean().item()
+    logger.info("CD: {} \t eval_loss_unweighted: {}", cd, loss)
+    stats = {"CD": cd, "eval_loss_unweighted": loss}
 
     # visualize the pointclouds
     visualize_pointcloud_batch(
@@ -139,7 +140,7 @@ def evaluate(model, eval_iter, cfg, step, sampling=False):
     )
 
     if not sampling:
-        wandb.log({"CD": cd}, step=step)
+        wandb.log(stats, step=step)
 
         samps_eval = wandb.Image("%s/%03d_pred.png" % (out_dir, step))
         samps_eval_all = wandb.Image("%s/%03d_pred_all.png" % (out_dir, step))

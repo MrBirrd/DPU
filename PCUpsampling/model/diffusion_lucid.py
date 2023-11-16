@@ -16,13 +16,14 @@ try:
 except:
     pass
 
-from .unet_pointvoxel import PVCLionSmall
+from .unet_pointvoxel import PVCLionSmall, PVCAdaptive
 from gecco_torch.models.linear_lift import LinearLift
 from gecco_torch.models.set_transformer import SetTransformer
 
 ModelPrediction = namedtuple("ModelPrediction", ["pred_noise", "pred_x_start"])
 from loguru import logger
 from ema_pytorch import EMA
+from .loss import get_loss
 
 
 # gaussian diffusion trainer class
@@ -46,13 +47,13 @@ def identity(t, *args, **kwargs):
     return t
 
 
-def linear_beta_schedule(timesteps):
+def linear_beta_schedule(timesteps, beta_start=0.0001, beta_end=0.02):
     """
     linear schedule, proposed in original ddpm paper
     """
     scale = 1000 / timesteps
-    beta_start = scale * 0.0001
-    beta_end = scale * 0.02
+    beta_start = scale * beta_start
+    beta_end = scale * beta_end
     return torch.linspace(beta_start, beta_end, timesteps, dtype=torch.float64)
 
 
@@ -83,6 +84,26 @@ def sigmoid_beta_schedule(timesteps, start=-3, end=3, tau=0.9, clamp_min=1e-5):
     alphas_cumprod = alphas_cumprod / alphas_cumprod[0]
     betas = 1 - (alphas_cumprod[1:] / alphas_cumprod[:-1])
     return torch.clip(betas, 0, 0.999)
+
+
+def adapted_sigmoid_beta_schedule(timesteps, beta_start=0.0001, beta_end=0.02, a=10, b=-5):
+    """
+    Generate a sigmoid-shaped beta schedule for diffusion process.
+
+    Args:
+    - timesteps (int): Number of timesteps in the diffusion process.
+    - beta_start (float): Starting noise level.
+    - beta_end (float): Maximum noise level.
+    - a (float): Steepness parameter for sigmoid function.
+    - b (float): Center shift parameter for sigmoid function.
+
+    Returns:
+    - numpy array: Array of beta values for each timestep.
+    """
+    t = torch.linspace(0, timesteps, timesteps, dtype=torch.float64)
+    sigmoid_function = 1 / (1 + torch.exp(-a * (t / timesteps) + b))
+    beta_schedule = beta_start + (beta_end - beta_start) * sigmoid_function
+    return torch.clip(beta_schedule, 0, 0.999)  # Clipping to avoid very high values
 
 
 def normalize_to_neg_one_to_one(x):
@@ -133,15 +154,28 @@ class GaussianDiffusion(nn.Module):
 
         # setup networks
         if cfg.model.type == "PVD":
-            self.model = PVCLionSmall(
-                out_dim=cfg.model.out_dim,
-                input_dim=cfg.model.in_dim,
-                npoints=cfg.data.npoints,
-                embed_dim=cfg.model.time_embed_dim,
-                use_att=cfg.model.use_attention,
-                dropout=cfg.model.dropout,
-                extra_feature_channels=cfg.model.extra_feature_channels,
-            ).cuda()
+            if cfg.model.PVD.size == "small":
+                self.model = PVCLionSmall(
+                    out_dim=cfg.model.out_dim,
+                    input_dim=cfg.model.in_dim,
+                    npoints=cfg.data.npoints,
+                    embed_dim=cfg.model.time_embed_dim,
+                    use_att=cfg.model.use_attention,
+                    use_st=cfg.model.PVD.use_st,
+                    dropout=cfg.model.dropout,
+                    extra_feature_channels=cfg.model.extra_feature_channels,
+                ).cuda()
+            if cfg.model.PVD.size == "large":
+                self.model = PVCAdaptive(
+                    out_dim=cfg.model.out_dim,
+                    input_dim=cfg.model.in_dim,
+                    npoints=cfg.data.npoints,
+                    embed_dim=cfg.model.time_embed_dim,
+                    use_att=cfg.model.PVD.use_attention,
+                    use_st=cfg.model.PVD.use_st,
+                    dropout=cfg.model.dropout,
+                    extra_feature_channels=cfg.model.extra_feature_channels,
+                )
         elif cfg.model.type == "Mink":
             self.model = MinkUnet(
                 dim=cfg.model.time_embed_dim,
@@ -180,6 +214,9 @@ class GaussianDiffusion(nn.Module):
         else:
             self.model_ema = None
 
+        # setup loss
+        self.loss = get_loss(cfg.diffusion.loss_type)
+
         # dimensions
         self.channels = cfg.data.nc
         self.npoints = cfg.data.npoints
@@ -197,10 +234,12 @@ class GaussianDiffusion(nn.Module):
 
         if beta_schedule == "linear":
             beta_schedule_fn = linear_beta_schedule
+            schedule_fn_kwargs["beta_start"] = cfg.diffusion.beta_start
+            schedule_fn_kwargs["beta_end"] = cfg.diffusion.beta_end
         elif beta_schedule == "cosine":
             beta_schedule_fn = cosine_beta_schedule
         elif beta_schedule == "sigmoid":
-            beta_schedule_fn = sigmoid_beta_schedule
+            beta_schedule_fn = adapted_sigmoid_beta_schedule
         else:
             raise ValueError(f"unknown beta schedule {beta_schedule}")
 
@@ -216,9 +255,7 @@ class GaussianDiffusion(nn.Module):
 
         # sampling related parameters
 
-        self.sampling_timesteps = default(
-            sampling_timesteps, timesteps
-        )  # default num sampling timesteps to number of timesteps at training
+        self.sampling_timesteps = default(sampling_timesteps, timesteps)
 
         assert self.sampling_timesteps <= timesteps
         self.is_ddim_sampling = self.sampling_timesteps < timesteps
@@ -342,8 +379,12 @@ class GaussianDiffusion(nn.Module):
         x_self_cond=None,
         clip_x_start=False,
         rederive_pred_noise=True,
+        sampling=False,
     ):
-        model_output = self.model(x, t, cond=cond, x_self_cond=x_self_cond)
+        if sampling:
+            model_output = self.model_ema(x, t, cond=cond, x_self_cond=x_self_cond)
+        else:
+            model_output = self.model(x, t, cond=cond, x_self_cond=x_self_cond)
 
         pred_noise, x_start = self.to_noise_and_xstart(
             model_output,
@@ -384,7 +425,14 @@ class GaussianDiffusion(nn.Module):
         return pred_noise, x_start
 
     def p_mean_variance(self, x, t, cond=None, x_self_cond=None, clip_denoised=False):
-        preds = self.model_predictions(x, t, cond=cond, x_self_cond=x_self_cond, clip_x_start=clip_denoised)
+        preds = self.model_predictions(
+            x,
+            t,
+            cond=cond,
+            x_self_cond=x_self_cond,
+            clip_x_start=clip_denoised,
+            sampling=False,  # TODO add optional sampling with ema option
+        )
         x_start = preds.pred_x_start
 
         if clip_denoised:
@@ -469,7 +517,12 @@ class GaussianDiffusion(nn.Module):
             time_cond = torch.full((shape[0],), time, device=self.device, dtype=torch.long)
             self_cond = x_start if self.self_condition else None
             pred_noise, x_start, *_ = self.model_predictions(
-                x=img, t=time_cond, cond=cond, x_self_cond=self_cond, clip_x_start=clip
+                x=img,
+                t=time_cond,
+                cond=cond,
+                x_self_cond=self_cond,
+                clip_x_start=clip,
+                sampling=False,  # TODO add optional sampling with ema option
             )
 
             if time_next < 0:
@@ -600,11 +653,10 @@ class GaussianDiffusion(nn.Module):
             else:
                 raise ValueError(f"unknown objective {self.objective}")
 
-            mse_loss = F.mse_loss(model_out, target, reduction="none")
-            mse_loss = reduce(mse_loss, "b ... -> b", "mean")
-            mse_loss = mse_loss * extract(self.loss_weight, t, mse_loss.shape)
-            mse_loss = mse_loss.mean()
-            loss = mse_loss
+            loss = self.loss(model_out, target)
+            loss = loss * extract(self.loss_weight, t, loss.shape)  # SNR weighted loss
+            loss = loss.mean()
+            total_loss = loss
 
             if self.reg_scale > 0:
                 # calculate additional projectiom loss on the x0
@@ -617,9 +669,9 @@ class GaussianDiffusion(nn.Module):
                 proj_loss = proj_loss * proj_loss_scale
                 proj_loss = proj_loss.mean()
                 proj_loss = proj_loss * self.reg_scale
-                loss += proj_loss
+                total_loss += proj_loss
 
-        return loss
+        return total_loss
 
     def forward(self, input, cond=None, *args, **kwargs):
         B, D, N, device = *input.shape, input.device
