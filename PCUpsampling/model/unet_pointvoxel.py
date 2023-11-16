@@ -20,7 +20,72 @@ from .pvcnn2_ada import (
 from .pvcnn_generation import PVCNN2Base
 from .rin import Attention
 from einops import rearrange
-from packaging import version
+from model.set_transformer import SetTransformer
+
+
+def get_neighbor_index(vertices: "(bs, vertice_num, 3)", neighbor_num: int):
+    """
+    Return: (bs, vertice_num, neighbor_num)
+    """
+    bs, v, _ = vertices.size()
+    device = vertices.device
+    inner = torch.bmm(vertices, vertices.transpose(1, 2))  # (bs, v, v)
+    quadratic = torch.sum(vertices**2, dim=2)  # (bs, v)
+    distance = inner * (-2) + quadratic.unsqueeze(1) + quadratic.unsqueeze(2)
+    neighbor_index = torch.topk(distance, k=neighbor_num + 1, dim=-1, largest=False)[1]
+    neighbor_index = neighbor_index[:, :, 1:]
+    return neighbor_index
+
+
+def get_nearest_index(target: "(bs, v1, 3)", source: "(bs, v2, 3)"):
+    """
+    Return: (bs, v1, 1)
+    """
+    inner = torch.bmm(target, source.transpose(1, 2))  # (bs, v1, v2)
+    s_norm_2 = torch.sum(source**2, dim=2)  # (bs, v2)
+    t_norm_2 = torch.sum(target**2, dim=2)  # (bs, v1)
+    d_norm_2 = s_norm_2.unsqueeze(1) + t_norm_2.unsqueeze(2) - 2 * inner
+    nearest_index = torch.topk(d_norm_2, k=1, dim=-1, largest=False)[1]
+    return nearest_index
+
+
+def indexing_neighbor(tensor: "(bs, vertice_num, dim)", index: "(bs, vertice_num, neighbor_num)"):
+    """
+    Return: (bs, vertice_num, neighbor_num, dim)
+    """
+    bs, v, n = index.size()
+    id_0 = torch.arange(bs).view(-1, 1, 1)
+    tensor_indexed = tensor[id_0, index]
+    return tensor_indexed
+
+
+class NeighborPooling(nn.Module):
+    def __init__(self, pooling_rate: int = 4, neighbor_num: int = 4):
+        super().__init__()
+        self.pooling_rate = pooling_rate
+        self.neighbor_num = neighbor_num
+
+    def forward(self, vertices: "(bs, vertice_num, 3)", feature_map: "(bs, vertice_num, channel_num)"):
+        """
+        Return:
+            vertices_pool: (bs, pool_vertice_num, 3),
+            feature_map_pool: (bs, pool_vertice_num, channel_num)
+        """
+        bs, vertice_num, _ = vertices.size()
+        neighbor_index = get_neighbor_index(vertices, self.neighbor_num)
+        neighbor_feature = indexing_neighbor(feature_map, neighbor_index)
+        # (bs, vertice_num, neighbor_num, channel_num)
+        pooled_feature = torch.max(neighbor_feature, dim=2)[0]
+        # (bs, vertice_num, channel_num)
+
+        pool_num = int(vertice_num / self.pooling_rate)
+        sample_idx = torch.randperm(vertice_num)[:pool_num]
+        vertices_pool = vertices[:, sample_idx, :]
+        # (bs, pool_num, 3)
+        feature_map_pool = pooled_feature[:, sample_idx, :]
+        # (bs, pool_num, channel_num)
+        return vertices_pool, feature_map_pool
+
 
 class PVCNN2Unet(nn.Module):
     """
@@ -32,6 +97,7 @@ class PVCNN2Unet(nn.Module):
         out_dim=3,
         embed_dim=64,
         use_att=True,
+        use_st=False,
         dropout=0.1,
         extra_feature_channels=3,
         input_dim=3,
@@ -88,16 +154,25 @@ class PVCNN2Unet(nn.Module):
         self.sa_layers = nn.ModuleList(sa_layers)
 
         if use_att:
-            if flash and not (version.parse(torch.__version__) < version.parse("2.0.0")):
-                self.global_att = Attention(
-                    dim=channels_sa_features,
-                    heads=8,
-                    norm=False,
-                    flash=True,
-                    # time_cond_dim=embed_dim,
+            if use_st:
+                self.global_att = SetTransformer(
+                    n_layers=6,
+                    feature_dim=channels_sa_features,
+                    num_inducers=16,
+                    t_embed_dim=1,
+                    num_groups=4,
                 )
             else:
-                self.global_att = LinearAttention(channels_sa_features, 8, verbose=verbose)
+                if flash:
+                    self.global_att = Attention(
+                        dim=channels_sa_features,
+                        heads=8,
+                        norm=False,
+                        flash=True,
+                        # time_cond_dim=embed_dim,
+                    )
+                else:
+                    self.global_att = LinearAttention(channels_sa_features, 8, verbose=verbose)
         else:
             self.global_att = None
 
@@ -173,6 +248,7 @@ class PVCNN2Unet(nn.Module):
                 features, coords, temb, _ = sa_blocks((features, coords, temb, None))
             else:  # i == 0 or temb is None
                 features, coords, temb, _ = sa_blocks((features, coords, temb, None))
+            # print(f"sa_blocks: i: {i} \t features: {features.shape} \t coords: {coords.shape} \t temb: {temb.shape}")
 
         in_features_list[0] = inputs[:, 3:, :].contiguous()
 
@@ -182,6 +258,11 @@ class PVCNN2Unet(nn.Module):
             elif isinstance(self.global_att, Attention):
                 features = rearrange(features, "b n c -> b c n")
                 features = self.global_att(features)
+                features = rearrange(features, "b c n -> b n c")
+            elif isinstance(self.global_att, SetTransformer):
+                features = rearrange(features, "b n c -> b c n")
+                temb_st = rearrange(t, "b -> b 1 1").float()
+                features, _ = self.global_att(features=features, t_embed=temb_st)
                 features = rearrange(features, "b c n -> b n c")
 
         for fp_idx, fp_blocks in enumerate(self.fp_layers):
@@ -207,6 +288,7 @@ class PVCNN2Unet(nn.Module):
                         None,
                     )
                 )
+            # print("fp_blocks: fp_idx: ", fp_idx, "\t features: ", features.shape, "\t coords: ", coords.shape)
 
         for l in self.classifier:
             if isinstance(l, SharedMLP):
@@ -253,6 +335,7 @@ class PVCLionSmall(PVCNN2Unet):
         embed_dim: int = 64,
         npoints: int = 2048,
         use_att: bool = True,
+        use_st: bool = False,
         dropout: float = 0.1,
         extra_feature_channels: int = 3,
         width_multiplier: int = 1,
@@ -287,6 +370,7 @@ class PVCLionSmall(PVCNN2Unet):
             input_dim=input_dim,
             embed_dim=embed_dim,
             use_att=use_att,
+            use_st=use_st,
             dropout=dropout,
             sa_blocks=sa_blocks,
             fp_blocks=fp_blocks,
@@ -294,35 +378,46 @@ class PVCLionSmall(PVCNN2Unet):
             width_multiplier=width_multiplier,
             voxel_resolution_multiplier=voxel_resolution_multiplier,
             self_cond=self_cond,
-            flash=True,
+            flash=False,
         )
 
 
-class PVCLionBig(PVCNN2Unet):
+class PVCAdaptive(PVCNN2Unet):
     def __init__(
         self,
         out_dim: int = 3,
         input_dim: int = 3,
         embed_dim: int = 64,
+        npoints: int = 2048,
         use_att: bool = True,
+        use_st: bool = False,
         dropout: float = 0.1,
         extra_feature_channels: int = 3,
         width_multiplier: int = 1,
         voxel_resolution_multiplier: int = 1,
         self_cond: bool = False,
     ):
+        voxel_resolutions = [32, 16, 8, 8]
+        n_sa_blocks = [2, 2, 3, 4]
+        n_fp_blocks = [2, 2, 3, 4]
+        n_centers = [npoints // 4, npoints // 4**2, npoints // 4**3, npoints // 4**4]
+        radius = [0.1, 0.2, 0.4, 0.8]
+
         sa_blocks = [
             # conv vfg  , sa config
-            ((32, 2, 32), (1024, 0.1, 32, (32, 64))),
-            ((64, 3, 16), (256, 0.2, 32, (64, 128))),
-            ((128, 3, 8), (64, 0.4, 32, (128, 256))),
-            (None, (16, 0.8, 32, (256, 256, 512))),
+            # out channels, num blocks, voxel resolution | num_centers, radius, num_neighbors, out_channels
+            ((32, n_sa_blocks[0], voxel_resolutions[0]), (n_centers[0], radius[0], 32, (32, 64))),
+            ((64, n_sa_blocks[1], voxel_resolutions[1]), (n_centers[1], radius[1], 32, (64, 128))),
+            ((128, n_sa_blocks[2], voxel_resolutions[2]), (n_centers[2], radius[2], 32, (128, 256))),
+            (None, (n_centers[3], radius[3], 32, (256, 256, 512))),
         ]
+
+        # in_channels, out_channels X | out_channels, num_blocks, voxel_resolution
         fp_blocks = [
-            ((256, 256), (256, 3, 8)),
-            ((256, 256), (256, 3, 8)),
-            ((256, 128), (128, 2, 16)),
-            ((128, 128, 64), (64, 2, 32)),
+            ((256, 256), (256, n_fp_blocks[3], voxel_resolutions[3])),
+            ((256, 256), (256, n_fp_blocks[2], voxel_resolutions[2])),
+            ((256, 128), (128, n_fp_blocks[1], voxel_resolutions[1])),
+            ((128, 128, 64), (64, n_fp_blocks[0], voxel_resolutions[0])),
         ]
 
         super().__init__(
@@ -330,6 +425,7 @@ class PVCLionBig(PVCNN2Unet):
             input_dim=input_dim,
             embed_dim=embed_dim,
             use_att=use_att,
+            use_st=use_st,
             dropout=dropout,
             sa_blocks=sa_blocks,
             fp_blocks=fp_blocks,
@@ -337,6 +433,7 @@ class PVCLionBig(PVCNN2Unet):
             width_multiplier=width_multiplier,
             voxel_resolution_multiplier=voxel_resolution_multiplier,
             self_cond=self_cond,
+            flash=False,
         )
 
 
@@ -383,10 +480,11 @@ class PVCNN2(PVCNN2Base):
             voxel_resolution_multiplier=voxel_resolution_multiplier,
         )
 
+
 if __name__ == "__main__":
     net = PVCLionSmall(input_dim=3, extra_feature_channels=0)
     net = net.cuda()
-    
+
     test = torch.rand(1, 3, 2048).cuda()
     t = torch.rand(1).cuda()
     test = net(test, t)

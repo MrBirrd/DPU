@@ -45,9 +45,7 @@ class SE3d(nn.Module):
         return f"SE({self.channel}, {self.channel})"
 
     def forward(self, inputs):
-        return inputs * self.fc(inputs.mean(-1).mean(-1).mean(-1)).view(
-            inputs.shape[0], inputs.shape[1], 1, 1, 1
-        )
+        return inputs * self.fc(inputs.mean(-1).mean(-1).mean(-1)).view(inputs.shape[0], inputs.shape[1], 1, 1, 1)
 
 
 class LinearAttention(nn.Module):
@@ -72,15 +70,11 @@ class LinearAttention(nn.Module):
         x = x.unsqueeze(-1)  # add w dimension
         b, c, h, w = x.shape
         qkv = self.to_qkv(x)
-        q, k, v = rearrange(
-            qkv, "b (qkv heads c) h w -> qkv b heads c (h w)", heads=self.heads, qkv=3
-        )
+        q, k, v = rearrange(qkv, "b (qkv heads c) h w -> qkv b heads c (h w)", heads=self.heads, qkv=3)
         k = k.softmax(dim=-1)
         context = torch.einsum("bhdn,bhen->bhde", k, v)
         out = torch.einsum("bhde,bhdn->bhen", context, q)
-        out = rearrange(
-            out, "b heads c (h w) -> b (heads c) h w", heads=self.heads, h=h, w=w
-        )
+        out = rearrange(out, "b heads c (h w) -> b (heads c) h w", heads=self.heads, h=h, w=w)
         out = self.to_out(out)
         out = out.squeeze(-1)  # B,C,N,1 -> B,C,N
         return out
@@ -115,9 +109,7 @@ class BallQuery(nn.Module):
         # neighbor_features: B,D(+3),Ncenter
         points_coords = points_coords.contiguous()
         centers_coords = centers_coords.contiguous()
-        neighbor_indices = F.ball_query(
-            centers_coords, points_coords, self.radius, self.num_neighbors
-        )
+        neighbor_indices = F.ball_query(centers_coords, points_coords, self.radius, self.num_neighbors)
         neighbor_coordinates = F.grouping(points_coords, neighbor_indices)
         neighbor_coordinates = neighbor_coordinates - centers_coords.unsqueeze(-1)
 
@@ -127,9 +119,7 @@ class BallQuery(nn.Module):
         else:
             neighbor_features = F.grouping(points_features, neighbor_indices)
             if self.include_coordinates:
-                neighbor_features = torch.cat(
-                    [neighbor_coordinates, neighbor_features], dim=1
-                )
+                neighbor_features = torch.cat([neighbor_coordinates, neighbor_features], dim=1)
         return neighbor_features
 
     def extra_repr(self):
@@ -205,14 +195,7 @@ class Voxelization(nn.Module):
         norm_coords = coords - coords.mean(2, keepdim=True)
         if self.normalize:
             norm_coords = (
-                norm_coords
-                / (
-                    norm_coords.norm(dim=1, keepdim=True)
-                    .max(dim=2, keepdim=True)
-                    .values
-                    * 2.0
-                    + self.eps
-                )
+                norm_coords / (norm_coords.norm(dim=1, keepdim=True).max(dim=2, keepdim=True).values * 2.0 + self.eps)
                 + 0.5
             )
         else:
@@ -224,9 +207,7 @@ class Voxelization(nn.Module):
         return F.avg_voxelize(features, vox_coords, self.r), norm_coords
 
     def extra_repr(self):
-        return "resolution={}{}".format(
-            self.r, ", normalized eps = {}".format(self.eps) if self.normalize else ""
-        )
+        return "resolution={}{}".format(self.r, ", normalized eps = {}".format(self.eps) if self.normalize else "")
 
 
 class PVConv(nn.Module):
@@ -283,9 +264,7 @@ class PVConv(nn.Module):
         else:
             self.attn = None
         if add_point_feat:
-            self.point_features = SharedMLP(
-                in_channels, out_channels, cfg=cfg, conditioning=use_conditioning
-            )
+            self.point_features = SharedMLP(in_channels, out_channels, cfg=cfg, conditioning=use_conditioning)
         self.add_point_feat = add_point_feat
 
     def forward(self, inputs):
@@ -306,12 +285,8 @@ class PVConv(nn.Module):
             coords = coords[:, :3]
         else:
             coords = coords
-        assert (
-            features.shape[0] == coords.shape[0]
-        ), f"get feat: {features.shape} and {coords.shape}"
-        assert (
-            features.shape[2] == coords.shape[2]
-        ), f"get feat: {features.shape} and {coords.shape}"
+        assert features.shape[0] == coords.shape[0], f"get feat: {features.shape} and {coords.shape}"
+        assert features.shape[2] == coords.shape[2], f"get feat: {features.shape} and {coords.shape}"
         assert coords.shape[1] == 3, f"expect coords: B,3,Npoint, get: {coords.shape}"
         # features: B,D,N; point_features
         # coords:   B,3,N
@@ -324,9 +299,7 @@ class PVConv(nn.Module):
                 voxel_features_4d = voxel_layers(voxel_features_4d, cond)
             else:
                 voxel_features_4d = voxel_layers(voxel_features_4d)
-        voxel_features = F.trilinear_devoxelize(
-            voxel_features_4d, voxel_coords, r, self.training
-        )
+        voxel_features = F.trilinear_devoxelize(voxel_features_4d, voxel_coords, r, self.training)
 
         fused_features = voxel_features
         if self.add_point_feat:
@@ -377,9 +350,7 @@ class PointNetAModule(nn.Module):
         if len(self.mlps) > 1:
             features_list = []
             for mlp in self.mlps:
-                features_list.append(
-                    mlp(features, style).max(dim=-1, keepdim=True).values
-                )
+                features_list.append(mlp(features, style).max(dim=-1, keepdim=True).values)
             return torch.cat(features_list, dim=1), coords, time_emb
         else:
             return (
@@ -417,9 +388,7 @@ class PointNetSAModule(nn.Module):
 
         groupers, mlps = [], []
         total_out_channels = 0
-        for _radius, _out_channels, _num_neighbors in zip(
-            radius, out_channels, num_neighbors
-        ):
+        for _radius, _out_channels, _num_neighbors in zip(radius, out_channels, num_neighbors):
             groupers.append(
                 BallQuery(
                     radius=_radius,
@@ -453,17 +422,15 @@ class PointNetSAModule(nn.Module):
         # centers_coords: B,D,N
         S = centers_coords.shape[-1]
         time_emb = inputs[2]
-        time_emb = (
-            time_emb[:, :, :S]
-            if time_emb is not None and type(time_emb) is not dict
-            else time_emb
-        )
+        time_emb = time_emb[:, :, :S] if time_emb is not None and type(time_emb) is not dict else time_emb
 
         features_list = []
         c = 0
         for grouper, mlp in zip(self.groupers, self.mlps):
             c += 1
+            # print("pre grouper (coords, centers, features)", coords.shape, centers_coords.shape, features.shape)
             grouper_output = grouper(coords, centers_coords, features)
+            # print("post grouper (grouper)", grouper_output.shape)
             features_list.append(mlp(grouper_output, style).max(dim=-1).values)
 
         if len(features_list) > 1:
@@ -502,13 +469,9 @@ class PointNetFPModule(nn.Module):
         else:
             raise NotImplementedError
 
-        interpolated_features = F.nearest_neighbor_interpolate(
-            points_coords, centers_coords, centers_features
-        )
+        interpolated_features = F.nearest_neighbor_interpolate(points_coords, centers_coords, centers_features)
         if points_features is not None:
-            interpolated_features = torch.cat(
-                [interpolated_features, points_features], dim=1
-            )
+            interpolated_features = torch.cat([interpolated_features, points_features], dim=1)
         if time_emb is not None:
             B, D, S = time_emb.shape
             N = points_coords.shape[-1]
@@ -517,14 +480,10 @@ class PointNetFPModule(nn.Module):
 
 
 def _linear_gn_relu(in_channels, out_channels):
-    return nn.Sequential(
-        nn.Linear(in_channels, out_channels), nn.GroupNorm(8, out_channels), Swish()
-    )
+    return nn.Sequential(nn.Linear(in_channels, out_channels), nn.GroupNorm(8, out_channels), Swish())
 
 
-def create_mlp_components(
-    in_channels, out_channels, classifier=False, dim=2, width_multiplier=1, cfg={}
-):
+def create_mlp_components(in_channels, out_channels, classifier=False, dim=2, width_multiplier=1, cfg={}):
     r = width_multiplier
 
     if dim == 1:
@@ -593,9 +552,7 @@ def create_pointnet2_sa_components(
             out_channels, num_blocks, voxel_resolution = conv_configs
             out_channels = int(r * out_channels)
             for p in range(num_blocks):
-                attention = ((c + 1) % 2 == 0 and use_att and p == 0) or (
-                    force_att and c > 0
-                )
+                attention = ((c + 1) % 2 == 0 and use_att and p == 0) or (force_att and c > 0)
                 if voxel_resolution is None:
                     block = functools.partial(SharedMLP, conditioning=use_conditioning)
                 else:
@@ -615,9 +572,7 @@ def create_pointnet2_sa_components(
                 if c == 0:
                     sa_blocks.append(block(in_channels, out_channels, cfg=cfg))
                 elif k == 0:
-                    sa_blocks.append(
-                        block(in_channels + embed_dim * has_temb, out_channels, cfg=cfg)
-                    )
+                    sa_blocks.append(block(in_channels + embed_dim * has_temb, out_channels, cfg=cfg))
                 in_channels = out_channels
                 k += 1
             extra_feature_channels = in_channels
@@ -642,8 +597,7 @@ def create_pointnet2_sa_components(
             sa_blocks.append(
                 block(
                     cfg=cfg,
-                    in_channels=extra_feature_channels
-                    + (embed_dim * has_temb if k == 0 else 0),
+                    in_channels=extra_feature_channels + (embed_dim * has_temb if k == 0 else 0),
                     out_channels=out_channels,
                     include_coordinates=True,
                 )
@@ -691,9 +645,7 @@ def create_pointnet2_fp_modules(
         out_channels = tuple(int(r * oc) for oc in fp_configs)
         fp_blocks.append(
             PointNetFPModule(
-                in_channels=in_channels
-                + sa_in_channels[-1 - fp_idx]
-                + embed_dim * has_temb,
+                in_channels=in_channels + sa_in_channels[-1 - fp_idx] + embed_dim * has_temb,
                 out_channels=out_channels,
                 use_conditioning=use_conditioning,
                 cfg=cfg,
@@ -705,9 +657,7 @@ def create_pointnet2_fp_modules(
             out_channels, num_blocks, voxel_resolution = conv_configs
             out_channels = int(r * out_channels)
             for p in range(num_blocks):
-                attention = (
-                    (c + 1) % 2 == 0 and c < len(fp_blocks) - 1 and use_att and p == 0
-                )
+                attention = (c + 1) % 2 == 0 and c < len(fp_blocks) - 1 and use_att and p == 0
                 if voxel_resolution is None:
                     block = functools.partial(SharedMLP, cfg=cfg)
                 else:

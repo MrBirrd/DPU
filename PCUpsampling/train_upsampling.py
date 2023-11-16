@@ -235,7 +235,7 @@ def train(gpu, cfg, output_dir, noises_init=None):
                 step=step,
             )
 
-        if (step + 1) % cfg.training.viz_interval == 0 and is_main_process and False:
+        if (step + 1) % cfg.training.viz_interval == 0 and is_main_process:
             try:
                 evaluate(model, eval_iter, cfg, step)
             except Exception as e:
