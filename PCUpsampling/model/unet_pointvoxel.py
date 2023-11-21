@@ -112,6 +112,7 @@ class PVCNN2Unet(nn.Module):
         cfg={},
         sa_blocks={},
         fp_blocks={},
+        st_params={},
     ):
         super().__init__()
         self.input_dim = input_dim
@@ -156,11 +157,11 @@ class PVCNN2Unet(nn.Module):
         if use_att:
             if use_st:
                 self.global_att = SetTransformer(
-                    n_layers=6,
+                    n_layers=st_params["layers"],
                     feature_dim=channels_sa_features,
-                    num_inducers=16,
+                    num_inducers=st_params["inducers"],
                     t_embed_dim=1,
-                    num_groups=4,
+                    num_groups=st_params["gn_groups"],
                 )
             else:
                 if flash:
@@ -396,6 +397,7 @@ class PVCAdaptive(PVCNN2Unet):
         width_multiplier: int = 1,
         voxel_resolution_multiplier: int = 1,
         self_cond: bool = False,
+        st_params: dict = {},
     ):
         voxel_resolutions = [32, 16, 8, 8]
         n_sa_blocks = [2, 2, 3, 4]
@@ -426,6 +428,7 @@ class PVCAdaptive(PVCNN2Unet):
             embed_dim=embed_dim,
             use_att=use_att,
             use_st=use_st,
+            st_params=st_params,
             dropout=dropout,
             sa_blocks=sa_blocks,
             fp_blocks=fp_blocks,

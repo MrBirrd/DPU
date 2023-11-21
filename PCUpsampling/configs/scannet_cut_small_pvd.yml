@@ -1,5 +1,5 @@
 data:
-  data_dir: ../datasets/scannetpp/
+  data_dir: /cluster/project/cvg/Shared_datasets/scannetpp/data/
   dataset: "ScanNetPP"
   unconditional: true
   workers: 4
@@ -64,7 +64,7 @@ training:
   bs: 32
   overfit: false
   amp: false
-  steps: 50_000
+  steps: 100_000
   accumulation_steps: 1
   log_interval: 10 # steps
   save_interval: 10000

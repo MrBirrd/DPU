@@ -11,11 +11,6 @@ from torch.cuda.amp import autocast
 from tqdm import tqdm
 from utils.losses import get_scaling, projection_loss
 
-try:
-    from .unet_mink import MinkUnet
-except:
-    pass
-
 from .unet_pointvoxel import PVCLionSmall, PVCAdaptive
 from gecco_torch.models.linear_lift import LinearLift
 from gecco_torch.models.set_transformer import SetTransformer
@@ -25,6 +20,11 @@ from loguru import logger
 from ema_pytorch import EMA
 from .loss import get_loss
 
+try:
+    from .unet_mink import MinkUnet
+except:
+    logger.error("MinkUnet not found, please install MinkowskiEngine")
+    pass
 
 # gaussian diffusion trainer class
 def exists(x):
@@ -173,6 +173,7 @@ class GaussianDiffusion(nn.Module):
                     embed_dim=cfg.model.time_embed_dim,
                     use_att=cfg.model.PVD.use_attention,
                     use_st=cfg.model.PVD.use_st,
+                    st_params=cfg.model.ST,
                     dropout=cfg.model.dropout,
                     extra_feature_channels=cfg.model.extra_feature_channels,
                 )
@@ -186,7 +187,7 @@ class GaussianDiffusion(nn.Module):
                 in_channels=cfg.model.in_dim + cfg.model.extra_feature_channels,
                 dim_mults=cfg.model.Mink.dim_mults,
                 downsampfactors=cfg.model.Mink.downsampfactors,
-                use_attention=cfg.model.use_attention,
+                use_attention=cfg.model.Mink.use_attention,
             ).cuda()
         elif cfg.model.type == "SetTransformer":
             set_transformer = SetTransformer(
