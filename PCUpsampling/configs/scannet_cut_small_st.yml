@@ -1,0 +1,93 @@
+data:
+  data_dir: /cluster/project/cvg/Shared_datasets/scannetpp/data/
+  dataset: ScanNetPP
+  unconditional: true
+  workers: 4
+  npoints: 8192
+  nc: 3
+  voxel_size: 0.01
+  upsample_frac: 8
+  normalize: true
+diffusion:
+  timesteps: 200
+  timesteps_clip: 200
+  sampling_timesteps: 200
+  formulation: LUCID
+  objective: pred_noise
+  schedule: linear
+  min_snr_gamma: 5
+  sampling_strategy: DDPM
+  ddim_sampling_eta: 0.0
+  sampling_hint: true
+  loss_type: mse
+  dynamic_threshold: false
+  clip: false
+  beta_start: 1.0e-07
+  beta_end: 1.0e-07
+  reg_scale: 0
+model:
+  type: SetTransformer
+  ema: false
+  in_dim: 3
+  extra_feature_channels: 0
+  out_dim: 3
+  time_embed_dim: 64
+  dropout: 0.1
+  EMA:
+    decay: 0.999
+  PVD:
+    use_attention: true
+    size: large
+    use_st: false
+  ST:
+    fdim: 256
+    inducers: 128
+    layers: 6
+  Mink:
+    init_ds_factor: 2
+    D: 1
+    dim_mults:
+    - 1
+    - 2
+    - 4
+    - 8
+    downsampfactors:
+    - 4
+    - 4
+    - 4
+    - 4
+training:
+  optimizer:
+    type: AdamW
+    lr: 0.0001
+    beta1: 0.9
+    beta2: 0.999
+    weight_decay: 0.0
+  scheduler:
+    type: constant
+    lr_gamma: 0.999
+  grad_clip:
+    enabled: false
+    value: 10.0
+  bs: 8
+  overfit: false
+  amp: false
+  steps: 200000
+  accumulation_steps: 4
+  log_interval: 10
+  save_interval: 10000
+  viz_interval: 10000
+  seed: 42
+sampling:
+  bs: 8
+  num_iter: 1
+config: configs/scannet_cut_small_st.yml
+name: scannet_cut_small_st
+save_dir: /cluster/scratch/matvogel/DPU/
+model_path: /cluster/scratch/matvogel/DPU/scannet_cut_small_st/step_89999.pth
+world_size: 1
+dist_url: tcp://127.0.0.1:9991
+dist_backend: nccl
+distribution_type: single
+rank: 0
+out_sampling: /cluster/scratch/matvogel/DPU/scannet_cut_small_st/sampling/89999/DDPM(T=200)
