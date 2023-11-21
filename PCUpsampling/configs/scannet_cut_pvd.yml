@@ -1,5 +1,5 @@
 data:
-  data_dir: ../datasets/scannetpp/
+  data_dir: /cluster/project/cvg/Shared_datasets/scannetpp/data/
   dataset: "ScanNetPP"
   unconditional: true
   workers: 4
