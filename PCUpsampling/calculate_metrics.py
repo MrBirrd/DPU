@@ -33,7 +33,12 @@ if __name__ == "__main__":
         # "scannet_cut_pvd",
         # "scannet_cut_mink",
         # "scannet_cut_pvd_att",
-        "scannet_cut_st"
+        # "scannet_cut_st",
+        #"scannet_cut_pvd_X"
+        "scannet_cut_small_mink",
+        "scannet_cut_small_st",
+        "scannet_cut_small_pvd_large_mse",
+        "scannet_cut_small_pvd_st"
     ]
 
     models = ["checkpoints/" + model for model in models]
@@ -100,7 +105,15 @@ if __name__ == "__main__":
                         pred = pred.permute(0, 2, 1)
 
                         # calculate chamfer distance
-                        chamfer_dist = calculate_chamfer_distance(gt, pred)
+                        try:
+                            chamfer_dist = calculate_chamfer_distance(gt, pred)
+                        except:
+                            # switch row major to col major
+                            xgnp = pred.cpu().numpy()
+                            xgnp = np.asfortranarray(xgnp)
+                            pred = torch.from_numpy(xgnp).cuda()
+                            chamfer_dist = calculate_chamfer_distance(gt, pred)
+
                         cd_total += chamfer_dist.item() * 1000
 
                         # calculate earth mover's distance
