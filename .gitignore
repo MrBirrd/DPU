@@ -1,4 +1,5 @@
 .vscode
+plot_superviz
 upsampling
 test
 logs_*

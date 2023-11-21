@@ -28,8 +28,8 @@ def get_output_dir(prefix, cfg):
 
 def set_seed(opt):
     if opt.training.seed is None:
-        opt.training.seed = random.randint(1, 10000)
-    logger.info("Random Seed: ", opt.training.seed)
+        opt.training.seed = 42
+    logger.info("Random Seed: {}", opt.training.seed)
     random.seed(opt.training.seed)
     torch.manual_seed(opt.training.seed)
     np.random.seed(opt.training.seed)

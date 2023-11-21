@@ -175,7 +175,7 @@ class GaussianDiffusion(nn.Module):
                     use_st=cfg.model.PVD.use_st,
                     dropout=cfg.model.dropout,
                     extra_feature_channels=cfg.model.extra_feature_channels,
-                )
+                ).cuda()
         elif cfg.model.type == "Mink":
             self.model = MinkUnet(
                 dim=cfg.model.time_embed_dim,
@@ -186,7 +186,7 @@ class GaussianDiffusion(nn.Module):
                 in_channels=cfg.model.in_dim + cfg.model.extra_feature_channels,
                 dim_mults=cfg.model.Mink.dim_mults,
                 downsampfactors=cfg.model.Mink.downsampfactors,
-                use_attention=cfg.model.use_attention,
+                use_attention=cfg.model.Mink.use_attention,
             ).cuda()
         elif cfg.model.type == "SetTransformer":
             set_transformer = SetTransformer(
@@ -455,19 +455,24 @@ class GaussianDiffusion(nn.Module):
         return pred_img, x_start
 
     @torch.inference_mode()
-    def p_sample_loop(self, shape, cond=None, hint=None, save_every=0, clip=False, *args, **kwargs):
+    def p_sample_loop(self, shape, cond=None, hint=None, add_hint_noise=True, return_noised_hint=False, save_every=0, clip=False, *args, **kwargs):
         img = torch.randn(shape, device=self.device)
 
         total_steps = min(self.num_timesteps, self.timesteps_clip)
 
         # generate start by hint if hint is not None
         # this is done by diffusing the hint the same way as trainig samples
+        diffusion_start = None
         if hint is not None:
-            with torch.no_grad():
-                t = total_steps - 1
-                t = torch.tensor([t], device=self.device).long()
-                t = repeat(t, "1 -> b", b=shape[0])
-                img, alphas, sigmas = self.q_sample(x_start=hint, noise=img, t=t, return_alphas_simgas=True)
+            if add_hint_noise:
+                with torch.no_grad():
+                    t = total_steps - 1
+                    t = torch.tensor([t], device=self.device).long()
+                    t = repeat(t, "1 -> b", b=shape[0])
+                    img, alphas, sigmas = self.q_sample(x_start=hint, noise=img, t=t, return_alphas_simgas=True)
+            else:
+                img = hint
+            diffusion_start = img
 
         imgs = [img]
 
@@ -487,10 +492,13 @@ class GaussianDiffusion(nn.Module):
 
         ret = img if not save_every else imgs
 
-        return ret
+        if return_noised_hint:
+            return ret, diffusion_start
+        else:
+            return ret
 
     @torch.inference_mode()
-    def ddim_sample(self, shape, cond=None, hint=None, save_every=0, clip=False, *args, **kwargs):
+    def ddim_sample(self, shape, cond=None, hint=None, add_hint_noise=True, return_noised_hint=False, save_every=0, clip=False, *args, **kwargs):
         # extract potential timestep clipping
         total_steps = min(self.num_timesteps, self.timesteps_clip)
 
@@ -502,11 +510,16 @@ class GaussianDiffusion(nn.Module):
 
         # generate start by hint if hint is not None
         # this is done by diffusing the hint the same way as trainig samples
-        if hint is not None:
-            with torch.no_grad():
-                t = torch.tensor([total_steps - 1], device=self.device).long()
-                t = repeat(t, "1 -> b", b=shape[0])
-                img = self.q_sample(x_start=hint, noise=img, t=t)
+        diffusion_start = None
+        if hint is not None :
+            if add_hint_noise:
+                with torch.no_grad():
+                    t = torch.tensor([total_steps - 1], device=self.device).long()
+                    t = repeat(t, "1 -> b", b=shape[0])
+                    img = self.q_sample(x_start=hint, noise=img, t=t)
+            else:
+                img = hint
+            diffusion_start = img
 
         x_start = None
         # set saving
@@ -548,10 +561,13 @@ class GaussianDiffusion(nn.Module):
         ret = img if not save_every else imgs
         # ret = self.unnormalize(ret)
 
-        return ret
+        if return_noised_hint:
+            return ret, diffusion_start
+        else:
+            return ret
 
     @torch.inference_mode()
-    def sample(self, shape, freq=0, cond=None, clip=False, hint=None, *args, **kwargs):
+    def sample(self, shape, freq=0, cond=None, clip=False, hint=None, add_hint_noise=True, return_noised_hint=False, *args, **kwargs):
         steps = min(self.num_timesteps, self.timesteps_clip)
         if freq > 0 and freq <= 1:
             save_every = int(steps * freq)
@@ -581,6 +597,8 @@ class GaussianDiffusion(nn.Module):
             hint=hint,
             save_every=save_every,
             clip=clip,
+            add_hint_noise=add_hint_noise,
+            return_noised_hint=return_noised_hint,
             *args,
             **kwargs,
         )
