@@ -431,7 +431,9 @@ class PointNetSAModule(nn.Module):
             # print("pre grouper (coords, centers, features)", coords.shape, centers_coords.shape, features.shape)
             grouper_output = grouper(coords, centers_coords, features)
             # print("post grouper (grouper)", grouper_output.shape)
-            features_list.append(mlp(grouper_output, style).max(dim=-1).values)
+            group_features = mlp(grouper_output, style)
+            # print("post grouper (mlp)", group_features.shape)
+            features_list.append(group_features.max(dim=-1).values)
 
         if len(features_list) > 1:
             return torch.cat(features_list, dim=1), centers_coords, time_emb, style
