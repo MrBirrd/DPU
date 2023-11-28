@@ -12,6 +12,7 @@ from tqdm import tqdm
 from decord import VideoReader
 from decord import cpu
 from sklearn.neighbors import KDTree
+import os
 
 
 def load_dino(model_name):
@@ -128,6 +129,9 @@ def process_scene(
     image_height: int = 1440,
     dino_model_name: str = "dinov2_vits14",
 ):
+    if os.path.exists(target_path + ".npy"):
+        print("Already processed scene", scene_id)
+        return
     # load up scene configuration
     scene = ScannetppScene_Release(scene_id, data_root=data_root)
     mesh_path = scene.scan_mesh_path
