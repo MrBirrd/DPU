@@ -34,11 +34,12 @@ if __name__ == "__main__":
         # "scannet_cut_mink",
         # "scannet_cut_pvd_att",
         # "scannet_cut_st",
-        #"scannet_cut_pvd_X"
-        "scannet_cut_small_mink",
-        "scannet_cut_small_st",
-        "scannet_cut_small_pvd_large_mse",
-        "scannet_cut_small_pvd_st"
+        # "scannet_cut_pvd_X"
+        # "scannet_cut_small_mink",
+        # "scannet_cut_small_st",
+        # "scannet_cut_small_pvd_large_mse",
+        # "scannet_cut_small_pvd_st",
+        "scannet_cut_small_pvd_l1"
     ]
 
     models = ["checkpoints/" + model for model in models]
