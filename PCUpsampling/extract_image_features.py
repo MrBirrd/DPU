@@ -12,6 +12,12 @@ def main():
         help="Path to the data directory.",
     )
     parser.add_argument(
+        "--scenes_files",
+        type=str,
+        default=None,
+        help="Path to the scenes files.",
+    )
+    parser.add_argument(
         "--output_dir",
         type=str,
         default=None,
@@ -26,8 +32,12 @@ def main():
     parser.add_argument("--dino_model_name", type=str, default="dinov2_vits14", help="Name of the DINO model to use.")
     args = parser.parse_args()
 
-    root_dir = os.listdir(args.data_root)
-    scenes = [f for f in root_dir if os.path.isdir(os.path.join(args.data_root, f))]
+    if args.scenes_files is not None:
+        with open(args.scenes_files, "r") as f:
+            scenes = f.read().splitlines()
+    else:
+        root_dir = os.listdir(args.data_root)
+        scenes = [f for f in root_dir if os.path.isdir(os.path.join(args.data_root, f))]
 
     if args.output_dir is None:
         args.output_dir = args.data_root
