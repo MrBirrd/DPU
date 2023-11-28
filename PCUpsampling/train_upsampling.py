@@ -58,9 +58,6 @@ def train(gpu, cfg, output_dir, noises_init=None):
         cfg.sampling.bs = cfg.training.bs
         cfg.data.workers = 0
 
-        cfg.training.save_interval = int(cfg.training.save_interval / cfg.ngpus_per_node)
-        cfg.training.viz_interval = int(cfg.training.viz_interval / cfg.ngpus_per_node)
-
     # setup data loader and sampler
     train_loader, val_loader, train_sampler, val_sampler = get_dataloader(cfg)
 
