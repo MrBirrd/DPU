@@ -133,6 +133,7 @@ def process_scene(
     if os.path.exists(target_path + ".npy") and not overwrite:
         print("Already processed scene", scene_id)
         return
+
     # load up scene configuration
     scene = ScannetppScene_Release(scene_id, data_root=data_root)
     mesh_path = scene.scan_mesh_path
@@ -150,12 +151,6 @@ def process_scene(
 
     # create videoreader and read the frames
     vr = VideoReader(movie_path, ctx=cpu(0))
-    skip_frames = 10  # we only have intrinsics for every 10th frame
-    frame_idxs = np.linspace(
-        0, vr._num_frame // skip_frames * skip_frames, round(vr._num_frame // skip_frames + 1), dtype=np.int32
-    )
-    print("Reading frames")
-    videoframes = vr.get_batch(frame_idxs).asnumpy()
 
     # initialize list
     ptc_feats = [[] for _ in range(len(points))]
@@ -174,21 +169,18 @@ def process_scene(
         # skip every nth scan
         if image_idx % skip_scans != 0:
             continue
-        
-        # seek the video frame
-        videoframe = vr.get_batch([frame_idxs[image_height]]).asnumpy() / 255.0
-        
-        world_to_camera = image.world_to_camera
 
         # extract video frame
         frame_name = image.name
-        frame = int(frame_name.split("_")[-1].split(".")[0]) // 10
-        videoframe = videoframes[frame] / 255.0
+        frame = int(frame_name.split("_")[-1].split(".")[0])
+
+        # seek the video frame
+        videoframe = vr[frame].asnumpy() / 255.0
 
         # project the mesh on the camera and extract the rgb values from the videoframe
         iphone_data = iphone_intrinsics[frame_name.split(".")[0]]
         intrinsic_matrix = iphone_data["intrinsic"]
-
+        world_to_camera = image.world_to_camera
         R = world_to_camera[:3, :3]
         t = world_to_camera[:-1, -1:]
 

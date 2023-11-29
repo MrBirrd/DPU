@@ -42,8 +42,7 @@ def main():
 
     # deactivate xformers
     os.environ["XFORMERS_DISABLED"] = "1"
-    
-    
+
     if args.scenes_files is not None:
         with open(args.scenes_files, "r") as f:
             scenes = f.read().splitlines()
@@ -53,9 +52,9 @@ def main():
 
     if args.output_dir is None:
         args.output_dir = args.data_root
-        
+
     print("Processing", len(scenes), "scenes")
-    
+
     for scene_id in scenes:
         # construct paths
         target_path = os.path.join(args.output_dir, scene_id, "features", f"{args.feature_type}")
@@ -79,7 +78,6 @@ def main():
             torch.cuda.empty_cache()
             gc.collect()
         except Exception as e:
-            print(e)
             print(traceback.format_exc())
             pass
 
