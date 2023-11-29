@@ -62,6 +62,7 @@ def main():
         movie_path = os.path.join(args.data_root, scene_id, "iphone", "rgb.mp4")
 
         try:
+            print("Processing scene", scene_id)
             process_scene(
                 scene_id=scene_id,
                 data_root=args.data_root,

@@ -54,7 +54,7 @@ def normalize_t(t):
     return normalized_t
 
 
-@torch.no_grad()
+@torch.inference_mode()
 def get_dino_features(model, image, patch_size=14):
     B, C, H, W = image.shape
     smaller_edge_size = min(H, W)
@@ -180,7 +180,7 @@ def update_features_batched(feature_array, count_array, new_features, valid_indi
     return feature_array, count_array
 
 
-def interpolate_missing_features(ptc_feats, ptc_feats_count, points, batch_size=128):
+def interpolate_missing_features(ptc_feats, ptc_feats_count, points, f_shape, batch_size=128):
     # ptc_feats: NxF - Feature array
     # ptc_feats_count: N - Array tracking the count of each feature
     # points: Nx3 - Array of point cloud coordinates
@@ -208,10 +208,10 @@ def interpolate_missing_features(ptc_feats, ptc_feats_count, points, batch_size=
 
         for batch_idx, neighbor_batch in enumerate(idx):
             nonzero_neighbors = ptc_feats[neighbor_batch, :]
-            nonzero_neighbors_mask = np.any(nonzero_neighbors != np.zeros(3), axis=-1)
+            nonzero_neighbors_mask = np.any(nonzero_neighbors != np.zeros(f_shape), axis=-1)
             nonzero_neighbors = nonzero_neighbors[nonzero_neighbors_mask]
             if nonzero_neighbors.shape[0] == 0:
-                neighbors_agg = np.zeros(3)
+                neighbors_agg = np.zeros(f_shape)
             else:
                 neighbors_agg = np.median(nonzero_neighbors, axis=-2)
             ptc_feats[batch[batch_idx]] = neighbors_agg
@@ -267,14 +267,33 @@ def process_scene(
     ptc_feats_count = np.zeros((len(points), 1), dtype=np.int32)
 
     # calculate features in batches, first skip every nth scan
+    batch_size = 2
+    total_data = len(images)
+    
+    if total_data < 30:
+        skip_scans = 1
+    elif total_data < 60:
+        skip_scans = 2
+    elif total_data < 90:
+        skip_scans = 3
+    elif total_data < 160:
+        skip_scans = 4
+    else:
+        skip_scans = 5
+    
     images = list(images.values())
     images = images[::skip_scans]
 
-    batch_size = 2
-    batches = np.array_split(np.arange(len(images)), len(images) // batch_size)
-    points = np.expand_dims(points, axis=0).repeat(batch_size, axis=0)
-
+    
+    # split into batches of maximum shape of batch_size
+    num_batches = int(np.ceil(total_data / batch_size))
+    batches = np.array_split(np.arange(total_data), num_batches)
+    
     for batch in tqdm(batches, total=len(batches), desc="Processing images"):
+        # expand dims to batch size
+        points_batch = np.expand_dims(points, axis=0).repeat(len(batch), axis=0)
+        
+        # create batch of frames
         frame_names = [images[i].name for i in batch]
         frames = [int(frame_name.split("_")[-1].split(".")[0]) for frame_name in frame_names]
 
@@ -288,18 +307,19 @@ def process_scene(
                 for iphone_data in [iphone_intrinsics[frame_name.split(".")[0]] for frame_name in frame_names]
             ]
         )
+        
         world_to_cameras = [images[i].world_to_camera for i in batch]
         Rs = np.array([world_to_camera[:3, :3] for world_to_camera in world_to_cameras])
         ts = np.array([world_to_camera[:-1, -1:] for world_to_camera in world_to_cameras])
 
-        points_projected = project_point_cloud_batch(points, ts, Rs, intrinsic_matrices)
+        points_projected = project_point_cloud_batch(points_batch, ts, Rs, intrinsic_matrices)
         valid_indices = filter_points_batch(points_projected, image_width, image_height)
 
         # extract features
         if feature_type == "rgb":
             features = map_image_features_to_filtered_ptc_batch(videoframes, points_projected, valid_indices)
         elif feature_type == "dino":
-            with torch.cuda.amp.autocast(cache_enabled=False):
+            with torch.cuda.amp.autocast(enabled=True, cache_enabled=False):
                 videoframes = torch.tensor(videoframes).permute(0, 3, 1, 2).type(torch.float16).cuda()
                 dino_feats = get_dino_features(model, videoframes)
 
@@ -308,6 +328,6 @@ def process_scene(
 
         update_features_batched(ptc_feats, ptc_feats_count, features, valid_indices)
 
-    ptc_feats = interpolate_missing_features(ptc_feats, ptc_feats_count, points[0])
+    ptc_feats = interpolate_missing_features(ptc_feats, ptc_feats_count, points, f_shape)
     np.nan_to_num(ptc_feats, copy=False)
     np.save(target_path, ptc_feats.astype(np.float16))
