@@ -284,6 +284,8 @@ def process_scene(
     images = list(images.values())
     images = images[::skip_scans]
 
+    # recalculate total data
+    total_data = len(images)
     
     # split into batches of maximum shape of batch_size
     num_batches = int(np.ceil(total_data / batch_size))
