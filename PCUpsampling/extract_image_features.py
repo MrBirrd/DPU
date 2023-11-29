@@ -21,6 +21,11 @@ def main():
         help="Path to the scenes files.",
     )
     parser.add_argument(
+        "--overwrite",
+        action="store_true",
+        help="Whether to overwrite existing features.",
+    )
+    parser.add_argument(
         "--output_dir",
         type=str,
         default=None,
@@ -68,6 +73,7 @@ def main():
                 image_width=args.image_width,
                 image_height=args.image_height,
                 dino_model_name=args.dino_model_name,
+                overwrite=args.overwrite,
             )
             print("Done with scene", scene_id)
             torch.cuda.empty_cache()

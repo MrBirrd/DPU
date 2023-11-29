@@ -128,8 +128,9 @@ def process_scene(
     image_width: int = 1920,
     image_height: int = 1440,
     dino_model_name: str = "dinov2_vits14",
+    overwrite: bool = False,
 ):
-    if os.path.exists(target_path + ".npy"):
+    if os.path.exists(target_path + ".npy") and not overwrite:
         print("Already processed scene", scene_id)
         return
     # load up scene configuration
