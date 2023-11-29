@@ -5,7 +5,7 @@ from torch import Tensor
 from einops import rearrange
 from third_party.scannetpp.common.utils.colmap import read_model
 from third_party.scannetpp.common.scene_release import ScannetppScene_Release
-import open3d as o3d
+import pyminiply
 import numpy as np
 import json
 from tqdm import tqdm
@@ -141,9 +141,11 @@ def process_scene(
     iphone_intrinsics_path = scene.iphone_pose_intrinsic_imu_path
     iphone_intrinsics = json.load(open(iphone_intrinsics_path))
 
-    mesh = o3d.io.read_triangle_mesh(str(mesh_path))
-    pointcloud = o3d.geometry.PointCloud(mesh.vertices)
-    points = np.array(pointcloud.points)
+    ply, *_ = pyminiply.read(str(mesh_path))
+    # remove nans or infs
+    ply = ply[~np.isnan(ply).any(axis=1)]
+    ply = ply[~np.isinf(ply).any(axis=1)]
+    points = ply[:, :3]
 
     # create videoreader and read the frames
     vr = VideoReader(movie_path, ctx=cpu(0))
@@ -151,6 +153,7 @@ def process_scene(
     frame_idxs = np.linspace(
         0, vr._num_frame // skip_frames * skip_frames, round(vr._num_frame // skip_frames + 1), dtype=np.int32
     )
+    print("Reading frames")
     videoframes = vr.get_batch(frame_idxs).asnumpy()
 
     # initialize list
@@ -162,12 +165,18 @@ def process_scene(
         pass
     elif feature_type == "dino":
         f_shape = 384
+        print("Loading DINO model")
         model = load_dino(dino_model_name)
 
     # calculate features
     for image_idx, image in tqdm(images.items(), total=len(images), desc="Processing images"):
+        # skip every nth scan
         if image_idx % skip_scans != 0:
             continue
+        
+        # seek the video frame
+        videoframe = vr.get_batch([frame_idxs[image_height]]).asnumpy() / 255.0
+        
         world_to_camera = image.world_to_camera
 
         # extract video frame
@@ -220,7 +229,7 @@ def process_scene(
     batch_size = 100
     batches = np.array_split(missing_idx, len(missing_idx) // batch_size)
 
-    for batch in batches:
+    for batch in tqdm(batches, total=len(batches), desc="KNN interpolation"):
         # find nearest neighbors
         dist, idx = tree.query(points[batch], k=10)
         # replace missing values with mean over nearest neighbors

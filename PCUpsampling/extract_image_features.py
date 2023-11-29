@@ -1,6 +1,9 @@
 from utils.image_features import process_scene
 import argparse
 import os
+import traceback
+import torch
+import gc
 
 
 def main():
@@ -32,6 +35,10 @@ def main():
     parser.add_argument("--dino_model_name", type=str, default="dinov2_vits14", help="Name of the DINO model to use.")
     args = parser.parse_args()
 
+    # deactivate xformers
+    os.environ["XFORMERS_DISABLED"] = "1"
+    
+    
     if args.scenes_files is not None:
         with open(args.scenes_files, "r") as f:
             scenes = f.read().splitlines()
@@ -41,7 +48,9 @@ def main():
 
     if args.output_dir is None:
         args.output_dir = args.data_root
-
+        
+    print("Processing", len(scenes), "scenes")
+    
     for scene_id in scenes:
         # construct paths
         target_path = os.path.join(args.output_dir, scene_id, "features", f"{args.feature_type}")
@@ -61,9 +70,11 @@ def main():
                 dino_model_name=args.dino_model_name,
             )
             print("Done with scene", scene_id)
-            break
+            torch.cuda.empty_cache()
+            gc.collect()
         except Exception as e:
             print(e)
+            print(traceback.format_exc())
             pass
 
 
