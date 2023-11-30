@@ -10,13 +10,13 @@ import pyminiply
 
 
 class ScanNetPPCut(Dataset):
-    def __init__(self, root, npoints, mode="training") -> None:
+    def __init__(self, root, npoints, mode="training", features=None) -> None:
         super().__init__()
         self.root = root
         self.npoints = npoints
 
         # setup the pcd trees
-        self.trees = []
+        self.data = []
 
         # load the splits which are located in the splits folder at same level
         script_path = os.path.dirname(os.path.realpath(__file__))
@@ -38,28 +38,46 @@ class ScanNetPPCut(Dataset):
         folders = os.listdir(self.root)
         logger.info("Setting up scannet dataset")
         folders = [f for f in folders if os.path.isdir(os.path.join(self.root, f))]
+        folders = [f for f in folders if f in scans]
+        
         for idx, f in enumerate(tqdm(folders, desc=f"Loading {mode} scans")):
-            # skip if not in split
-            if f not in scans:
-                continue
-            # else read the ply file and generate a tree
             file = os.path.join(self.root, f, "scans", "mesh_aligned_0.05.ply")
-            if os.path.exists(file):
-                ply, *_ = pyminiply.read(file)
-                # remove nans or infs
-                ply = ply[~np.isnan(ply).any(axis=1)]
-                ply = ply[~np.isinf(ply).any(axis=1)]
-                # generate the tree
-                pcd_tree = spatial.cKDTree(ply)
-                self.trees.append(pcd_tree)
+            feature_file = os.path.join(self.root, f, "features", f"{features}.npy") if features is not None else None
+            
+            # check if the files exists
+            valid_scan = os.path.exists(file) if features is None else os.path.exists(file) and os.path.exists(feature_file)
 
-        logger.info(f"Loaded {len(self.trees)} scans")
+            if valid_scan:
+                # read the data
+                pointcloud, *_ = pyminiply.read(file)
+                
+                # remove nans or infs
+                mask = ~np.isnan(pointcloud).any(axis=1) | ~np.isinf(pointcloud).any(axis=1)
+                
+                # filter
+                pointcloud = pointcloud[mask]
+                # generate the tree
+                pcd_tree = spatial.cKDTree(pointcloud)
+
+                data = {
+                    "tree": pcd_tree,
+                    "scene": f,
+                    "feature_path": feature_file,
+                }
+                self.data.append(data)
+
+        logger.info(f"Loaded {len(self.data)} scans")
 
     def __len__(self):
-        return len(self.trees) * 100
+        return len(self.data) * 128
 
     def __getitem__(self, index):
-        pcd_tree = self.trees[index % len(self.trees)]
+        iteration_data = self.data[index // 128]
+        
+        pcd_tree = iteration_data["tree"]
+        feature_file = iteration_data["feature_path"]
+        
+        # extract points and features
         points = pcd_tree.data
 
         # sample k points around randomly chosen point
@@ -67,8 +85,16 @@ class ScanNetPPCut(Dataset):
         rand_point = points[rand_idx]
         _, idx = pcd_tree.query(rand_point, k=self.npoints, p=2)
         points = points[idx]
-
-        # normalize the points
+        
+        # load the features
+        if feature_file is not None:
+            features = np.load(feature_file, mmap_mode="r")
+            features = features[:, idx]
+            features = torch.from_numpy(features).float()
+        else:
+            features = None
+        
+        # normalize the point coordinates
         center = np.mean(points, axis=0)
         points -= center
         scale = np.max(np.linalg.norm(points, axis=1))
@@ -80,5 +106,9 @@ class ScanNetPPCut(Dataset):
             "train_points_center": center,
             "train_points_scale": scale,
         }
-
+        
+        # append the features if they are available
+        if features is not None:
+            data["features"] = features
+        
         return data

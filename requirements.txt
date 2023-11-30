@@ -18,3 +18,5 @@ matplotlib
 wandb
 ipykernel
 ninja
+decord
+scikit-learn

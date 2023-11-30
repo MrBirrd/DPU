@@ -188,6 +188,9 @@ def interpolate_missing_features(ptc_feats, ptc_feats_count, points, f_shape, ba
     # Find indices of missing features (where count is 0)
     missing_idx = np.where(ptc_feats_count == 0)[0]
 
+    if len(missing_idx) == 0:
+        return ptc_feats
+    
     # Create a KDTree for nearest neighbor search
     tree = KDTree(points)
 

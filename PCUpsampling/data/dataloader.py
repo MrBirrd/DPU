@@ -68,9 +68,9 @@ def get_dataloader(opt, sampling=False):
         )
     elif opt.data.dataset == "ScanNetPP":
         train_dataset = (
-            ScanNetPPCut(npoints=opt.data.npoints, root=opt.data.data_dir, mode="training") if not sampling else None
+            ScanNetPPCut(npoints=opt.data.npoints, root=opt.data.data_dir, mode="training", features=opt.data.features) if not sampling else None
         )
-        test_dataset = ScanNetPPCut(npoints=opt.data.npoints, root=opt.data.data_dir, mode="validation")
+        test_dataset = ScanNetPPCut(npoints=opt.data.npoints, root=opt.data.data_dir, mode="validation", features=opt.data.features)
     else:
         raise NotImplementedError(f"Dataset {opt.data.dataset} not implemented!")
 

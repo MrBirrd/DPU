@@ -182,14 +182,17 @@ def train(gpu, cfg, output_dir, noises_init=None):
                 if "train_points_lowres" in data and not cfg.data.unconditional
                 else None
             )
+            features = data["features"] if "features" in data else None
 
             # move data to gpu
             if cfg.distribution_type == "multi":
                 x = x.cuda(gpu)
                 lowres = lowres.cuda(gpu) if lowres is not None else None
+                features = features.cuda(gpu) if features is not None else None
             elif cfg.distribution_type == "single":
                 x = x.cuda()
                 lowres = lowres.cuda() if lowres is not None else None
+                features = features.cuda() if features is not None else None
 
             # forward pass
             loss = model(x, cond=lowres)
