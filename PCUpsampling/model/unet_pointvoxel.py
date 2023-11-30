@@ -125,7 +125,7 @@ class PVCNN2Unet(nn.Module):
         self.time_emb_scales = time_emb_scales
         self.embed_dim = embed_dim
         self.self_condition = self_cond
-        ## assert(self.embed_dim == 0)
+
         if self.embed_dim > 0:  # has time embedding
             # for prior model, we have time embedding, for VAE model, no time embedding
             self.embedf = nn.Sequential(
@@ -178,7 +178,7 @@ class PVCNN2Unet(nn.Module):
             self.global_att = None
 
         # only use extra features in the last fp module
-        sa_in_channels[0] = extra_feature_channels + input_dim - 3 if extra_feature_channels == 0 else 6
+        sa_in_channels[0] = extra_feature_channels + input_dim
 
         fp_layers, channels_fp_features = create_pointnet2_fp_modules(
             fp_blocks=self.fp_blocks,
@@ -193,6 +193,7 @@ class PVCNN2Unet(nn.Module):
             verbose=verbose,
             cfg=cfg,
         )
+
         self.fp_layers = nn.ModuleList(fp_layers)
 
         layers, _ = create_mlp_components(
@@ -221,37 +222,38 @@ class PVCNN2Unet(nn.Module):
         assert emb.shape == torch.Size([timesteps.shape[0], self.embed_dim])
         return emb
 
-    def forward(self, inputs, t, cond=None, x_self_cond=None):
-        # Input: coords: B3N
-        B = inputs.shape[0]
-        coords = inputs[:, : self.input_dim, :].contiguous()
-        features = inputs
+    def forward(self, coords, t, cond=None, x_self_cond=None):
+        (B, C, N), device = coords.shape, coords.device
+        coords = coords.contiguous()
 
-        # additional conditioning
+        # initialize features as coordinates
+        features = coords.clone()
+
         if cond is not None:
-            features = torch.cat([features, cond], dim=1)
+            features = torch.cat([features, cond], dim=1).contiguous()
+        else:
+            features = features.contiguous()
+
+        # initialize lists
+        coords_list, in_features_list = [], []
+        in_features_list.append(features)
 
         if t is not None:
             if t.ndim == 0 and not len(t.shape) == 1:
                 t = t.view(1).expand(B)
-            temb = self.embedf(self.get_timestep_embedding(t, inputs.device))[:, :, None].expand(
-                -1, -1, inputs.shape[-1]
-            )
-
-        coords_list, in_features_list = [], []
+            temb = self.embedf(self.get_timestep_embedding(t, device))[:, :, None].expand(-1, -1, N)
 
         for i, sa_blocks in enumerate(self.sa_layers):
             in_features_list.append(features)
             coords_list.append(coords)
             if i > 0 and temb is not None:
-                # TODO: implement a sa_blocks forward function; check if is PVConv layer and kwargs get grid_emb, take as additional input
                 features = torch.cat([features, temb], dim=1)
                 features, coords, temb, _ = sa_blocks((features, coords, temb, None))
             else:  # i == 0 or temb is None
                 features, coords, temb, _ = sa_blocks((features, coords, temb, None))
-            # print(f"sa_blocks: i: {i} \t features: {features.shape} \t coords: {coords.shape} \t temb: {temb.shape}")
 
-        in_features_list[0] = inputs[:, 3:, :].contiguous()
+        # remove first added feature in feature list
+        in_features_list.pop(1)
 
         if self.global_att is not None:
             if isinstance(self.global_att, LinearAttention):
@@ -289,7 +291,6 @@ class PVCNN2Unet(nn.Module):
                         None,
                     )
                 )
-            # print("fp_blocks: fp_idx: ", fp_idx, "\t features: ", features.shape, "\t coords: ", coords.shape)
 
         for l in self.classifier:
             if isinstance(l, SharedMLP):
@@ -297,35 +298,6 @@ class PVCNN2Unet(nn.Module):
             else:
                 features = l(features)
         return features
-
-
-# the building block of encode and decoder for VAE
-def get_sa_fp_parameters(npoints, points_downsampling=[16, 64, 128, 256]):
-    # get closest lower power of two to npoints
-    n = 2 ** int(np.log2(npoints))
-
-    sa_blocks = [
-        # conv vfg  ,   sa config
-        (
-            (32, 2, 32),
-            (1024, 0.1, 32, (32, 64)),
-        ),  # out channels, num blocks, voxel resolution | num_centers, radius, num_neighbors, out_channels
-        ((64, 3, 16), (256, 0.2, 32, (64, 128))),
-        ((128, 3, 8), (64, 0.4, 32, (128, 256))),
-        (None, (16, 0.8, 32, (256, 256, 512))),
-    ]
-
-    fp_blocks = [
-        (
-            (256, 256),
-            (256, 3, 8),
-        ),  # in_channels, out_channels X | out_channels, num_blocks, voxel_resolution
-        ((256, 256), (256, 3, 8)),
-        ((256, 128), (128, 2, 16)),
-        ((128, 128, 64), (64, 2, 32)),
-    ]
-
-    return sa_blocks, fp_blocks
 
 
 class PVCLionSmall(PVCNN2Unet):

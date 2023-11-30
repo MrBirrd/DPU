@@ -6,10 +6,11 @@ from omegaconf import OmegaConf
 def parse_args():
     # make parser which accepts optinal arguments
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config", type=str, help="Path to the config file.")
+    parser.add_argument("--config", type=str, default=None, help="Path to the config file.")
     parser.add_argument("--name", type=str, default="", help="Name of the experiment.")
     parser.add_argument("--save_dir", default="checkpoints", help="path to save models")
     parser.add_argument("--model_path", type=str, default="", help="path to model (to continue training)")
+    parser.add_argument("--restart", action="store_true", help="restart training from scratch")
 
     """distributed"""
     parser.add_argument("--world_size", default=1, type=int, help="Number of distributed nodes.")
@@ -34,8 +35,11 @@ def parse_args():
     args, remaining_argv = parser.parse_known_args()
 
     # load config
-    if args.model_path != "":
-        cfg = OmegaConf.load(os.path.join(os.path.dirname(args.model_path), "opt.yaml"))
+    if args.model_path != "" and not args.restart:
+        try:
+            cfg = OmegaConf.load(os.path.join(os.path.dirname(args.model_path), "opt.yaml"))
+        except FileNotFoundError:
+            cfg = OmegaConf.load(args.config)
     else:
         cfg = OmegaConf.load(args.config)
 

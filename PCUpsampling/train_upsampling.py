@@ -14,6 +14,7 @@ from utils.evaluation import evaluate
 from utils.file_utils import *
 from utils.ops import *
 from utils.args import parse_args
+from utils.training import smart_load_model_weights, get_data_batch
 from lion_pytorch import Lion
 from loguru import logger
 import wandb
@@ -149,11 +150,14 @@ def train(gpu, cfg, output_dir, noises_init=None):
     # load model
     if cfg.model_path != "":
         ckpt = torch.load(cfg.model_path)
-        model.load_state_dict(ckpt["model_state"])
-        optimizer.load_state_dict(ckpt["optimizer_state"])
+        # model.load_state_dict(ckpt["model_state"])
+        smart_load_model_weights(model, ckpt["model_state"])
+        # load optimizer
+        if not cfg.restart:
+            optimizer.load_state_dict(ckpt["optimizer_state"])
 
     # set start step
-    if cfg.model_path != "":
+    if cfg.model_path != "" and not cfg.restart:
         start_step = torch.load(cfg.model_path)["step"] + 1
     else:
         start_step = 0
@@ -176,26 +180,9 @@ def train(gpu, cfg, output_dir, noises_init=None):
             # get next batch
             data = next(train_iter)
 
-            x = data["train_points"].transpose(1, 2)
-            lowres = (
-                data["train_points_lowres"].transpose(1, 2)
-                if "train_points_lowres" in data and not cfg.data.unconditional
-                else None
-            )
-            features = data["features"] if "features" in data else None
-
-            # move data to gpu
-            if cfg.distribution_type == "multi":
-                x = x.cuda(gpu)
-                lowres = lowres.cuda(gpu) if lowres is not None else None
-                features = features.cuda(gpu) if features is not None else None
-            elif cfg.distribution_type == "single":
-                x = x.cuda()
-                lowres = lowres.cuda() if lowres is not None else None
-                features = features.cuda() if features is not None else None
-
+            x, feature_cond = get_data_batch(batch=data, cfg=cfg, return_dict=False, device=gpu)
             # forward pass
-            loss = model(x, cond=lowres)
+            loss = model(x, cond=feature_cond)
 
             loss /= cfg.training.accumulation_steps
 
@@ -249,7 +236,7 @@ def train(gpu, cfg, output_dir, noises_init=None):
                     "optimizer_state": optimizer.state_dict(),
                 }
 
-                torch.save(save_dict, "%s/step_%d.pth" % (output_dir, step))
+                torch.save(save_dict, "%s/step_%d.pth" % (output_dir, step + 1))
 
             if cfg.distribution_type == "multi":
                 dist.barrier()

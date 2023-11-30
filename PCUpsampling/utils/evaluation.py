@@ -9,6 +9,8 @@ import json
 from modules.functional import furthest_point_sample
 from scipy import spatial
 from tqdm import tqdm
+from utils.training import get_data_batch
+
 
 def print_stats(x: Tensor, name: str):
     xmean = torch.mean(x)
@@ -42,27 +44,14 @@ def evaluate(model, eval_iter, cfg, step, sampling=False):
 
     eval_data = next(eval_iter)
 
-    gt_pointcloud = eval_data["train_points"].transpose(1, 2)
-    lowres_pointcloud = (
-        eval_data["train_points_lowres"].transpose(1, 2)
-        if "train_points_lowres" in eval_data and not cfg.data.unconditional
-        else None
-    )
+    batch = get_data_batch(batch=eval_data, cfg=cfg, return_dict=True, device=cfg.gpu)
+    gt_pointcloud = batch["target"]
+    lowres_pointcloud = batch["lowres_cond"]
+    features = batch["feature_cond"]
 
-    # move data to gpu
-    if cfg.distribution_type == "multi":
-        gt_pointcloud = gt_pointcloud.cuda(cfg.gpu)
-        lowres_pointcloud = lowres_pointcloud.cuda(cfg.gpu) if lowres_pointcloud is not None else None
-    elif cfg.distribution_type == "single":
-        gt_pointcloud = gt_pointcloud.cuda()
-        lowres_pointcloud = lowres_pointcloud.cuda() if lowres_pointcloud is not None else None
+    cond = features if features is not None else lowres_pointcloud
 
     with torch.no_grad():
-        if cfg.sampling.bs == 1:
-            cond = lowres_pointcloud[0].unsqueeze(0) if lowres_pointcloud is not None else None
-        else:
-            cond = lowres_pointcloud[: cfg.sampling.bs] if lowres_pointcloud is not None else None
-
         x_gen_eval, x_gen_eval_hints = model.sample(
             shape=new_x_chain(gt_pointcloud, cfg.sampling.bs).shape,
             device=gt_pointcloud.device,
@@ -75,7 +64,7 @@ def evaluate(model, eval_iter, cfg, step, sampling=False):
         x_gen_list = model.sample(
             shape=new_x_chain(gt_pointcloud, 1).shape,
             device=gt_pointcloud.device,
-            cond=lowres_pointcloud[0].unsqueeze(0) if lowres_pointcloud is not None else None,
+            cond=cond[0].unsqueeze(0) if cond is not None else None,
             hint=gt_pointcloud if cfg.diffusion.sampling_hint else None,
             freq=0.1,
             clip_denoised=False,
@@ -117,6 +106,7 @@ def evaluate(model, eval_iter, cfg, step, sampling=False):
         cd = np.mean(cds)
 
     loss = model.loss(x_gen_eval, gt_pointcloud).mean().item()
+
     logger.info("CD: {} \t eval_loss_unweighted: {}", cd, loss)
     stats = {"CD": cd, "eval_loss_unweighted": loss}
 
@@ -164,7 +154,7 @@ def evaluate(model, eval_iter, cfg, step, sampling=False):
         np.save("%s/%03d_pred.npy" % (out_dir, step), x_gen_eval.cpu().numpy())
         np.save("%s/%03d_pred_all.npy" % (out_dir, step), x_gen_all.cpu().numpy())
         np.save("%s/%03d_hints.npy" % (out_dir, step), x_gen_eval_hints.cpu().numpy())
-        
+
         if gt_pointcloud is not None:
             np.save("%s/%03d_gt_highres.npy" % (out_dir, step), gt_pointcloud.cpu().numpy())
         if lowres_pointcloud is not None:
@@ -211,7 +201,7 @@ def upsample_big_pointcloud(model, pointcloud, batch_size=8192, n_batches=32):
                 )
             total_pbar.update(1)
             # reshape
-            upsampled_batch = upsampled_batch.permute(0, 2, 1) # B, 3, N => B, N 3
+            upsampled_batch = upsampled_batch.permute(0, 2, 1)  # B, 3, N => B, N 3
             # add back indices
             upsampled_batch = torch.cat([upsampled_batch, upsampling_batch[:, :, 3:]], dim=-1)
             upsampled_points = torch.cat([upsampled_points, upsampled_batch.squeeze(0)], dim=0)
@@ -231,14 +221,11 @@ def upsample_big_pointcloud(model, pointcloud, batch_size=8192, n_batches=32):
             )
         total_pbar.update(1)
         # reshape
-        upsampled_batch = upsampled_batch.permute(0, 2, 1) # B, 3, N => B, N 3
+        upsampled_batch = upsampled_batch.permute(0, 2, 1)  # B, 3, N => B, N 3
         # add back indices
         upsampled_batch = torch.cat([upsampled_batch, upsampling_batch[:, :, 3:]], dim=-1)
         upsampled_points = torch.cat([upsampled_points, upsampled_batch.squeeze(0)], dim=0)
         upsampling_batch = torch.tensor([]).cuda()
-    
+
     # check if all points were upsampled
     return upsampled_points
-
-        
-
