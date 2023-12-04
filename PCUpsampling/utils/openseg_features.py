@@ -1,6 +1,16 @@
+import torch
+import subprocess
+import numpy as np
+import os
+from PIL import Image
+import io
+
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
+
+
 import tensorflow as tf2
 import tensorflow.compat.v1 as tf
-from tensorflow import io
+from tensorflow import io as tfio
 
 
 ## OpenSeg
@@ -15,18 +25,21 @@ def load_openseg_model(model_path):
 def read_bytes(path):
     """Read bytes for OpenSeg model running."""
 
-    with io.gfile.GFile(path, "rb") as f:
+    with tfio.gfile.GFile(path, "rb") as f:
         file_bytes = f.read()
     return file_bytes
 
 
-def extract_openseg_img_feature(img_dir, openseg_model, img_size=None, regional_pool=True):
+def extract_openseg_img_feature(image, openseg_model, img_size=None, regional_pool=True):
     """Extract per-pixel OpenSeg features."""
 
     text_emb = tf.zeros([1, 1, 768])
     # load RGB image
-    # np_image_string = image.numpy().tobytes()
-    np_image_string = read_bytes(img_dir)
+    # np_image_string = image.tobytes()
+    pil_image = Image.fromarray(image)
+    buf = io.BytesIO()
+    pil_image.save(buf, format="JPEG")
+    np_image_string = buf.getvalue()
     # run OpenSeg
 
     results = openseg_model.signatures["serving_default"](
@@ -50,3 +63,17 @@ def extract_openseg_img_feature(img_dir, openseg_model, img_size=None, regional_
     del image_embedding_feat
     feat_2d = torch.from_numpy(feat_2d).permute(2, 0, 1)  # dtype=torch.float16
     return feat_2d
+
+
+if __name__ == "__main__":
+    if not os.path.exists("./exported_model"):
+        subprocess.run(
+            ["gsutil", "cp", "-r", "gs://cloud-tpu-checkpoints/detection/projects/openseg/colab/exported_model", "./"]
+        )
+
+    model = load_openseg_model(model_path="./exported_model")
+    H, W = 1400, 1200
+    test_image = np.random.rand(H, W, 3) * 255
+    test_image = test_image.astype(np.uint8)
+    feats = extract_openseg_img_feature(test_image, model, img_size=(H, W))
+    print("Features of shape: ", feats.shape)
