@@ -242,7 +242,7 @@ def process_scene(
     mesh_path = scene.scan_mesh_path
 
     colmap_dir = scene.iphone_colmap_dir
-    cameras, images, points3D = read_model(colmap_dir, ".txt")
+    _, images, _ = read_model(colmap_dir, ".txt", read=["images"])
     iphone_intrinsics_path = scene.iphone_pose_intrinsic_imu_path
     iphone_intrinsics = json.load(open(iphone_intrinsics_path))
 

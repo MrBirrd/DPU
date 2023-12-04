@@ -1,11 +1,11 @@
 import torch
 from .arkitscenes import IndoorScenes, IndoorScenesCut, ArkitScans
-from .scannetpp import ScanNetPPCut
+from .scannetpp import ScanNetPPCut, ScanNetPPProcessed
 from .shapenet import get_dataset_shapenet
 from loguru import logger
 import os
 from torch.utils.data import Dataset, DataLoader
-
+from torch.utils.data.distributed import DistributedSampler
 
 def save_iter(dataloader, sampler):
     """Return a save iterator over the loader, which supports multi-gpu training using a distributed sampler."""
@@ -77,18 +77,29 @@ def get_dataloader(opt, sampling=False):
         test_dataset = ScanNetPPCut(
             npoints=opt.data.npoints, root=opt.data.data_dir, mode="validation", features=opt.data.point_features
         )
+    elif opt.data.dataset == "ScanNetPPProcessed":
+        train_dataset = (
+            ScanNetPPProcessed(
+                root=opt.data.data_dir, mode="training", features=opt.data.point_features, augment=opt.data.augment
+            )
+            if not sampling
+            else None
+        )
+        test_dataset = ScanNetPPProcessed(
+            root=opt.data.data_dir, mode="validation", features=opt.data.point_features, augment=opt.data.augment
+        )
     else:
         raise NotImplementedError(f"Dataset {opt.data.dataset} not implemented!")
 
     # setup the samplers
     if opt.distribution_type == "multi":
         train_sampler = (
-            torch.utils.data.distributed.DistributedSampler(train_dataset, num_replicas=opt.world_size, rank=opt.rank)
+            DistributedSampler(train_dataset, num_replicas=opt.world_size, rank=opt.rank)
             if train_dataset is not None
             else None
         )
         test_sampler = (
-            torch.utils.data.distributed.DistributedSampler(test_dataset, num_replicas=opt.world_size, rank=opt.rank)
+            DistributedSampler(test_dataset, num_replicas=opt.world_size, rank=opt.rank)
             if test_dataset is not None
             else None
         )
@@ -104,6 +115,8 @@ def get_dataloader(opt, sampling=False):
             sampler=train_sampler,
             shuffle=train_sampler is None,
             num_workers=int(opt.data.workers),
+            prefetch_factor = 2,
+            pin_memory = True,
             drop_last=True,
         )
         if train_dataset is not None
@@ -117,6 +130,7 @@ def get_dataloader(opt, sampling=False):
             sampler=test_sampler,
             shuffle=False,
             num_workers=int(opt.data.workers),
+            pin_memory=True,
             drop_last=False,
         )
         if test_dataset is not None

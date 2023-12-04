@@ -170,6 +170,7 @@ class GaussianDiffusion(nn.Module):
                     out_dim=cfg.model.out_dim,
                     input_dim=cfg.model.in_dim,
                     npoints=cfg.data.npoints,
+                    channels=cfg.model.PVD.channels,
                     embed_dim=cfg.model.time_embed_dim,
                     use_att=cfg.model.PVD.use_attention,
                     use_st=cfg.model.PVD.use_st,

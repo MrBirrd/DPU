@@ -9,24 +9,7 @@ import json
 from modules.functional import furthest_point_sample
 from scipy import spatial
 from tqdm import tqdm
-from utils.training import get_data_batch
-
-
-def print_stats(x: Tensor, name: str):
-    xmean = torch.mean(x)
-    xstd = torch.std(x)
-    xmin = torch.min(x)
-    xmax = torch.max(x)
-    logger.info(f"{name} mean: {xmean}, std: {xstd}, min: {xmin}, max: {xmax}")
-
-
-def calculate_stats(x: Tensor):
-    xmean = torch.mean(x)
-    xstd = torch.std(x)
-    xmin = torch.min(x)
-    xmax = torch.max(x)
-    stats = {"mean": xmean, "std": xstd, "min": xmin, "max": xmax}
-    return stats
+from PCUpsampling.utils.utils import get_data_batch, to_cuda
 
 
 # helper for chain of samples
@@ -34,7 +17,7 @@ def new_x_chain(x, num_chain):
     return torch.randn(num_chain, *x.shape[1:], device=x.device)
 
 
-def evaluate(model, eval_iter, cfg, step, sampling=False):
+def evaluate(model, eval_iter, cfg, step, sampling=False, debug=False):
     if sampling:
         out_dir = cfg.out_sampling
     else:
@@ -43,44 +26,39 @@ def evaluate(model, eval_iter, cfg, step, sampling=False):
     model.eval()
 
     eval_data = next(eval_iter)
+    eval_data = to_cuda(eval_data, cfg.gpu)
 
-    batch = get_data_batch(batch=eval_data, cfg=cfg, return_dict=True, device=cfg.gpu)
-    gt_pointcloud = batch["target"]
-    lowres_pointcloud = batch["lowres_cond"]
-    features = batch["feature_cond"]
-
-    cond = features if features is not None else lowres_pointcloud
-
+    gt, features = get_data_batch(batch=eval_data, cfg=cfg, device=cfg.gpu)
+    
     with torch.no_grad():
-        x_gen_eval, x_gen_eval_hints = model.sample(
-            shape=new_x_chain(gt_pointcloud, cfg.sampling.bs).shape,
-            device=gt_pointcloud.device,
-            cond=cond,
-            hint=gt_pointcloud if cfg.diffusion.sampling_hint else None,
+        pred, hints = model.sample(
+            shape=new_x_chain(gt, cfg.sampling.bs).shape,
+            device=gt.device,
+            cond=features,
+            hint=gt if cfg.diffusion.sampling_hint else None,
             return_noised_hint=True,
             clip_denoised=False,
         )
 
-        x_gen_list = model.sample(
-            shape=new_x_chain(gt_pointcloud, 1).shape,
-            device=gt_pointcloud.device,
-            cond=cond[0].unsqueeze(0) if cond is not None else None,
-            hint=gt_pointcloud if cfg.diffusion.sampling_hint else None,
-            freq=0.1,
-            clip_denoised=False,
-        )
-
-        x_gen_all = torch.cat(x_gen_list, dim=0)
-
-    # calculate metrics such as min, max, mean, std, etc.
-    print_stats(x_gen_eval, "x_gen_eval")
-    print_stats(x_gen_all, "x_gen_all")
+        if debug:
+            pred_trajectory = torch.cat(model.sample(
+                shape=new_x_chain(gt, 1).shape,
+                device=gt.device,
+                cond=features[0].unsqueeze(0) if features is not None else None,
+                hint=gt if cfg.diffusion.sampling_hint else None,
+                freq=0.1,
+                clip_denoised=False,
+            ), dim=0)
+            
+            print_stats(pred, "x_gen_eval")
+            print_stats(pred_trajectory, "x_gen_all")
+        
 
     # calculate the CD
     cds = []
 
     try:
-        for x_pred, x_gt in zip(x_gen_eval, gt_pointcloud):
+        for x_pred, x_gt in zip(pred, gt):
             cd = chamfer_distance(
                 x_pred.cpu().permute(1, 0).numpy(),
                 x_gt.cpu().permute(1, 0).numpy(),
@@ -91,11 +69,11 @@ def evaluate(model, eval_iter, cfg, step, sampling=False):
 
     except Exception as e:
         # switch row major to col major
-        xgnp = x_gen_eval.cpu().numpy()
+        xgnp = pred.cpu().numpy()
         xgnp = np.asfortranarray(xgnp)
-        x_gen_eval = torch.from_numpy(xgnp).cuda()
+        pred = torch.from_numpy(xgnp).cuda()
         # evaluate again
-        for x_pred, x_gt in zip(x_gen_eval, gt_pointcloud):
+        for x_pred, x_gt in zip(pred, gt):
             cd = chamfer_distance(
                 x_pred.cpu().permute(1, 0).numpy(),
                 x_gt.cpu().permute(1, 0).numpy(),
@@ -105,7 +83,7 @@ def evaluate(model, eval_iter, cfg, step, sampling=False):
 
         cd = np.mean(cds)
 
-    loss = model.loss(x_gen_eval, gt_pointcloud).mean().item()
+    loss = model.loss(pred, gt).mean().item()
 
     logger.info("CD: {} \t eval_loss_unweighted: {}", cd, loss)
     stats = {"CD": cd, "eval_loss_unweighted": loss}
@@ -113,12 +91,12 @@ def evaluate(model, eval_iter, cfg, step, sampling=False):
     # visualize the pointclouds
     visualize_pointcloud_batch(
         "%s/%03d_pred.png" % (out_dir, step),
-        x_gen_eval.transpose(1, 2),
+        pred.transpose(1, 2),
     )
 
     visualize_pointcloud_batch(
         "%s/%03d_pred_all.png" % (out_dir, step),
-        x_gen_all.transpose(1, 2),
+        pred_trajectory.transpose(1, 2),
     )
 
     if lowres_pointcloud is not None:
@@ -129,7 +107,7 @@ def evaluate(model, eval_iter, cfg, step, sampling=False):
 
     visualize_pointcloud_batch(
         "%s/%03d_high_quality.png" % (out_dir, step),
-        gt_pointcloud.transpose(1, 2),
+        gt.transpose(1, 2),
     )
 
     if not sampling:
@@ -151,12 +129,12 @@ def evaluate(model, eval_iter, cfg, step, sampling=False):
             step=step,
         )
     else:
-        np.save("%s/%03d_pred.npy" % (out_dir, step), x_gen_eval.cpu().numpy())
-        np.save("%s/%03d_pred_all.npy" % (out_dir, step), x_gen_all.cpu().numpy())
-        np.save("%s/%03d_hints.npy" % (out_dir, step), x_gen_eval_hints.cpu().numpy())
+        np.save("%s/%03d_pred.npy" % (out_dir, step), pred.cpu().numpy())
+        np.save("%s/%03d_pred_all.npy" % (out_dir, step), pred_trajectory.cpu().numpy())
+        np.save("%s/%03d_hints.npy" % (out_dir, step), hints.cpu().numpy())
 
-        if gt_pointcloud is not None:
-            np.save("%s/%03d_gt_highres.npy" % (out_dir, step), gt_pointcloud.cpu().numpy())
+        if gt is not None:
+            np.save("%s/%03d_gt_highres.npy" % (out_dir, step), gt.cpu().numpy())
         if lowres_pointcloud is not None:
             np.save("%s/%03d_gt_lowres.npy" % (out_dir, step), lowres_pointcloud.cpu().numpy())
 

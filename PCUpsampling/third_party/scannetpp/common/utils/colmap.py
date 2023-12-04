@@ -445,7 +445,7 @@ def detect_model_format(path, ext):
     return False
 
 
-def read_model(path, ext="") -> Tuple[Dict[int, Camera], Dict[int, Image], Dict[int, Point3D]]:
+def read_model(path, ext="", read=["cameras", "images", "points3D"]) -> Tuple[Dict[int, Camera], Dict[int, Image], Dict[int, Point3D]]:
     # try to detect the extension automatically
     if ext == "":
         if detect_model_format(path, ".bin"):
@@ -456,13 +456,13 @@ def read_model(path, ext="") -> Tuple[Dict[int, Camera], Dict[int, Image], Dict[
             raise ValueError("Provide model format: '.bin' or '.txt'")
 
     if ext == ".txt":
-        cameras = read_cameras_text(os.path.join(path, "cameras" + ext))
-        images = read_images_text(os.path.join(path, "images" + ext))
-        points3D = read_points3D_text(os.path.join(path, "points3D") + ext)
+        cameras = read_cameras_text(os.path.join(path, "cameras" + ext)) if "cameras" in read else {}
+        images = read_images_text(os.path.join(path, "images" + ext)) if "images" in read else {}
+        points3D = read_points3D_text(os.path.join(path, "points3D") + ext) if "points3D" in read else {}
     else:
-        cameras = read_cameras_binary(os.path.join(path, "cameras" + ext))
-        images = read_images_binary(os.path.join(path, "images" + ext))
-        points3D = read_points3D_binary(os.path.join(path, "points3D") + ext)
+        cameras = read_cameras_binary(os.path.join(path, "cameras" + ext)) if "cameras" in read else {}
+        images = read_images_binary(os.path.join(path, "images" + ext)) if "images" in read else {}
+        points3D = read_points3D_binary(os.path.join(path, "points3D") + ext) if "points3D" in read else {}
     return cameras, images, points3D
 
 

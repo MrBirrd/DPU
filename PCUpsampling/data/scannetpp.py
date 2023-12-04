@@ -7,8 +7,99 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset
 import pyminiply
+from utils.ops import random_rotate_pointcloud_horizontally
+EULER_FEATURE_ROOT = "/cluster/scratch/matvogel/scannetpp"
+from utils.visualize import visualize_pointcloud_batch
+import time
 
+class ScanNetPPProcessed(Dataset):
+    def __init__(self, root, mode="training", features=None, augment=False) -> None:
+        super().__init__()
+        self.root = root
+        self.mode = mode
+        if features not in ["dino", "rgb"]:
+            features = None
+        
+        self.features = features
+        self.augment = augment
+        
+        splits_path = os.path.join(root, "splits")
+        with open(os.path.join(splits_path, "train.txt"), "r") as f:
+            train_scans = f.read().splitlines()
+        with open(os.path.join(splits_path, "val.txt"), "r") as f:
+            val_scans = f.read().splitlines()
+            
+        # setup the splits
+        if mode == "training":
+            scans = train_scans
+        elif mode == "validation":
+            scans = val_scans
+        else:
+            raise NotImplementedError(f"Mode {mode} not implemented!")
 
+        # scan paths for ply files
+        folders = os.listdir(self.root)
+        logger.info(f"Setting up preprocessed {mode} scannet dataset")
+        folders = [f for f in folders if os.path.isdir(os.path.join(self.root, f))]
+        folders = [f for f in folders if f in scans]
+        
+        self.scene_batches = []
+        
+        for idx, folder in enumerate(folders):
+            folder_files = os.listdir(os.path.join(self.root, folder))
+            points_paths = sorted([f for f in folder_files if f.startswith("points")])
+            for points in points_paths:
+                data = {
+                    "scene": folder,
+                    "points": os.path.join(self.root, folder, points),
+                }
+                # check if the features are available
+                if features is None:
+                    self.scene_batches.append(data)
+                    continue
+                else:
+                    # load the features if they are on disk
+                    features = points.replace("points", self.features)
+                    if features not in folder_files:
+                        continue
+                    data[self.features] = os.path.join(self.root, folder, features)
+                    # append the file paths
+                    self.scene_batches.append(data)
+        
+        logger.info(f"Loaded {len(self.scene_batches)} batches")
+        
+    def __len__(self):
+        return len(self.scene_batches)
+
+    def __getitem__(self, index):
+        data = self.scene_batches[index]
+        
+        points = np.load(data["points"]).T # N x 3
+        
+        # normalize the point coordinates
+        center = np.mean(points, axis=0)
+        points -= center
+        scale = np.max(np.linalg.norm(points, axis=1))
+        points /= scale
+        # random rotation augmentation
+        if self.augment and np.random.rand() < 0.2:
+            points, theta = random_rotate_pointcloud_horizontally(points)
+          
+        batch_data = {
+            "idx": index,
+            "train_points": torch.from_numpy(points).float(),
+            "train_points_center": center,
+            "train_points_scale": scale,
+        }
+
+        # append the features if they are available
+        if self.features is not None:
+            print(data.keys())
+            features = np.load(data[self.features])
+            batch_data["features"] = torch.from_numpy(features).float()
+
+        return batch_data
+        
 class ScanNetPPCut(Dataset):
     def __init__(self, root, npoints, mode="training", features=None) -> None:
         super().__init__()
@@ -42,7 +133,7 @@ class ScanNetPPCut(Dataset):
 
         for idx, f in enumerate(tqdm(folders, desc=f"Loading {mode} scans")):
             file = os.path.join(self.root, f, "scans", "mesh_aligned_0.05.ply")
-            feature_file = os.path.join(self.root, f, "features", f"{features}.npy") if features is not None else None
+            feature_file = os.path.join(EULER_FEATURE_ROOT, f, "features", f"{features}.npy") if features is not None else None
 
             # check if the files exists
             valid_scan = (
@@ -54,10 +145,10 @@ class ScanNetPPCut(Dataset):
                 pointcloud, *_ = pyminiply.read(file)
 
                 # remove nans or infs
-                mask = ~np.isnan(pointcloud).any(axis=1) | ~np.isinf(pointcloud).any(axis=1)
+                #mask = ~np.isnan(pointcloud).any(axis=1) | ~np.isinf(pointcloud).any(axis=1)
 
                 # filter
-                pointcloud = pointcloud[mask]
+                #pointcloud = pointcloud[mask]
                 # generate the tree
                 pcd_tree = spatial.cKDTree(pointcloud)
 

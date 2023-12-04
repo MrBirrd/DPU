@@ -228,7 +228,7 @@ class PVCNN2Unet(nn.Module):
 
         # initialize features as coordinates
         features = coords.clone()
-
+        
         if cond is not None:
             features = torch.cat([features, cond], dim=1).contiguous()
         else:
@@ -361,6 +361,7 @@ class PVCAdaptive(PVCNN2Unet):
         out_dim: int = 3,
         input_dim: int = 3,
         embed_dim: int = 64,
+        channels: list = [32, 64, 128, 256, 512],
         npoints: int = 2048,
         use_att: bool = True,
         use_st: bool = False,
@@ -380,18 +381,18 @@ class PVCAdaptive(PVCNN2Unet):
         sa_blocks = [
             # conv vfg  , sa config
             # out channels, num blocks, voxel resolution | num_centers, radius, num_neighbors, out_channels
-            ((32, n_sa_blocks[0], voxel_resolutions[0]), (n_centers[0], radius[0], 32, (32, 64))),
-            ((64, n_sa_blocks[1], voxel_resolutions[1]), (n_centers[1], radius[1], 32, (64, 128))),
-            ((128, n_sa_blocks[2], voxel_resolutions[2]), (n_centers[2], radius[2], 32, (128, 256))),
-            (None, (n_centers[3], radius[3], 32, (256, 256, 512))),
+            ((channels[0], n_sa_blocks[0], voxel_resolutions[0]), (n_centers[0], radius[0], 32, (channels[0], channels[1]))),
+            ((channels[1], n_sa_blocks[1], voxel_resolutions[1]), (n_centers[1], radius[1], 32, (channels[1], channels[2]))),
+            ((channels[2], n_sa_blocks[2], voxel_resolutions[2]), (n_centers[2], radius[2], 32, (channels[2], channels[3]))),
+            (None,                                                (n_centers[3], radius[3], 32, (channels[3], channels[3], channels[4]))),
         ]
 
         # in_channels, out_channels X | out_channels, num_blocks, voxel_resolution
         fp_blocks = [
-            ((256, 256), (256, n_fp_blocks[3], voxel_resolutions[3])),
-            ((256, 256), (256, n_fp_blocks[2], voxel_resolutions[2])),
-            ((256, 128), (128, n_fp_blocks[1], voxel_resolutions[1])),
-            ((128, 128, 64), (64, n_fp_blocks[0], voxel_resolutions[0])),
+            ((channels[3], channels[3]),                (channels[3], n_fp_blocks[3], voxel_resolutions[3])),
+            ((channels[3], channels[3]),                (channels[3], n_fp_blocks[2], voxel_resolutions[2])),
+            ((channels[3], channels[2]),                (channels[2], n_fp_blocks[1], voxel_resolutions[1])),
+            ((channels[2], channels[2], channels[1]),   (channels[1], n_fp_blocks[0], voxel_resolutions[0])),
         ]
 
         super().__init__(

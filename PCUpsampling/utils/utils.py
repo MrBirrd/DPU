@@ -8,10 +8,12 @@ def to_cuda(data, device):
         return None
     if isinstance(data, (list, tuple)):
         return [to_cuda(d, device) for d in data]
+    if isinstance(data, dict):
+        return {k: to_cuda(v, device) for k, v in data.items()}
     if device is None:
-        return data.cuda()
+        return data.cuda(non_blocking=True)
     else:
-        return data.to(device)
+        return data.to(device, non_blocking=True)
 
 
 def get_data_batch(batch, cfg, return_dict=False, device=None):
@@ -23,11 +25,6 @@ def get_data_batch(batch, cfg, return_dict=False, device=None):
         lowres_cond = batch["train_points_lowres"].transpose(1, 2) if "train_points_lowres" in batch else None
     else:
         feature_cond, lowres_cond = None, None
-
-    # move to devices
-    target = to_cuda(target, device)
-    feature_cond = to_cuda(feature_cond, device)
-    lowres_cond = to_cuda(lowres_cond, device)
 
     if return_dict:
         return {
