@@ -224,7 +224,9 @@ def train(gpu, cfg, output_dir, noises_init=None):
 
         if (step + 1) % cfg.training.viz_interval == 0 and is_main_process:
             try:
+                model.eval()
                 evaluate(model, eval_iter, cfg, step)
+                model.train()
             except Exception as e:
                 logger.error("Error during evaluation: {}", e)
 

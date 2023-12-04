@@ -9,27 +9,44 @@ import json
 from modules.functional import furthest_point_sample
 from scipy import spatial
 from tqdm import tqdm
-from PCUpsampling.utils.utils import get_data_batch, to_cuda
+from utils.utils import get_data_batch, to_cuda
+from metrics.metrics import print_stats, calculate_cd
+from metrics.emd_ import emd_module as EMD
 
 
-# helper for chain of samples
 def new_x_chain(x, num_chain):
     return torch.randn(num_chain, *x.shape[1:], device=x.device)
 
 
-def evaluate(model, eval_iter, cfg, step, sampling=False, debug=False):
+def save_visualizations(items, out_dir, step):
+    for item in items:
+        ptc, name = item
+        visualize_pointcloud_batch(
+            "%s/%03d_%s.png" % (out_dir, step, name),
+            ptc.transpose(1, 2),
+        )
+
+
+def log_wandb(name, out_dir, step):
+    wandb_img = wandb.Image("%s/%03d_%s.png" % (out_dir, step, name))
+    wandb_img.log({name: wandb_img}, step=step)
+
+
+def save_ptc(name, ptc, out_dir, step):
+    np.save("%s/%03d_%s.npy" % (out_dir, step, name), ptc.cpu().numpy())
+
+
+def evaluate(model, eval_iter, cfg, step, sampling=False, save_npy=False, debug=False):
     if sampling:
         out_dir = cfg.out_sampling
     else:
         out_dir = cfg.outf_syn
 
-    model.eval()
-
     eval_data = next(eval_iter)
     eval_data = to_cuda(eval_data, cfg.gpu)
 
     gt, features = get_data_batch(batch=eval_data, cfg=cfg, device=cfg.gpu)
-    
+
     with torch.no_grad():
         pred, hints = model.sample(
             shape=new_x_chain(gt, cfg.sampling.bs).shape,
@@ -41,105 +58,70 @@ def evaluate(model, eval_iter, cfg, step, sampling=False, debug=False):
         )
 
         if debug:
-            pred_trajectory = torch.cat(model.sample(
-                shape=new_x_chain(gt, 1).shape,
-                device=gt.device,
-                cond=features[0].unsqueeze(0) if features is not None else None,
-                hint=gt if cfg.diffusion.sampling_hint else None,
-                freq=0.1,
-                clip_denoised=False,
-            ), dim=0)
-            
+            pred_trajectory = torch.cat(
+                model.sample(
+                    shape=new_x_chain(gt, 1).shape,
+                    device=gt.device,
+                    cond=features[0].unsqueeze(0) if features is not None else None,
+                    hint=gt if cfg.diffusion.sampling_hint else None,
+                    freq=0.1,
+                    clip_denoised=False,
+                ),
+                dim=0,
+            )
+            # log and save the trajectory
             print_stats(pred, "x_gen_eval")
             print_stats(pred_trajectory, "x_gen_all")
-        
-
-    # calculate the CD
-    cds = []
-
-    try:
-        for x_pred, x_gt in zip(pred, gt):
-            cd = chamfer_distance(
-                x_pred.cpu().permute(1, 0).numpy(),
-                x_gt.cpu().permute(1, 0).numpy(),
-            )
-            cds.append(cd)
-
-        cd = np.mean(cds)
-
-    except Exception as e:
-        # switch row major to col major
-        xgnp = pred.cpu().numpy()
-        xgnp = np.asfortranarray(xgnp)
-        pred = torch.from_numpy(xgnp).cuda()
-        # evaluate again
-        for x_pred, x_gt in zip(pred, gt):
-            cd = chamfer_distance(
-                x_pred.cpu().permute(1, 0).numpy(),
-                x_gt.cpu().permute(1, 0).numpy(),
-            )
-
-            cds.append(cd)
-
-        cd = np.mean(cds)
-
-    loss = model.loss(pred, gt).mean().item()
-
-    logger.info("CD: {} \t eval_loss_unweighted: {}", cd, loss)
-    stats = {"CD": cd, "eval_loss_unweighted": loss}
+            save_visualizations((pred_trajectory, "trajectory"), out_dir, step)
+            save_ptc("trajectory", pred_trajectory, out_dir, step)
+            if not sampling:
+                log_wandb("trajectory", out_dir, step)
 
     # visualize the pointclouds
-    visualize_pointcloud_batch(
-        "%s/%03d_pred.png" % (out_dir, step),
-        pred.transpose(1, 2),
+    save_visualizations(
+        [
+            (pred, "pred"),
+            (hints, "hints"),
+            (gt, "gt"),
+        ],
+        out_dir,
+        step,
     )
 
-    visualize_pointcloud_batch(
-        "%s/%03d_pred_all.png" % (out_dir, step),
-        pred_trajectory.transpose(1, 2),
-    )
+    # calculate stats
+    # subsample cloud to closest multiple of 128
+    n_points = pred.shape[-1]
+    n_points = n_points - n_points % 128
 
-    if lowres_pointcloud is not None:
-        visualize_pointcloud_batch(
-            "%s/%03d_low_quality.png" % (out_dir, step),
-            lowres_pointcloud.transpose(1, 2),
-        )
+    pred = pred[..., :n_points]
+    gt = gt[..., :n_points]
+    hints = hints[..., :n_points]
 
-    visualize_pointcloud_batch(
-        "%s/%03d_high_quality.png" % (out_dir, step),
-        gt.transpose(1, 2),
-    )
+    emd = EMD.emdModule()
+    cd = calculate_cd(pred, gt)
+    eval_loss = model.loss(pred, gt).mean().item()
+    distance, _ = emd(gt, pred, 0.05, 3000)
+    emd = torch.sqrt(distance).mean().item()
+
+    # print the stats
+    batch_metrics = {
+        "CD": cd,
+        "EMD": emd,
+        "eval_loss_unweighted": eval_loss,
+    }
+    logger.info(batch_metrics)
 
     if not sampling:
-        wandb.log(stats, step=step)
+        wandb.log(batch_metrics, step=step)
+        log_wandb("pred", out_dir, step)
+        log_wandb("hints", out_dir, step)
+        log_wandb("gt", out_dir, step)
+    elif save_npy:
+        save_ptc("pred", pred, out_dir, step)
+        save_ptc("hints", hints, out_dir, step)
+        save_ptc("gt", gt, out_dir, step)
 
-        samps_eval = wandb.Image("%s/%03d_pred.png" % (out_dir, step))
-        samps_eval_all = wandb.Image("%s/%03d_pred_all.png" % (out_dir, step))
-        samps_lowres = (
-            wandb.Image("%s/%03d_low_quality.png" % (out_dir, step)) if lowres_pointcloud is not None else None
-        )
-        samps_highres = wandb.Image("%s/%03d_high_quality.png" % (out_dir, step))
-        wandb.log(
-            {
-                "samples_eval": samps_eval,
-                "samples_eval_all": samps_eval_all,
-                "samples_lowres": samps_lowres,
-                "samples_highres": samps_highres,
-            },
-            step=step,
-        )
-    else:
-        np.save("%s/%03d_pred.npy" % (out_dir, step), pred.cpu().numpy())
-        np.save("%s/%03d_pred_all.npy" % (out_dir, step), pred_trajectory.cpu().numpy())
-        np.save("%s/%03d_hints.npy" % (out_dir, step), hints.cpu().numpy())
-
-        if gt is not None:
-            np.save("%s/%03d_gt_highres.npy" % (out_dir, step), gt.cpu().numpy())
-        if lowres_pointcloud is not None:
-            np.save("%s/%03d_gt_lowres.npy" % (out_dir, step), lowres_pointcloud.cpu().numpy())
-
-    model.train()
-    return stats
+    return batch_metrics
 
 
 def upsample_big_pointcloud(model, pointcloud, batch_size=8192, n_batches=32):
