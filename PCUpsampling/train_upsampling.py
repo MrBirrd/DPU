@@ -14,12 +14,12 @@ from utils.evaluation import evaluate
 from utils.file_utils import *
 from utils.ops import *
 from utils.args import parse_args
-from utils.training import smart_load_model_weights, get_data_batch
+from PCUpsampling.utils.utils import smart_load_model_weights, get_data_batch, to_cuda
 from lion_pytorch import Lion
 from loguru import logger
 import wandb
 import json
-
+from model.loader import load_model, load_optim_sched
 
 def train(gpu, cfg, output_dir, noises_init=None):
     # set gpu
@@ -27,10 +27,6 @@ def train(gpu, cfg, output_dir, noises_init=None):
         cfg.gpu = gpu
 
     logger.info("CUDA available: {}", torch.cuda.is_available())
-
-    # set seed
-    set_seed(cfg)
-    torch.cuda.empty_cache()
 
     # evaluate main process and set output dir
     if cfg.distribution_type == "multi":
@@ -57,52 +53,13 @@ def train(gpu, cfg, output_dir, noises_init=None):
 
         cfg.training.bs = int(cfg.training.bs / cfg.ngpus_per_node)
         cfg.sampling.bs = cfg.training.bs
-        cfg.data.workers = 0
 
+    # set seed
+    set_seed(cfg)
+    torch.cuda.empty_cache()
+    
     # setup data loader and sampler
     train_loader, val_loader, train_sampler, val_sampler = get_dataloader(cfg)
-
-    # setup model
-    if cfg.diffusion.formulation == "PVD":
-        model = PVD(
-            cfg,
-            loss_type=cfg.diffusion.loss_type,
-            model_mean_type="eps",
-            model_var_type="fixedsmall",
-            device="cuda" if gpu == 0 else gpu,
-        )
-    elif cfg.diffusion.formulation == "EDM":
-        model = ElucidatedDiffusion(args=cfg)
-    elif cfg.diffusion.formulation == "LUCID":
-        model = LUCID(cfg=cfg)
-    elif cfg.diffusion.formulation == "RIN":
-        model = RINDIFFUSION(cfg=cfg)
-
-    # setup DDP model
-    if cfg.distribution_type == "multi":
-
-        def _transform_(m):
-            return nn.parallel.DistributedDataParallel(m, device_ids=[gpu], output_device=gpu)
-
-        torch.cuda.set_device(gpu)
-        model.cuda(gpu)
-        model.multi_gpu_wrapper(_transform_)
-
-    # setup data parallel model
-    elif cfg.distribution_type == "single":
-
-        def _transform_(m):
-            return nn.parallel.DataParallel(m)
-
-        model = model.cuda()
-        model.multi_gpu_wrapper(_transform_)
-
-    # setup single gpu model
-    elif gpu is not None:
-        torch.cuda.set_device(gpu)
-        model = model.cuda(gpu)
-    else:
-        raise ValueError("distribution_type = multi | single | None")
 
     # initialize config and wandb
     if is_main_process:
@@ -112,61 +69,25 @@ def train(gpu, cfg, output_dir, noises_init=None):
             project="pvdup",
             config=OmegaConf.to_container(cfg, resolve=True),
             entity="matvogel",
-            # settings=wandb.Settings(start_method="fork"),
         )
-
-    # setup optimizers
-    if cfg.training.optimizer.type == "Adam":
-        optimizer = optim.Adam(
-            model.parameters(),
-            lr=cfg.training.optimizer.lr,
-            weight_decay=cfg.training.optimizer.weight_decay,
-            betas=(cfg.training.optimizer.beta1, cfg.training.optimizer.beta2),
-        )
-    elif cfg.training.optimizer.type == "Lion":
-        optimizer = Lion(
-            model.parameters(),
-            lr=cfg.training.optimizer.lr,
-            weight_decay=cfg.training.optimizer.weight_decay,
-            betas=(cfg.training.optimizer.beta1, cfg.training.optimizer.beta2),
-        )
-    elif cfg.training.optimizer.type == "AdamW":
-        optimizer = optim.AdamW(
-            model.parameters(),
-            lr=cfg.training.optimizer.lr,
-            weight_decay=cfg.training.optimizer.weight_decay,
-            betas=(cfg.training.optimizer.beta1, cfg.training.optimizer.beta2),
-        )
-
-    # setup lr scheduler
-    if cfg.training.scheduler.type == "ExponentialLR":
-        lr_scheduler = optim.lr_scheduler.ExponentialLR(optimizer, cfg.training.scheduler.lr_gamma)
-    else:
-        lr_scheduler = optim.lr_scheduler.ConstantLR(optimizer, factor=1.0)
+    
+    model, ckpt = load_model(cfg, gpu)
+    optimizer, lr_scheduler = load_optim_sched(cfg, model, ckpt)
 
     # setup amp scaler
     ampscaler = torch.cuda.amp.GradScaler(enabled=cfg.training.amp)
-
-    # load model
-    if cfg.model_path != "":
-        ckpt = torch.load(cfg.model_path)
-        # model.load_state_dict(ckpt["model_state"])
-        smart_load_model_weights(model, ckpt["model_state"])
-        # load optimizer
-        if not cfg.restart:
-            optimizer.load_state_dict(ckpt["optimizer_state"])
-
-    # set start step
-    if cfg.model_path != "" and not cfg.restart:
-        start_step = torch.load(cfg.model_path)["step"] + 1
-    else:
-        start_step = 0
 
     # train loop
     train_iter = save_iter(train_loader, train_sampler)
     eval_iter = save_iter(val_loader, val_sampler)
 
-    for step in range(start_step, cfg.training.steps):
+    torch.cuda.empty_cache()
+    
+    # sample first batch
+    next_batch = next(train_iter)
+    next_batch = to_cuda(next_batch, gpu)
+    
+    for step in range(cfg.start_step, cfg.training.steps):
         # chek if we have a new epoch
         if cfg.distribution_type == "multi":
             train_sampler.set_epoch(step // len(train_loader))
@@ -177,8 +98,10 @@ def train(gpu, cfg, output_dir, noises_init=None):
 
         loss_accum = 0.0
         for accum_iter in range(cfg.training.accumulation_steps):
-            # get next batch
-            data = next(train_iter)
+            data = next_batch
+            # prepare next batch
+            next_batch = next(train_iter)
+            next_batch = to_cuda(next_batch, gpu)
 
             x, feature_cond = get_data_batch(batch=data, cfg=cfg, return_dict=False, device=gpu)
             # forward pass
@@ -237,7 +160,7 @@ def train(gpu, cfg, output_dir, noises_init=None):
                     "model_state": model.state_dict(),
                     "optimizer_state": optimizer.state_dict(),
                 }
-
+                os.makedirs(output_dir, exist_ok=True)
                 torch.save(save_dict, "%s/step_%d.pth" % (output_dir, step + 1))
 
             if cfg.distribution_type == "multi":
@@ -245,7 +168,7 @@ def train(gpu, cfg, output_dir, noises_init=None):
                 map_location = {"cuda:%d" % 0: "cuda:%d" % gpu}
                 model.load_state_dict(
                     torch.load(
-                        "%s/step_%d.pth" % (output_dir, step),
+                        "%s/step_%d.pth" % (output_dir, step + 1),
                         map_location=map_location,
                     )["model_state"]
                 )
