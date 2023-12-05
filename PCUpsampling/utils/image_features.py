@@ -14,6 +14,11 @@ from decord import cpu
 from sklearn.neighbors import KDTree
 import os
 
+try:
+    from third_party.ZegCLIP.get_model import get_model, predict
+except ImportError:
+    print("ZegCLIP not installed, skipping")
+
 
 def load_dino(model_name):
     model = torch.hub.load("facebookresearch/dinov2", model_name).cuda()
@@ -263,6 +268,10 @@ def process_scene(
         f_shape = 384
         print("Loading DINO model")
         model = load_dino(dino_model_name)
+    elif feature_type == "clip":
+        f_shape = 512
+        print("Loading ZegCLIP model")
+        model = get_model().cuda()
 
     # initialize features and set count to 0
     ptc_feats = np.zeros((len(points), f_shape), dtype=np.float16)
@@ -329,6 +338,11 @@ def process_scene(
 
             dino_feats = rearrange(dino_feats, "b c h w -> b h w c").cpu().numpy()
             features = map_image_features_to_filtered_ptc_batch(dino_feats, points_projected, valid_indices)
+        elif feature_type == "clip":
+            with torch.cuda.amp.autocast(enabled=True, dtype=torch.float16):
+                clip_feats = predict(model, videoframes, points_projected, valid_indices)
+            clip_feats = rearrange(clip_feats, "b c h w -> b h w c").cpu().numpy()
+            features = map_image_features_to_filtered_ptc_batch(clip_feats, points_projected, valid_indices)
 
         update_features_batched(ptc_feats, ptc_feats_count, features, valid_indices)
 

@@ -28,3 +28,4 @@ sampling.sh
 *.egg
 *.egg-info
 *.sh
+exported_model
