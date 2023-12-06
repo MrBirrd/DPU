@@ -32,7 +32,7 @@ def main():
         help="Path to the output directory.",
     )
     parser.add_argument(
-        "--feature_type", type=str, default="rgb", help="Type of features to extract.", choices=["rgb", "dino"]
+        "--feature_type", type=str, default="rgb", help="Type of features to extract.", choices=["rgb", "dino", "clip"]
     )
     parser.add_argument("--skip_scans", type=int, default=5, help="Number of scans to skip between each scan.")
     parser.add_argument("--image_width", type=int, default=1920, help="Width of the images in the video.")

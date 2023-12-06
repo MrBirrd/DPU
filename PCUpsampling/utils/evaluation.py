@@ -29,7 +29,7 @@ def save_visualizations(items, out_dir, step):
 
 def log_wandb(name, out_dir, step):
     wandb_img = wandb.Image("%s/%03d_%s.png" % (out_dir, step, name))
-    wandb_img.log({name: wandb_img}, step=step)
+    wandb.log({name: wandb_img}, step=step)
 
 
 def save_ptc(name, ptc, out_dir, step):
@@ -44,7 +44,7 @@ def evaluate(model, eval_iter, cfg, step, sampling=False, save_npy=False, debug=
 
     eval_data = next(eval_iter)
     eval_data = to_cuda(eval_data, cfg.gpu)
-
+    
     gt, features = get_data_batch(batch=eval_data, cfg=cfg, device=cfg.gpu)
 
     with torch.no_grad():
@@ -96,11 +96,11 @@ def evaluate(model, eval_iter, cfg, step, sampling=False, save_npy=False, debug=
     pred = pred[..., :n_points]
     gt = gt[..., :n_points]
     hints = hints[..., :n_points]
-
+    
     emd = EMD.emdModule()
     cd = calculate_cd(pred, gt)
     eval_loss = model.loss(pred, gt).mean().item()
-    distance, _ = emd(gt, pred, 0.05, 3000)
+    distance, _ = emd(gt.permute(0, 2, 1), pred.permute(0, 2, 1), 0.05, 3000)
     emd = torch.sqrt(distance).mean().item()
 
     # print the stats

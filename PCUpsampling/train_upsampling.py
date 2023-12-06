@@ -14,7 +14,7 @@ from utils.evaluation import evaluate
 from utils.file_utils import *
 from utils.ops import *
 from utils.args import parse_args
-from PCUpsampling.utils.utils import smart_load_model_weights, get_data_batch, to_cuda
+from utils.utils import smart_load_model_weights, get_data_batch, to_cuda
 from lion_pytorch import Lion
 from loguru import logger
 import wandb

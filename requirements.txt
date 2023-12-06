@@ -20,3 +20,5 @@ ipykernel
 ninja
 decord
 scikit-learn
+imageio
+trimesh

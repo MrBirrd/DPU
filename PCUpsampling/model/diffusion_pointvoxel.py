@@ -10,8 +10,8 @@ except:
     pass
 
 from .unet_pointvoxel import PVCLionSmall
-from gecco_torch.models.linear_lift import LinearLift
-from gecco_torch.models.set_transformer import SetTransformer
+from third_party.gecco_torch.models.linear_lift import LinearLift
+from third_party.gecco_torch.models.set_transformer import SetTransformer
 import math
 
 

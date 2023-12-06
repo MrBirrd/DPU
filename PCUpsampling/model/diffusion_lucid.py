@@ -12,8 +12,8 @@ from tqdm import tqdm
 from utils.losses import get_scaling, projection_loss
 
 from .unet_pointvoxel import PVCLionSmall, PVCAdaptive
-from gecco_torch.models.linear_lift import LinearLift
-from gecco_torch.models.set_transformer import SetTransformer
+from third_party.gecco_torch.models.linear_lift import LinearLift
+from third_party.gecco_torch.models.set_transformer import SetTransformer
 
 ModelPrediction = namedtuple("ModelPrediction", ["pred_noise", "pred_x_start"])
 from loguru import logger

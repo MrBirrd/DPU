@@ -1,0 +1,8 @@
+tqdm
+scikit-learn
+decord
+pyminiply
+omegaconf
+ftfy
+regex
+einops

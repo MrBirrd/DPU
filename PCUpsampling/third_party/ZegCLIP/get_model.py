@@ -27,16 +27,16 @@ def predict(model, img):
             # Directly convert the tensor
             numpy_arrays.append(item.detach().cpu().numpy())
 
-    features = torch.from_numpy(numpy_arrays[0]).cuda()
-
+    features = torch.from_numpy(numpy_arrays[0]).cuda().half().contiguous()
+    
     # interpolate back
-    features = torch.nn.functional.interpolate(features, (H, W), mode="bilinear", align_corners=False)
+    features = torch.nn.functional.interpolate(features, (H, W), mode="bilinear")
 
     return features.cpu().numpy()
 
 
 def preprocess_image(img):
-    img = torch.nn.functional.interpolate(img, (512, 512), mode="bilinear", align_corners=False)
+    img = torch.nn.functional.interpolate(img, (512, 512), mode="bilinear")
     # make mean zero std 1, img is of shape B C H W
     img = img - torch.mean(img, dim=(2, 3), keepdim=True)
     img = img / torch.std(img, dim=(2, 3), keepdim=True)
@@ -48,7 +48,7 @@ def get_model():
         {
             "config": "third_party/ZegCLIP/configs/coco/vpt_seg_fully_vit-b_512x512_80k_12_100_multi.py",
             # checkpoint is from same folder this file is in
-            "checkpoint": f"third_party/ZegCLIP/coco_fully_512_vit_base.pth",
+            "checkpoint": "/cluster/scratch/matvogel/models/coco_fully_512_vit_base.pth",
         }
     )
     args.gpu_id = 0
