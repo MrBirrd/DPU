@@ -9,7 +9,6 @@ from torch.utils.data import Dataset
 import pyminiply
 from utils.ops import random_rotate_pointcloud_horizontally
 EULER_FEATURE_ROOT = "/cluster/scratch/matvogel/scannetpp"
-from utils.visualize import visualize_pointcloud_batch
 import time
 
 class ScanNetPPProcessed(Dataset):
@@ -17,7 +16,7 @@ class ScanNetPPProcessed(Dataset):
         super().__init__()
         self.root = root
         self.mode = mode
-        if features not in ["dino", "rgb"]:
+        if features not in ["dino", "rgb", "dino_svd64"]:
             features = None
         
         self.features = features
@@ -47,24 +46,13 @@ class ScanNetPPProcessed(Dataset):
         
         for idx, folder in enumerate(folders):
             folder_files = os.listdir(os.path.join(self.root, folder))
-            points_paths = sorted([f for f in folder_files if f.startswith("points")])
+            points_paths = sorted([f for f in folder_files if f.startswith("points") and f.endswith(".npz")])
             for points in points_paths:
                 data = {
                     "scene": folder,
-                    "points": os.path.join(self.root, folder, points),
+                    "npz": os.path.join(self.root, folder, points),
                 }
-                # check if the features are available
-                if features is None:
-                    self.scene_batches.append(data)
-                    continue
-                else:
-                    # load the features if they are on disk
-                    features = points.replace("points", self.features)
-                    if features not in folder_files:
-                        continue
-                    data[self.features] = os.path.join(self.root, folder, features)
-                    # append the file paths
-                    self.scene_batches.append(data)
+                self.scene_batches.append(data)
         
         logger.info(f"Loaded {len(self.scene_batches)} batches")
         
@@ -72,10 +60,25 @@ class ScanNetPPProcessed(Dataset):
         return len(self.scene_batches)
 
     def __getitem__(self, index):
-        data = self.scene_batches[index]
         
-        points = np.load(data["points"]).T # N x 3
+        batch_data = {}
         
+        # try to load the data and retry if it fails
+        while True:
+            try:
+                data = self.scene_batches[index]
+                data_dict = np.load(data["npz"])
+                points = data_dict["points"]
+                # append the features if they are available
+                if self.features is not None:
+                    features = data_dict[self.features]
+                    batch_data["features"] = torch.from_numpy(features).float()
+                break
+            except Exception as e:
+                logger.error(f"Failed to load data {data}")
+                self.scene_batches.pop(index)
+                index = np.random.randint(0, len(self.scene_batches))
+                
         # normalize the point coordinates
         center = np.mean(points, axis=0)
         points -= center
@@ -84,20 +87,12 @@ class ScanNetPPProcessed(Dataset):
         # random rotation augmentation
         if self.augment and np.random.rand() < 0.2:
             points, theta = random_rotate_pointcloud_horizontally(points)
-          
-        batch_data = {
-            "idx": index,
-            "train_points": torch.from_numpy(points).float(),
-            "train_points_center": center,
-            "train_points_scale": scale,
-        }
-
-        # append the features if they are available
-        if self.features is not None:
-            print(data.keys())
-            features = np.load(data[self.features])
-            batch_data["features"] = torch.from_numpy(features).float()
-
+        
+        batch_data["idx"] = index
+        batch_data["train_points"] = torch.from_numpy(points).float()
+        batch_data["train_points_center"] = center
+        batch_data["train_points_scale"] = scale
+        
         return batch_data
         
 class ScanNetPPCut(Dataset):

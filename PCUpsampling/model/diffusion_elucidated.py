@@ -14,8 +14,12 @@ try:
 except:
     pass
 from .unet_pointvoxel import PVCLionSmall
-from gecco_torch.models.linear_lift import LinearLift
-from gecco_torch.models.set_transformer import SetTransformer
+try:
+    from gecco_torch.models.linear_lift import LinearLift
+    from gecco_torch.models.set_transformer import SetTransformer
+except:
+    pass
+
 
 # from .unet_torchsparse import TSUnet
 # helpers

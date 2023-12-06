@@ -52,9 +52,9 @@ def sample(gpu, cfg, output_dir):
     for eval_iter in range(cfg.sampling.num_iter):
         metrics = evaluate(model, ds_iter, cfg, eval_iter, sampling=True, save_npy=True, debug=False)
         if metrics_df is None:
-            metrics_df = pd.DataFrame(metrics)
+            metrics_df = pd.DataFrame.from_dict(metrics, orient="index").T
         else:
-            metrics_df = pd.concat([metrics_df, pd.DataFrame(metrics)])
+            metrics_df = pd.concat([metrics_df, pd.DataFrame.from_dict(metrics, orient="index").T])
 
     # save the metrics
     metrics_df.to_csv(os.path.join(cfg.out_sampling, "metrics.csv"))

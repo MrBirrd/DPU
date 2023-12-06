@@ -2,7 +2,7 @@ data:
   data_dir: /cluster/scratch/matvogel/scannetprocessed/
   dataset: "ScanNetPPProcessed"
   augment: true
-  point_features: dino
+  point_features: dino_svd64
   unconditional: false
   workers: 4
   npoints: 8192
@@ -31,7 +31,7 @@ model:
   type: PVD # Mink ¦ PVD
   ema: false
   in_dim: 3
-  extra_feature_channels: 384
+  extra_feature_channels: 64
   out_dim: 3
   time_embed_dim: 64
   dropout: 0.1
