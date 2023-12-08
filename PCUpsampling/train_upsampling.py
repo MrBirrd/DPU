@@ -5,10 +5,8 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.utils.data
 from data.dataloader import get_dataloader, save_iter
-from model.diffusion_elucidated import ElucidatedDiffusion
 from model.diffusion_lucid import GaussianDiffusion as LUCID
 from model.diffusion_pointvoxel import PVD
-from model.diffusion_rin import GaussianDiffusion as RINDIFFUSION
 from omegaconf import OmegaConf
 from utils.evaluation import evaluate
 from utils.file_utils import *
@@ -122,10 +120,6 @@ def train(gpu, cfg, output_dir, noises_init=None):
         ampscaler.step(optimizer)
         ampscaler.update()
         optimizer.zero_grad()
-
-        # do ema update
-        if model.model_ema is not None:
-            model.model_ema.update()
 
         if step % cfg.training.log_interval == 0 and is_main_process:
             logger.info(
