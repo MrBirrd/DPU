@@ -122,6 +122,7 @@ class PVCNN2Unet(nn.Module):
         self.point_as_feat = point_as_feat
         self.condition_input = condition_input
         assert extra_feature_channels >= 0
+        self.extra_feature_channels = extra_feature_channels
         self.time_emb_scales = time_emb_scales
         self.embed_dim = embed_dim
         self.self_condition = self_cond
@@ -222,17 +223,15 @@ class PVCNN2Unet(nn.Module):
         assert emb.shape == torch.Size([timesteps.shape[0], self.embed_dim])
         return emb
 
-    def forward(self, coords, t, cond=None, x_self_cond=None):
-        (B, C, N), device = coords.shape, coords.device
-        coords = coords.contiguous()
+    def forward(self, x, t):
+        (B, C, N), device = x.shape, x.device
+        assert (
+            C == self.input_dim + self.extra_feature_channels
+        ), f"input dim: {C}, expected: {self.input_dim + self.extra_feature_channels}"
 
-        # initialize features as coordinates
-        features = coords.clone()
-        
-        if cond is not None:
-            features = torch.cat([features, cond], dim=1).contiguous()
-        else:
-            features = features.contiguous()
+        coords = x[:, : self.input_dim, :].contiguous()
+        # take coords + extra features as the feature input to the model
+        features = x.clone().contiguous()
 
         # initialize lists
         coords_list, in_features_list = [], []
@@ -381,18 +380,27 @@ class PVCAdaptive(PVCNN2Unet):
         sa_blocks = [
             # conv vfg  , sa config
             # out channels, num blocks, voxel resolution | num_centers, radius, num_neighbors, out_channels
-            ((channels[0], n_sa_blocks[0], voxel_resolutions[0]), (n_centers[0], radius[0], 32, (channels[0], channels[1]))),
-            ((channels[1], n_sa_blocks[1], voxel_resolutions[1]), (n_centers[1], radius[1], 32, (channels[1], channels[2]))),
-            ((channels[2], n_sa_blocks[2], voxel_resolutions[2]), (n_centers[2], radius[2], 32, (channels[2], channels[3]))),
-            (None,                                                (n_centers[3], radius[3], 32, (channels[3], channels[3], channels[4]))),
+            (
+                (channels[0], n_sa_blocks[0], voxel_resolutions[0]),
+                (n_centers[0], radius[0], 32, (channels[0], channels[1])),
+            ),
+            (
+                (channels[1], n_sa_blocks[1], voxel_resolutions[1]),
+                (n_centers[1], radius[1], 32, (channels[1], channels[2])),
+            ),
+            (
+                (channels[2], n_sa_blocks[2], voxel_resolutions[2]),
+                (n_centers[2], radius[2], 32, (channels[2], channels[3])),
+            ),
+            (None, (n_centers[3], radius[3], 32, (channels[3], channels[3], channels[4]))),
         ]
 
         # in_channels, out_channels X | out_channels, num_blocks, voxel_resolution
         fp_blocks = [
-            ((channels[3], channels[3]),                (channels[3], n_fp_blocks[3], voxel_resolutions[3])),
-            ((channels[3], channels[3]),                (channels[3], n_fp_blocks[2], voxel_resolutions[2])),
-            ((channels[3], channels[2]),                (channels[2], n_fp_blocks[1], voxel_resolutions[1])),
-            ((channels[2], channels[2], channels[1]),   (channels[1], n_fp_blocks[0], voxel_resolutions[0])),
+            ((channels[3], channels[3]), (channels[3], n_fp_blocks[3], voxel_resolutions[3])),
+            ((channels[3], channels[3]), (channels[3], n_fp_blocks[2], voxel_resolutions[2])),
+            ((channels[3], channels[2]), (channels[2], n_fp_blocks[1], voxel_resolutions[1])),
+            ((channels[2], channels[2], channels[1]), (channels[1], n_fp_blocks[0], voxel_resolutions[0])),
         ]
 
         super().__init__(

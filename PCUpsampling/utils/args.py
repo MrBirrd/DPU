@@ -35,7 +35,7 @@ def parse_args():
     args, remaining_argv = parser.parse_known_args()
 
     # load config
-    if args.model_path != "" and not args.restart:
+    if args.model_path != "":
         try:
             cfg = OmegaConf.load(os.path.join(os.path.dirname(args.model_path), "opt.yaml"))
         except FileNotFoundError:
@@ -69,10 +69,6 @@ def parse_args():
     # set name
     if opt.name == "" and opt.config is not None:
         opt.name = os.path.splitext(os.path.basename(opt.config))[0]
-
-    # fix values for DDPM sampling steps
-    if opt.diffusion.sampling_strategy == "DDPM":
-        opt.diffusion.sampling_timesteps = opt.diffusion.timesteps
 
     # set sampling output dir
     if opt.model_path != "":

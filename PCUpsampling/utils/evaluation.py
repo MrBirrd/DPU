@@ -44,28 +44,26 @@ def evaluate(model, eval_iter, cfg, step, sampling=False, save_npy=False, debug=
 
     eval_data = next(eval_iter)
     eval_data = to_cuda(eval_data, cfg.gpu)
-    
+
     gt, features = get_data_batch(batch=eval_data, cfg=cfg, device=cfg.gpu)
 
     with torch.no_grad():
-        pred, hints = model.sample(
+        pred, x_start = model.sample(
             shape=new_x_chain(gt, cfg.sampling.bs).shape,
-            device=gt.device,
             cond=features,
-            hint=gt if cfg.diffusion.sampling_hint else None,
+            x_start=gt if cfg.diffusion.sampling_hint else None,
             return_noised_hint=True,
-            clip_denoised=False,
+            clip=False,
         )
 
         if debug:
             pred_trajectory = torch.cat(
                 model.sample(
                     shape=new_x_chain(gt, 1).shape,
-                    device=gt.device,
                     cond=features[0].unsqueeze(0) if features is not None else None,
-                    hint=gt if cfg.diffusion.sampling_hint else None,
+                    x_start=gt if cfg.diffusion.sampling_hint else None,
                     freq=0.1,
-                    clip_denoised=False,
+                    clip=False,
                 ),
                 dim=0,
             )
@@ -81,7 +79,7 @@ def evaluate(model, eval_iter, cfg, step, sampling=False, save_npy=False, debug=
     save_visualizations(
         [
             (pred, "pred"),
-            (hints, "hints"),
+            (x_start, "hints"),
             (gt, "gt"),
         ],
         out_dir,
@@ -95,20 +93,22 @@ def evaluate(model, eval_iter, cfg, step, sampling=False, save_npy=False, debug=
 
     pred = pred[..., :n_points]
     gt = gt[..., :n_points]
-    hints = hints[..., :n_points]
-    
-    emd = EMD.emdModule()
-    cd = calculate_cd(pred, gt)
-    eval_loss = model.loss(pred, gt).mean().item()
-    distance, _ = emd(gt.permute(0, 2, 1), pred.permute(0, 2, 1), 0.05, 3000)
-    emd = torch.sqrt(distance).mean().item()
+    x_start = x_start[..., :n_points]
 
+    cd, emd, eval_loss = get_metrics(model, gt, pred)
     # print the stats
     batch_metrics = {
         "CD": cd,
         "EMD": emd,
         "eval_loss_unweighted": eval_loss,
     }
+
+    if x_start is not None:
+        cd_hint, emd_hint, eval_loss_hint = get_metrics(model, gt, x_start)
+        batch_metrics["CD_hint"] = cd_hint
+        batch_metrics["EMD_hint"] = emd_hint
+        batch_metrics["eval_loss_hint_unweighted"] = eval_loss_hint
+
     logger.info(batch_metrics)
 
     if not sampling:
@@ -118,7 +118,7 @@ def evaluate(model, eval_iter, cfg, step, sampling=False, save_npy=False, debug=
         log_wandb("gt", out_dir, step)
     elif save_npy:
         save_ptc("pred", pred, out_dir, step)
-        save_ptc("hints", hints, out_dir, step)
+        save_ptc("hints", x_start, out_dir, step)
         save_ptc("gt", gt, out_dir, step)
 
     return batch_metrics
@@ -145,7 +145,6 @@ def upsample_big_pointcloud(model, pointcloud, batch_size=8192, n_batches=32):
         # sample
         _, idx = pcd_tree.query(center.cpu(), k=batch_size)
         batch = pointcloud[idx].cuda()
-        # TODO normalize the batch and sav enormalizer constants to redo the normalizing
         upsampling_batch = torch.cat([upsampling_batch, batch.unsqueeze(0)], dim=0)
         if upsampling_batch.shape[0] == n_batches:
             # upsample
@@ -189,3 +188,12 @@ def upsample_big_pointcloud(model, pointcloud, batch_size=8192, n_batches=32):
 
     # check if all points were upsampled
     return upsampled_points
+
+
+def get_metrics(model, gt, pred):
+    emd = EMD.emdModule()
+    cd = calculate_cd(pred, gt)
+    eval_loss = model.loss(pred, gt).mean().item()
+    distance, _ = emd(gt.permute(0, 2, 1), pred.permute(0, 2, 1), 0.05, 3000)
+    emd = torch.sqrt(distance).mean().item()
+    return cd, emd, eval_loss

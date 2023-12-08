@@ -14,6 +14,7 @@ from utils.losses import get_scaling, projection_loss
 from .unet_pointvoxel import PVCLionSmall, PVCAdaptive
 from third_party.gecco_torch.models.linear_lift import LinearLift
 from third_party.gecco_torch.models.set_transformer import SetTransformer
+from model.dpm_sampler import DPM_Solver, model_wrapper, NoiseScheduleVP
 
 ModelPrediction = namedtuple("ModelPrediction", ["pred_noise", "pred_x_start"])
 from loguru import logger
@@ -25,6 +26,7 @@ try:
 except:
     logger.error("MinkUnet not found, please install MinkowskiEngine")
     pass
+
 
 # gaussian diffusion trainer class
 def exists(x):
@@ -151,6 +153,7 @@ class GaussianDiffusion(nn.Module):
         ddim_sampling_eta = cfg.diffusion.ddim_sampling_eta
         min_snr_gamma = cfg.diffusion.min_snr_gamma
         self.reg_scale = cfg.diffusion.reg_scale
+        self.cfg = cfg
 
         # setup networks
         if cfg.model.type == "PVD":
@@ -209,12 +212,6 @@ class GaussianDiffusion(nn.Module):
         logger.info(
             f"Generated model with following number of params (M): {sum(p.numel() for p in self.model.parameters() if p.requires_grad) / 1e6:.2f}"
         )
-
-        # generate ema model
-        if cfg.model.ema:
-            self.model_ema = EMA(model=self.model, inv_gamma=1.0, power=3 / 4)
-        else:
-            self.model_ema = None
 
         # setup loss
         self.loss = get_loss(cfg.diffusion.loss_type)
@@ -373,20 +370,20 @@ class GaussianDiffusion(nn.Module):
         posterior_log_variance_clipped = extract(self.posterior_log_variance_clipped, t, x_t.shape)
         return posterior_mean, posterior_variance, posterior_log_variance_clipped
 
+    def model_conditioned(self, x, t, cond=None):
+        if cond is not None:
+            x = torch.cat([x, cond], dim=1)
+        return self.model(x, t)
+
     def model_predictions(
         self,
         x,
         t,
         cond=None,
-        x_self_cond=None,
         clip_x_start=False,
         rederive_pred_noise=True,
-        sampling=False,
     ):
-        if sampling:
-            model_output = self.model_ema(x, t, cond=cond, x_self_cond=x_self_cond)
-        else:
-            model_output = self.model(x, t, cond=cond, x_self_cond=x_self_cond)
+        model_output = self.model_conditioned(x, t, cond)
 
         pred_noise, x_start = self.to_noise_and_xstart(
             model_output,
@@ -426,14 +423,12 @@ class GaussianDiffusion(nn.Module):
 
         return pred_noise, x_start
 
-    def p_mean_variance(self, x, t, cond=None, x_self_cond=None, clip_denoised=False):
+    def p_mean_variance(self, x, t, cond=None, clip_denoised=False):
         preds = self.model_predictions(
             x,
             t,
             cond=cond,
-            x_self_cond=x_self_cond,
             clip_x_start=clip_denoised,
-            sampling=False,  # TODO add optional sampling with ema option
         )
         x_start = preds.pred_x_start
 
@@ -446,39 +441,50 @@ class GaussianDiffusion(nn.Module):
         return model_mean, posterior_variance, posterior_log_variance, x_start
 
     @torch.inference_mode()
-    def p_sample(self, x, t: int, cond=None, x_self_cond=None, clip=False):
+    def p_sample(self, x, t: int, cond=None, clip: bool = False):
         b, *_, device = *x.shape, self.device
         batched_times = torch.full((b,), t, device=device, dtype=torch.long)
         model_mean, _, model_log_variance, x_start = self.p_mean_variance(
-            x=x, t=batched_times, cond=cond, x_self_cond=x_self_cond, clip_denoised=clip
+            x=x, t=batched_times, cond=cond, clip_denoised=clip
         )
         noise = torch.randn_like(x) if t > 0 else 0.0  # no noise if t == 0
         pred_img = model_mean + (0.5 * model_log_variance).exp() * noise
         return pred_img, x_start
 
+    def generate_x_start(self, shape, steps, x_start=None, add_hint_noise=False):
+        # sample gaussian noise
+        noise = torch.randn(shape, device=self.device)
+
+        if x_start is None:
+            x_start = noise
+        elif add_hint_noise:
+            with torch.no_grad():
+                t = steps - 1
+                t = torch.tensor([t], device=self.device).long()
+                t = repeat(t, "1 -> b", b=shape[0])
+                x_start, *_ = self.q_sample(x_start=x_start, noise=noise, t=t, return_alphas_simgas=True)
+        return x_start
+
     @torch.inference_mode()
-    def p_sample_loop(self, shape, cond=None, hint=None, add_hint_noise=True, return_noised_hint=False, save_every=0, clip=False, *args, **kwargs):
-        img = torch.randn(shape, device=self.device)
+    def p_sample_loop(
+        self,
+        shape,
+        x_start=None,
+        add_hint_noise=True,
+        return_noised_hint=False,
+        save_every=0,
+        cond=None,
+        clip=False,
+    ):
+        total_steps = min(self.sampling_timesteps, self.timesteps_clip)
 
-        total_steps = min(self.num_timesteps, self.timesteps_clip)
+        x_start = self.generate_x_start(
+            shape=shape, steps=self.num_timesteps, x_start=x_start, add_hint_noise=add_hint_noise
+        )
 
-        # generate start by hint if hint is not None
-        # this is done by diffusing the hint the same way as trainig samples
-        diffusion_start = None
-        if hint is not None:
-            if add_hint_noise:
-                with torch.no_grad():
-                    t = total_steps - 1
-                    t = torch.tensor([t], device=self.device).long()
-                    t = repeat(t, "1 -> b", b=shape[0])
-                    img, alphas, sigmas = self.q_sample(x_start=hint, noise=img, t=t, return_alphas_simgas=True)
-            else:
-                img = hint
-            diffusion_start = img
+        x = x_start
+        x_list = [x_start]
 
-        imgs = [img]
-
-        x_start = None  # TODO add back self conditioning
         sample_step = 0
 
         for t in tqdm(
@@ -486,91 +492,32 @@ class GaussianDiffusion(nn.Module):
             desc="sampling loop time step",
             total=total_steps,
         ):
-            self_cond = x_start if self.self_condition else None
-            img, x_start = self.p_sample(img, t, cond=cond, x_self_cond=self_cond, clip=clip)
+            x = self.p_sample(x, t, cond=cond, clip=clip)[0]
             if save_every and ((sample_step + 1) % save_every == 0):
-                imgs.append(img)
+                x_list.append(x)
             sample_step += 1
 
-        ret = img if not save_every else imgs
+        ret = x if not save_every else x_list
 
         if return_noised_hint:
-            return ret, diffusion_start
+            return ret, x_start
         else:
             return ret
 
     @torch.inference_mode()
-    def ddim_sample(self, shape, cond=None, hint=None, add_hint_noise=True, return_noised_hint=False, save_every=0, clip=False, *args, **kwargs):
-        # extract potential timestep clipping
-        total_steps = min(self.num_timesteps, self.timesteps_clip)
-
-        times = torch.linspace(-1, total_steps - 1, steps=total_steps + 1)
-        times = list(reversed(times.int().tolist()))
-        time_pairs = list(zip(times[:-1], times[1:]))
-
-        img = torch.randn(shape, device=self.device)
-
-        # generate start by hint if hint is not None
-        # this is done by diffusing the hint the same way as trainig samples
-        diffusion_start = None
-        if hint is not None :
-            if add_hint_noise:
-                with torch.no_grad():
-                    t = torch.tensor([total_steps - 1], device=self.device).long()
-                    t = repeat(t, "1 -> b", b=shape[0])
-                    img = self.q_sample(x_start=hint, noise=img, t=t)
-            else:
-                img = hint
-            diffusion_start = img
-
-        x_start = None
-        # set saving
-        imgs = [img]
-        sample_step = 0
-
-        for time, time_next in tqdm(time_pairs, desc="sampling loop time step"):
-            time_cond = torch.full((shape[0],), time, device=self.device, dtype=torch.long)
-            self_cond = x_start if self.self_condition else None
-            pred_noise, x_start, *_ = self.model_predictions(
-                x=img,
-                t=time_cond,
-                cond=cond,
-                x_self_cond=self_cond,
-                clip_x_start=clip,
-                sampling=False,  # TODO add optional sampling with ema option
-            )
-
-            if time_next < 0:
-                img = x_start
-                imgs.append(img)
-                continue
-
-            alpha = self.alphas_cumprod[time]
-            alpha_next = self.alphas_cumprod[time_next]
-
-            sigma = self.ddim_sampling_eta * ((1 - alpha / alpha_next) * (1 - alpha_next) / (1 - alpha)).sqrt()
-            c = (1 - alpha_next - sigma**2).sqrt()
-
-            noise = torch.randn_like(img)
-
-            img = x_start * alpha_next.sqrt() + c * pred_noise + sigma * noise
-
-            if save_every and ((sample_step + 1) % save_every == 0):
-                imgs.append(img)
-
-            sample_step += 1
-
-        ret = img if not save_every else imgs
-        # ret = self.unnormalize(ret)
-
-        if return_noised_hint:
-            return ret, diffusion_start
-        else:
-            return ret
-
-    @torch.inference_mode()
-    def sample(self, shape, freq=0, cond=None, clip=False, hint=None, add_hint_noise=True, return_noised_hint=False, *args, **kwargs):
+    def sample(
+        self,
+        shape,
+        freq=0,
+        clip=False,
+        x_start=None,
+        cond=None,
+        add_x_start_noise=True,
+        return_noised_hint=False,
+    ):
+        # logging intermediate outputs
         steps = min(self.num_timesteps, self.timesteps_clip)
+
         if freq > 0 and freq <= 1:
             save_every = int(steps * freq)
             if save_every < steps:
@@ -578,32 +525,42 @@ class GaussianDiffusion(nn.Module):
         else:
             save_every = 0
 
-        sample_fn = self.p_sample_loop if not self.is_ddim_sampling else self.ddim_sample
-
-        # savety batch size check
-        if cond is not None:
-            if shape[0] != cond.shape[0]:
-                min_bs = min(shape[0], cond.shape[0])
-                shape = (min_bs, *shape[1:])
-                cond = cond[:min_bs] if cond is not None else None
-        if hint is not None:
-            if shape[0] != hint.shape[0]:
-                min_bs = min(shape[0], hint.shape[0])
-                shape = (min_bs, *shape[1:])
-                hint = hint[:min_bs] if hint is not None else None
-                cond = cond[:min_bs] if cond is not None else None
-
-        return sample_fn(
-            shape,
-            cond=cond,
-            hint=hint,
-            save_every=save_every,
-            clip=clip,
-            add_hint_noise=add_hint_noise,
-            return_noised_hint=return_noised_hint,
-            *args,
-            **kwargs,
-        )
+        if self.cfg.diffusion.sampling_strategy == "DDPM":
+            return self.p_sample_loop(
+                shape,
+                x_start=x_start,
+                save_every=save_every,
+                clip=clip,
+                cond=cond,
+                add_hint_noise=add_x_start_noise,
+                return_noised_hint=return_noised_hint,
+            )
+        elif self.cfg.diffusion.sampling_strategy == "DPM++":
+            logger.info("Using DPM++ sampling strategy")
+            logger.info("Wrapping model with DPM++ solver")
+            vp_schedule = NoiseScheduleVP(
+                schedule="discrete",
+                betas=self.betas,
+            )
+            wrapped_model = model_wrapper(
+                model=self.model_conditioned,
+                noise_schedule=vp_schedule,
+                model_type="v",
+                model_kwargs={"cond": cond},
+            )
+            dpm_solver = DPM_Solver(model_fn=wrapped_model, noise_schedule=vp_schedule, algorithm_type="dpmsolver++")
+            x_start = self.generate_x_start(
+                shape=shape, steps=self.num_timesteps, x_start=x_start, add_hint_noise=add_x_start_noise
+            )
+            logger.info("Sampling from DPM++ solver using {} steps".format(self.sampling_timesteps))
+            out = dpm_solver.sample(
+                x=x_start.clone(), steps=self.sampling_timesteps, order=3, method="singlestep", denoise_to_zero=True
+            )
+            logger.info("Finished sampling from DPM++ solver")
+            if return_noised_hint:
+                return out, x_start
+            else:
+                return out
 
     @torch.inference_mode()
     def interpolate(self, x1, x2, t=None, lam=0.5):
@@ -636,7 +593,7 @@ class GaussianDiffusion(nn.Module):
         else:
             return noised_x
 
-    def p_losses(self, x_start, t, cond=None, noise=None, offset_noise_strength=None):
+    def p_losses(self, x_start, t, noise=None, cond=None, offset_noise_strength=None):
         noise = default(noise, lambda: torch.randn_like(x_start))
 
         # offset noise - https://www.crosslabs.org/blog/diffusion-with-offset-noise
@@ -650,18 +607,8 @@ class GaussianDiffusion(nn.Module):
         # noise sample
         x, alphas, sigmas = self.q_sample(x_start=x_start, t=t, noise=noise, return_alphas_simgas=True)
 
-        # if doing self-conditioning, 50% of the time, predict x_start from current set of times
-        # and condition with unet with that
-        # this technique will slow down training by 25%, but seems to lower FID significantly
-
-        x_self_cond = None
-        if self.self_condition and random() < 0.5:
-            with torch.no_grad():
-                x_self_cond = self.model_predictions(x, t, cond=cond).pred_x_start
-                x_self_cond.detach_()
-
         with autocast(enabled=self.amp):
-            model_out = self.model(x, t, cond=cond, x_self_cond=x_self_cond)
+            model_out = self.model_conditioned(x, t, cond)
 
             if self.objective == "pred_noise":
                 target = noise

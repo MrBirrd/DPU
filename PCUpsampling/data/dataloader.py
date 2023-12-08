@@ -1,11 +1,13 @@
 import torch
 from .arkitscenes import IndoorScenes, IndoorScenesCut, ArkitScans
-from .scannetpp import ScanNetPPCut, ScanNetPPProcessed
+from .scannetpp import ScanNetPPCut, ScanNetPPProcessed, NPZFolderTest
 from .shapenet import get_dataset_shapenet
 from loguru import logger
 import os
 from torch.utils.data import Dataset, DataLoader
 from torch.utils.data.distributed import DistributedSampler
+import numpy as np
+
 
 def save_iter(dataloader, sampler):
     """Return a save iterator over the loader, which supports multi-gpu training using a distributed sampler."""
@@ -18,6 +20,20 @@ def save_iter(dataloader, sampler):
             if sampler is not None:
                 sampler.set_epoch(sampler.epoch + 1)
             yield next(iterator)
+
+
+def get_npz_loader(root, cfg):
+    """Return a dataloader for a folder of npz files."""
+    ds = NPZFolderTest(root, features=cfg.data.point_features)
+    loader = DataLoader(
+        ds,
+        batch_size=cfg.sampling.bs,
+        shuffle=False,
+        num_workers=int(cfg.data.workers),
+        pin_memory=True,
+        drop_last=False,
+    )
+    return loader
 
 
 def get_dataloader(opt, sampling=False):
@@ -115,8 +131,8 @@ def get_dataloader(opt, sampling=False):
             sampler=train_sampler,
             shuffle=train_sampler is None,
             num_workers=int(opt.data.workers),
-            prefetch_factor = 2,
-            pin_memory = True,
+            prefetch_factor=2,
+            pin_memory=True,
             drop_last=True,
         )
         if train_dataset is not None

@@ -1,12 +1,11 @@
 from .diffusion_pointvoxel import PVD
-from .diffusion_rin import GaussianDiffusion as RINDIFFUSION
-from .diffusion_elucidated import ElucidatedDiffusion
 from .diffusion_lucid import GaussianDiffusion as LUCID
 import torch
-
+from loguru import logger
 from torch.nn.parallel import DistributedDataParallel, DataParallel
 from torch import optim
 from utils.utils import smart_load_model_weights
+
 
 def load_optim_sched(cfg, model, model_ckpt=None):
     # setup optimizers
@@ -30,15 +29,14 @@ def load_optim_sched(cfg, model, model_ckpt=None):
         lr_scheduler = optim.lr_scheduler.ExponentialLR(optimizer, cfg.training.scheduler.lr_gamma)
     else:
         lr_scheduler = optim.lr_scheduler.ConstantLR(optimizer, factor=1.0)
-    
+
     if model_ckpt is not None:
         optimizer.load_state_dict(model_ckpt["optimizer_state"])
-    
+
     return optimizer, lr_scheduler
 
 
 def load_model(cfg, gpu=None, smart=False):
-    
     # setup model
     if cfg.diffusion.formulation == "PVD":
         model = PVD(
@@ -54,11 +52,10 @@ def load_model(cfg, gpu=None, smart=False):
         model = LUCID(cfg=cfg)
     elif cfg.diffusion.formulation == "RIN":
         model = RINDIFFUSION(cfg=cfg)
-    
-    
+
     # setup DDP model
     if cfg.distribution_type == "multi":
-        
+
         def _transform_(m):
             return DistributedDataParallel(m, device_ids=[gpu], output_device=gpu)
 
@@ -81,22 +78,23 @@ def load_model(cfg, gpu=None, smart=False):
         model = model.cuda(gpu)
     else:
         raise ValueError("distribution_type = multi | single | None")
-    
+
     # load the model weights
     cfg.start_step = 0
     if cfg.model_path != "":
-        ckpt = torch.load(cfg.model_path, map_location=torch.device('cpu'))
-        # check if the model is wrapped in a module
-        if smart:
-            smart_load_model_weights(model, ckpt["model_state"])
-        else:
-            model.load_state_dict(ckpt["model_state"])
-        
+        ckpt = torch.load(cfg.model_path, map_location=torch.device("cpu"))
         if not cfg.restart:
             cfg.start_step = ckpt["step"] + 1
+            model.load_state_dict(ckpt["model_state"])
+        else:
+            # only load the model parameters and let rest start from scratch
+            model_keys = {k.replace("model.", ""): v for k, v in ckpt["model_state"].items() if k.startswith("model.")}
+            model.model.load_state_dict(model_keys)
+
+        logger.info("Loaded model from %s" % cfg.model_path)
     else:
         ckpt = None
-    
+
     torch.cuda.empty_cache()
-    
+
     return model, ckpt

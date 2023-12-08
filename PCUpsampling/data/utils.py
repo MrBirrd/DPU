@@ -6,6 +6,7 @@ from modules.functional import trilinear_devoxelize
 from modules.voxelization import Voxelization
 from scipy import spatial
 import random
+import os
 
 
 def ply_to_np(pcd):
@@ -39,6 +40,7 @@ def inverse_T(transformation):
     inv[:3, 3] = -R.T @ t
     inv[3, 3] = 1
     return inv
+
 
 class FeatureVoxelConcatenation(nn.Module):
     """
@@ -141,3 +143,18 @@ def normalize_lowres_hires_pair(lowres: np.ndarray, hires: np.ndarray) -> Tuple[
     lowres /= max_dist
     hires /= max_dist
     return lowres, hires
+
+
+def load_npz_folder(folder):
+    """Load a folder of .npz files."""
+    data = []
+    for file in os.listdir(folder):
+        if file.endswith(".npz"):
+            data.append(load_npz(os.path.join(folder, file)))
+    return data
+
+
+def load_npz(path):
+    """Load a .npz file."""
+    data = np.load(path)
+    return data

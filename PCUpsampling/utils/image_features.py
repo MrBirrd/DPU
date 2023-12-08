@@ -15,10 +15,12 @@ from sklearn.neighbors import KDTree
 import os
 
 import traceback
+
 try:
     from third_party.ZegCLIP.get_model import get_model, predict
 except Exception:
     print(traceback.format_exc())
+
 
 def load_dino(model_name):
     model = torch.hub.load("facebookresearch/dinov2", model_name).cuda()
@@ -322,6 +324,7 @@ def process_scene(
         )
 
         world_to_cameras = [images[i].world_to_camera for i in batch]
+
         Rs = np.array([world_to_camera[:3, :3] for world_to_camera in world_to_cameras])
         ts = np.array([world_to_camera[:-1, -1:] for world_to_camera in world_to_cameras])
 
