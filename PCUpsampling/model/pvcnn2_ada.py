@@ -13,18 +13,20 @@ copied and modified from source:
 """
 import copy
 import functools
-from loguru import logger
-from einops import rearrange
-import torch.nn as nn
-import torch
-import numpy as np
-import modules.functional as F
+import os
 from functools import partial
 
+import numpy as np
+import torch
+import torch.nn as nn
+from einops import rearrange
+from loguru import logger
 # from utils.checker import *
-from torch.cuda.amp import autocast, GradScaler, custom_fwd, custom_bwd
+from torch.cuda.amp import GradScaler, autocast, custom_bwd, custom_fwd
+
+import modules.functional as F
+
 from .adagn import AdaGN
-import os
 
 quiet = int(os.environ.get("quiet", 0))
 

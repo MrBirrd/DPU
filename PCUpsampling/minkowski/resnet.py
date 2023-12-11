@@ -1,8 +1,8 @@
-import torch.nn as nn
 import MinkowskiEngine as ME
+import torch.nn as nn
 
-from .model import Model
 from .common import ConvType, NormType, conv, get_norm, sum_pool
+from .model import Model
 from .resnet_block import BasicBlock, Bottleneck
 
 

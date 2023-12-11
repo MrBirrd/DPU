@@ -1,6 +1,8 @@
 from typing import Any
-from torch import nn, Tensor, cat
+
 from einops import rearrange
+from torch import Tensor, cat, nn
+
 from third_party.gecco_torch.models.set_transformer import SetTransformer
 
 

@@ -9,11 +9,12 @@
 """ copied and modified from https://github.com/CW-Huang/sdeflow-light/blob/524650bc5ad69522b3e0905672deef0650374512/lib/models/unet.py """
 
 import math
+
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn.init import _calculate_fan_in_and_fan_out
-import numpy as np
 
 
 def _calculate_correct_fan(tensor, mode):

@@ -19,11 +19,12 @@
 # the result is an approximation and the assignment is not guranteed to be a bijection
 
 import time
+
+import emd
 import numpy as np
 import torch
 from torch import nn
 from torch.autograd import Function
-import emd
 
 
 class emdFunction(Function):

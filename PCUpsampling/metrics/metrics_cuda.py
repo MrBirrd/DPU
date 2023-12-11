@@ -11,24 +11,29 @@ copied and modified from
 and 
     https://github.com/stevenygd/PointFlow/tree/b7a9216ffcd2af49b24078156924de025c4dbfb6/metrics
 """
-import torch
 import time
-from tabulate import tabulate
-import numpy as np
-from loguru import logger
 import warnings
+
+import numpy as np
+import torch
+import torch.nn.functional as F
+from loguru import logger
+from numpy.linalg import norm
 from scipy.stats import entropy
 from sklearn.neighbors import NearestNeighbors
-from numpy.linalg import norm
-from .PyTorchEMD.emd_nograd import earth_mover_distance_nograd
-from .PyTorchEMD.emd import earth_mover_distance
-from .ChamferDistancePytorch.chamfer3D.dist_chamfer_3D import chamfer_3DDist_nograd, chamfer_3DDist
+from tabulate import tabulate
+
 from utils.checker import *
-import torch.nn.functional as F
+
+from .ChamferDistancePytorch.chamfer3D.dist_chamfer_3D import (
+    chamfer_3DDist, chamfer_3DDist_nograd)
+from .PyTorchEMD.emd import earth_mover_distance
+from .PyTorchEMD.emd_nograd import earth_mover_distance_nograd
 
 
 def distChamferCUDA_l1(pred, target, points_dim=3):
     import modules.functional as pvcnn_fun
+
     # expect B.2048.3 and B.2048.3
     B = pred.shape[0]
     CHECKDIM(pred, 2, points_dim)

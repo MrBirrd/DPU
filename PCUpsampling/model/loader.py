@@ -1,10 +1,16 @@
-from .diffusion_pointvoxel import PVD
-from .diffusion_lucid import GaussianDiffusion as LUCID
 import torch
 from loguru import logger
-from torch.nn.parallel import DistributedDataParallel, DataParallel
 from torch import optim
+from torch.nn.parallel import DataParallel, DistributedDataParallel
+
+from model.unet_mink import MinkUnet
+from model.unet_pointvoxel import PVCAdaptive, PVCLionSmall
+from third_party.gecco_torch.models.linear_lift import LinearLift
+from third_party.gecco_torch.models.set_transformer import SetTransformer
 from utils.utils import smart_load_model_weights
+
+from .diffusion_lucid import GaussianDiffusion as LUCID
+from .diffusion_pointvoxel import PVD
 
 
 def load_optim_sched(cfg, model, model_ckpt=None):
@@ -36,22 +42,68 @@ def load_optim_sched(cfg, model, model_ckpt=None):
     return optimizer, lr_scheduler
 
 
-def load_model(cfg, gpu=None, smart=False):
-    # setup model
-    if cfg.diffusion.formulation == "PVD":
-        model = PVD(
-            cfg,
-            loss_type=cfg.diffusion.loss_type,
-            model_mean_type="eps",
-            model_var_type="fixedsmall",
-            device="cuda" if gpu == 0 else gpu,
+def load_model(cfg):
+    if cfg.model.type == "PVD":
+        if cfg.model.PVD.size == "small":
+            model = PVCLionSmall(
+                out_dim=cfg.model.out_dim,
+                input_dim=cfg.model.in_dim,
+                npoints=cfg.data.npoints,
+                embed_dim=cfg.model.time_embed_dim,
+                use_att=cfg.model.use_attention,
+                use_st=cfg.model.PVD.use_st,
+                dropout=cfg.model.dropout,
+                extra_feature_channels=cfg.model.extra_feature_channels,
+            )
+        if cfg.model.PVD.size == "large":
+            model = PVCAdaptive(
+                out_dim=cfg.model.out_dim,
+                input_dim=cfg.model.in_dim,
+                npoints=cfg.data.npoints,
+                channels=cfg.model.PVD.channels,
+                embed_dim=cfg.model.time_embed_dim,
+                use_att=cfg.model.PVD.use_attention,
+                use_st=cfg.model.PVD.use_st,
+                st_params=cfg.model.ST,
+                dropout=cfg.model.dropout,
+                extra_feature_channels=cfg.model.extra_feature_channels,
+            )
+    elif cfg.model.type == "Mink":
+        model = MinkUnet(
+            dim=cfg.model.time_embed_dim,
+            init_ds_factor=cfg.model.Mink.init_ds_factor,
+            D=cfg.model.Mink.D,
+            in_shape=[cfg.training.bs, cfg.model.in_dim, cfg.data.npoints],
+            out_dim=cfg.model.out_dim,
+            in_channels=cfg.model.in_dim + cfg.model.extra_feature_channels,
+            dim_mults=cfg.model.Mink.dim_mults,
+            downsampfactors=cfg.model.Mink.downsampfactors,
+            use_attention=cfg.model.Mink.use_attention,
         )
-    elif cfg.diffusion.formulation == "EDM":
-        model = ElucidatedDiffusion(args=cfg)
-    elif cfg.diffusion.formulation == "LUCID":
-        model = LUCID(cfg=cfg)
-    elif cfg.diffusion.formulation == "RIN":
-        model = RINDIFFUSION(cfg=cfg)
+    elif cfg.model.type == "SetTransformer":
+        set_transformer = SetTransformer(
+            n_layers=cfg.model.ST.layers,
+            feature_dim=cfg.model.ST.fdim,
+            num_inducers=cfg.model.ST.inducers,
+            t_embed_dim=1,
+        )
+        model = LinearLift(
+            inner=set_transformer,
+            feature_dim=cfg.model.ST.fdim,
+            in_dim=cfg.model.in_dim + cfg.model.extra_feature_channels,
+            out_dim=cfg.model.out_dim,
+        )
+    else:
+        raise NotImplementedError(cfg.unet)
+    logger.info(
+            f"Generated model with following number of params (M): {sum(p.numel() for p in model.parameters() if p.requires_grad) / 1e6:.2f}"
+        )
+    return model
+
+def load_diffusion(cfg, smart=False):
+    # setup model
+    model = LUCID(cfg=cfg)
+    gpu = cfg.gpu
 
     # setup DDP model
     if cfg.distribution_type == "multi":

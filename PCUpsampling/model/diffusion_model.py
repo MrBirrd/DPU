@@ -1,12 +1,16 @@
 import torch
+from torch import Tensor
 from torch import nn
+from abc import ABC, abstractmethod
 
-class DiffusionModel(nn.Module):
+class DiffusionModel(ABC, nn.Module):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
-    
-    def forward(self, x: torch.Tensor, t: int) -> torch.Tensor:
+
+    @abstractmethod
+    def forward(self, x0: Tensor, x_start: Tensor = None, cond: Tensor = None,) -> Tensor:
         raise NotImplementedError()
 
-    def sample(self, x: torch.Tensor, t: int) -> torch.Tensor:
+    @abstractmethod
+    def sample(self, shape, cond=None, x_start=None, return_noised_hint=False, clip=False) -> Tensor:
         raise NotImplementedError()

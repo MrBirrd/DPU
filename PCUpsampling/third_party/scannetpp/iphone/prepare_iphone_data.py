@@ -8,20 +8,21 @@ and semantic tasks on the mesh
 '''
 
 import argparse
-from pathlib import Path
-import yaml
-from munch import Munch
-from tqdm import tqdm
 import json
-import sys
 import subprocess
+import sys
 import zlib
-import numpy as np
+from pathlib import Path
+
 import imageio as iio
 import lz4.block
-
+import numpy as np
+import yaml
 from common.scene_release import ScannetppScene_Release
-from common.utils.utils import run_command, load_yaml_munch, load_json, read_txt_list
+from common.utils.utils import (load_json, load_yaml_munch, read_txt_list,
+                                run_command)
+from munch import Munch
+from tqdm import tqdm
 
 
 def extract_rgb(scene):

@@ -1,9 +1,10 @@
 
 
+import json
+
 import yaml
 from munch import Munch
-import json
-import yaml
+
 
 def write_json(path, data):
     with open(path, "w") as f:

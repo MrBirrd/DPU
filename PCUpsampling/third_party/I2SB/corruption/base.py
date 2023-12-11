@@ -13,6 +13,7 @@
 
 import torch
 
+
 class H_functions:
     """
     A class replacing the SVD of a matrix H, perhaps efficiently.

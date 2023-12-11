@@ -1,18 +1,16 @@
 import argparse
-from typing import List, Optional, Union, Callable
 import json
 import os
 from pathlib import Path
+from typing import Callable, List, Optional, Union
 
 import numpy as np
-from PIL import Image
 import torch
-from torchmetrics.image import PeakSignalNoiseRatio
-
 from common.scene_release import ScannetppScene_Release
-from eval.ssim import ssim as SSIM
 from eval.lpips.lpips import LPIPS
-
+from eval.ssim import ssim as SSIM
+from PIL import Image
+from torchmetrics.image import PeakSignalNoiseRatio
 
 SUPPORT_IMAGE_FORMAT = [".JPG", ".jpg", ".png", ".PNG", ".jpeg"]
 

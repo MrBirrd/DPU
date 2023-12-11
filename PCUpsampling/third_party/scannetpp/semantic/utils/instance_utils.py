@@ -1,8 +1,8 @@
-import os
 import json
+import os
+from types import SimpleNamespace
 
 import numpy as np
-from types import SimpleNamespace
 
 
 def load_ids(filename):

@@ -1,6 +1,6 @@
 from semantic.transforms.common import Compose
-from semantic.transforms.mesh import MapLabelToIndex, SamplePointsOnMesh, \
-             GetLabelsOnVertices, AddMeshVertices
+from semantic.transforms.mesh import (AddMeshVertices, GetLabelsOnVertices,
+                                      MapLabelToIndex, SamplePointsOnMesh)
 
 
 def get_transform(data_cfg):

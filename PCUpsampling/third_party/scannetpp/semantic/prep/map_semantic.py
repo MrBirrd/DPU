@@ -1,5 +1,6 @@
 from collections import OrderedDict
 
+
 def filter_classes(mapping, thresh, count_type):
     '''
     mapping: dataframe with class, count, semantic_map_to, instance_map_to

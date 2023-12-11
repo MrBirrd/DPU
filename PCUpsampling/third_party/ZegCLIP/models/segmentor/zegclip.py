@@ -1,21 +1,21 @@
-from matplotlib.pyplot import text
+import os
+
+import matplotlib.pyplot as plt
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
+import tqdm
+from matplotlib.pyplot import text
 from mmseg.core import add_prefix
-from mmseg.ops import resize
 from mmseg.models import builder
 from mmseg.models.builder import SEGMENTORS
 from mmseg.models.segmentors.base import BaseSegmentor
 from mmseg.models.segmentors.encoder_decoder import EncoderDecoder
+from mmseg.ops import resize
 
 from .untils import tokenize
-import numpy as np
-import tqdm
 
-import os
-import matplotlib.pyplot as plt
 
 @SEGMENTORS.register_module()
 class ZegCLIP(EncoderDecoder):

@@ -1,15 +1,18 @@
-import torch, time
+import time
+
 import chamfer2D.dist_chamfer_2D
 import chamfer3D.dist_chamfer_3D
 import chamfer5D.dist_chamfer_5D
 import chamfer_python
+import torch
 
 cham2D = chamfer2D.dist_chamfer_2D.chamfer_2DDist()
 cham3D = chamfer3D.dist_chamfer_3D.chamfer_3DDist()
 cham5D = chamfer5D.dist_chamfer_5D.chamfer_5DDist()
 
-from torch.autograd import Variable
 from fscore import fscore
+from torch.autograd import Variable
+
 
 def test_chamfer(distChamfer, dim):
     points1 = torch.rand(4, 100, dim).cuda()

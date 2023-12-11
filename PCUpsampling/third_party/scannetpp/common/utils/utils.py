@@ -1,7 +1,8 @@
+import json
 import subprocess
 import sys
+
 import yaml
-import json
 from munch import Munch
 
 

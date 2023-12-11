@@ -3,15 +3,15 @@ Read training data from pth and visualize it
 '''
 
 import argparse
-from pathlib import Path
 import os
-from common.scene_release import ScannetppScene_Release
+from pathlib import Path
 
-import torch
-import open3d as o3d
 import numpy as np
-from tqdm import tqdm
+import open3d as o3d
+import torch
 from common.file_io import load_yaml_munch, read_txt_list
+from common.scene_release import ScannetppScene_Release
+from tqdm import tqdm
 
 
 def main(args):

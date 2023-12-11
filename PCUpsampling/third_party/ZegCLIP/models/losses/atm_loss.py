@@ -1,9 +1,10 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
 from mmseg.models.builder import LOSSES
+
 from .criterion import SegPlusCriterion
+
 
 @LOSSES.register_module()
 class SegLossPlus(nn.Module):

@@ -1,19 +1,16 @@
 import argparse
-
-from mmcv import Config
-from mmcv.cnn import get_model_complexity_info
-from mmseg.models import build_segmentor
-import models
-
-from fvcore.nn import FlopCountAnalysis
-
-import torch
 from numbers import Number
 from typing import Any, Callable, List, Optional, Union
-from numpy import prod
+
+import models
 import numpy as np
+import torch
 from fvcore.nn import FlopCountAnalysis
+from mmcv import Config
+from mmcv.cnn import get_model_complexity_info
 from mmseg.datasets import build_dataset
+from mmseg.models import build_segmentor
+from numpy import prod
 
 
 def calc_flops(model, img_size=224):

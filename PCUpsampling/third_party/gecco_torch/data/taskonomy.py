@@ -1,16 +1,15 @@
 import os
 import re
-from typing import Tuple, List
+from typing import List, Tuple
 
-import torch
-import numpy as np
 import h5py
-import lightning.pytorch as pl
-from tqdm.auto import tqdm
 import imageio as iio
-
-from gecco_torch.structs import Context3d, Example
+import lightning.pytorch as pl
+import numpy as np
+import torch
 from gecco_torch.data.samplers import FixedSampler
+from gecco_torch.structs import Context3d, Example
+from tqdm.auto import tqdm
 
 
 class Building:

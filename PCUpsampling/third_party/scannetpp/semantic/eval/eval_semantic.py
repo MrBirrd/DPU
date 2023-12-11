@@ -1,15 +1,15 @@
 
 
 import argparse
-from common.file_io import read_txt_list, load_yaml_munch
+import warnings
+from pathlib import Path
+
+import numpy as np
+import torch
+from common.file_io import load_yaml_munch, read_txt_list
 from common.scene_release import ScannetppScene_Release
 from semantic.utils.confmat import ConfMat
 from tqdm import tqdm
-from pathlib import Path
-import numpy as np
-import torch
-
-import warnings
 
 
 def eval_semantic(scene_list, pred_dir, gt_dir, data_root, num_classes, ignore_label, 

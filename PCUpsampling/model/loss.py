@@ -1,7 +1,8 @@
 import torch
-from torch.nn.functional import mse_loss, l1_loss
-from metrics.emd_ import emd_module as EMD
 from einops import reduce
+from torch.nn.functional import l1_loss, mse_loss
+
+from metrics.emd_ import emd_module as EMD
 
 
 def mean_squared_error(pred, gt):

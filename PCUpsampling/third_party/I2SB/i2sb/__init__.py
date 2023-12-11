@@ -5,5 +5,5 @@
 # for I2SB. To view a copy of this license, see the LICENSE file.
 # ---------------------------------------------------------------
 
+from .ckpt_util import download, download_ckpt
 from .runner import Runner
-from .ckpt_util import download_ckpt, download

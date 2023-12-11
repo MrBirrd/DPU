@@ -5,11 +5,13 @@
 # for I2SB. To view a copy of this license, see the LICENSE file.
 # ---------------------------------------------------------------
 
+import logging
 import os
 import time
-import logging
+
 from rich.console import Console
 from rich.logging import RichHandler
+
 
 def get_time(sec):
     h = int(sec//3600)

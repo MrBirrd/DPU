@@ -2,6 +2,7 @@ import math
 from collections import namedtuple
 from functools import partial, wraps
 from random import random
+
 import torch
 import torch.nn.functional as F
 from einops import rearrange, reduce, repeat

@@ -13,13 +13,15 @@ copied and modified from source:
 """
 import copy
 import functools
-from loguru import logger
-from einops import rearrange
-import torch.nn as nn
-import torch
+
 import numpy as np
+import torch
+import torch.nn as nn
+from einops import rearrange
+from loguru import logger
+from torch.cuda.amp import GradScaler, autocast, custom_bwd, custom_fwd
+
 import modules.functional as F
-from torch.cuda.amp import autocast, GradScaler, custom_fwd, custom_bwd
 
 
 class SE3d(nn.Module):

@@ -1,22 +1,19 @@
 import os.path as osp
-
-from mmseg.datasets.builder import DATASETS
-from mmseg.datasets.custom import CustomDataset
-import os.path as osp
 import warnings
 from collections import OrderedDict
 
 import mmcv
 import numpy as np
 from mmcv.utils import print_log
+from mmseg.core import eval_metrics, intersect_and_union, pre_eval_to_metrics
+from mmseg.datasets.builder import DATASETS
+from mmseg.datasets.custom import CustomDataset
+from mmseg.datasets.pipelines import Compose, LoadAnnotations
+from mmseg.utils import get_root_logger
+from PIL import Image
 from prettytable import PrettyTable
 from torch.utils.data import Dataset
 
-from mmseg.core import eval_metrics, intersect_and_union, pre_eval_to_metrics
-from mmseg.utils import get_root_logger
-from mmseg.datasets.builder import DATASETS
-from mmseg.datasets.pipelines import Compose, LoadAnnotations
-from PIL import Image
 
 @DATASETS.register_module()
 class ZeroPascalVOCDataset20(CustomDataset):

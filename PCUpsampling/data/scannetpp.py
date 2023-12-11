@@ -1,13 +1,16 @@
-from .utils import *
-from loguru import logger
 import os
-from scipy import spatial
-from tqdm import tqdm
+
 import numpy as np
-import torch
-from torch.utils.data import Dataset
 import pyminiply
+import torch
+from loguru import logger
+from scipy import spatial
+from torch.utils.data import Dataset
+from tqdm import tqdm
+
 from utils.ops import random_rotate_pointcloud_horizontally
+
+from .utils import *
 
 EULER_FEATURE_ROOT = "/cluster/scratch/matvogel/scannetpp"
 VALID_FEATURES = ["dino", "rgb", "dino_svd64"]

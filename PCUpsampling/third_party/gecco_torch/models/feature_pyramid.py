@@ -8,10 +8,9 @@ from dataclasses import dataclass
 from typing import Literal
 
 import torch
-from torch import nn, Tensor
 import torchvision.models as tvm
-
 from gecco_torch.structs import Context3d
+from torch import Tensor, nn
 
 
 @dataclass

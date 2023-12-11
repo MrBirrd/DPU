@@ -1,9 +1,10 @@
-from pyviz3d import visualizer
-import numpy as np
-import os
 import argparse
+import os
 import subprocess
+
+import numpy as np
 from einops import rearrange
+from pyviz3d import visualizer
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

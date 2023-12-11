@@ -7,9 +7,9 @@ else:
 
 from enum import Enum
 
-import torch.nn as nn
 import MinkowskiEngine as ME
 import torch
+import torch.nn as nn
 from einops import rearrange
 
 

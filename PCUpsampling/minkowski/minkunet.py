@@ -1,11 +1,11 @@
-import torch.nn as nn
 import MinkowskiEngine as ME
 import MinkowskiEngine.MinkowskiOps as me
+import torch.nn as nn
 from MinkowskiEngine import MinkowskiReLU
 
-from .resnet import ResNetBase, get_norm
 from .common import ConvType, NormType, conv, conv_tr
-from .resnet_block import BasicBlock, Bottleneck, BasicBlockINBN
+from .resnet import ResNetBase, get_norm
+from .resnet_block import BasicBlock, BasicBlockINBN, Bottleneck
 
 
 class MinkUNetBase(ResNetBase):

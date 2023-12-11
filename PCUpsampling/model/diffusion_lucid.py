@@ -9,16 +9,15 @@ from einops import rearrange, reduce, repeat
 from torch import nn
 from torch.cuda.amp import autocast
 from tqdm import tqdm
+
+from model.dpm_sampler import DPM_Solver, NoiseScheduleVP, model_wrapper
+from model.loader import load_model
 from utils.losses import get_scaling, projection_loss
 
-from .unet_pointvoxel import PVCLionSmall, PVCAdaptive
-from third_party.gecco_torch.models.linear_lift import LinearLift
-from third_party.gecco_torch.models.set_transformer import SetTransformer
-from model.dpm_sampler import DPM_Solver, model_wrapper, NoiseScheduleVP
-
 ModelPrediction = namedtuple("ModelPrediction", ["pred_noise", "pred_x_start"])
-from loguru import logger
 from ema_pytorch import EMA
+from loguru import logger
+
 from .loss import get_loss
 
 try:
@@ -26,7 +25,6 @@ try:
 except:
     logger.error("MinkUnet not found, please install MinkowskiEngine")
     pass
-
 
 # gaussian diffusion trainer class
 def exists(x):
@@ -155,63 +153,7 @@ class GaussianDiffusion(nn.Module):
         self.reg_scale = cfg.diffusion.reg_scale
         self.cfg = cfg
 
-        # setup networks
-        if cfg.model.type == "PVD":
-            if cfg.model.PVD.size == "small":
-                self.model = PVCLionSmall(
-                    out_dim=cfg.model.out_dim,
-                    input_dim=cfg.model.in_dim,
-                    npoints=cfg.data.npoints,
-                    embed_dim=cfg.model.time_embed_dim,
-                    use_att=cfg.model.use_attention,
-                    use_st=cfg.model.PVD.use_st,
-                    dropout=cfg.model.dropout,
-                    extra_feature_channels=cfg.model.extra_feature_channels,
-                ).cuda()
-            if cfg.model.PVD.size == "large":
-                self.model = PVCAdaptive(
-                    out_dim=cfg.model.out_dim,
-                    input_dim=cfg.model.in_dim,
-                    npoints=cfg.data.npoints,
-                    channels=cfg.model.PVD.channels,
-                    embed_dim=cfg.model.time_embed_dim,
-                    use_att=cfg.model.PVD.use_attention,
-                    use_st=cfg.model.PVD.use_st,
-                    st_params=cfg.model.ST,
-                    dropout=cfg.model.dropout,
-                    extra_feature_channels=cfg.model.extra_feature_channels,
-                ).cuda()
-        elif cfg.model.type == "Mink":
-            self.model = MinkUnet(
-                dim=cfg.model.time_embed_dim,
-                init_ds_factor=cfg.model.Mink.init_ds_factor,
-                D=cfg.model.Mink.D,
-                in_shape=[cfg.training.bs, cfg.model.in_dim, cfg.data.npoints],
-                out_dim=cfg.model.out_dim,
-                in_channels=cfg.model.in_dim + cfg.model.extra_feature_channels,
-                dim_mults=cfg.model.Mink.dim_mults,
-                downsampfactors=cfg.model.Mink.downsampfactors,
-                use_attention=cfg.model.Mink.use_attention,
-            ).cuda()
-        elif cfg.model.type == "SetTransformer":
-            set_transformer = SetTransformer(
-                n_layers=cfg.model.ST.layers,
-                feature_dim=cfg.model.ST.fdim,
-                num_inducers=cfg.model.ST.inducers,
-                t_embed_dim=1,
-            ).cuda()
-            self.model = LinearLift(
-                inner=set_transformer,
-                feature_dim=cfg.model.ST.fdim,
-                in_dim=cfg.model.in_dim + cfg.model.extra_feature_channels,
-                out_dim=cfg.model.out_dim,
-            ).cuda()
-        else:
-            raise NotImplementedError(cfg.unet)
-
-        logger.info(
-            f"Generated model with following number of params (M): {sum(p.numel() for p in self.model.parameters() if p.requires_grad) / 1e6:.2f}"
-        )
+        self.model = load_model(cfg).to(cfg.gpu)
 
         # setup loss
         self.loss = get_loss(cfg.diffusion.loss_type)

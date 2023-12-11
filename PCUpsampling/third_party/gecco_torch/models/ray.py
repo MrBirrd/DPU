@@ -7,14 +7,13 @@ For unconditional modelling you should use gecco_torch.models.LinearLift instead
 through the SetTransformer.
 """
 import torch
-from torch import nn, Tensor
 from einops import rearrange
-from kornia.geometry.camera.perspective import project_points
-
-from gecco_torch.reparam import Reparam
-from gecco_torch.structs import Context3d
 from gecco_torch.models.feature_pyramid import FeaturePyramidContext
 from gecco_torch.models.set_transformer import SetTransformer
+from gecco_torch.reparam import Reparam
+from gecco_torch.structs import Context3d
+from kornia.geometry.camera.perspective import project_points
+from torch import Tensor, nn
 
 
 class GroupNormBNC(nn.GroupNorm):

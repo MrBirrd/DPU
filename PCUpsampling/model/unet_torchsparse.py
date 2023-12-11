@@ -1,4 +1,5 @@
 import argparse
+import math
 import random
 from functools import partial
 from typing import Any, Dict
@@ -7,7 +8,7 @@ import numpy as np
 import torch
 import torch.utils.data
 from einops import rearrange
-from torch import nn, einsum
+from torch import einsum, nn
 from torch.cuda import amp
 from torch.nn import functional as F
 from torchsparse import SparseTensor
@@ -15,7 +16,6 @@ from torchsparse import nn as spnn
 from torchsparse.nn.utils import fapply
 from torchsparse.utils.collate import sparse_collate
 from torchsparse.utils.quantize import sparse_quantize
-import math
 
 
 def silu(input: SparseTensor, inplace: bool = True) -> SparseTensor:

@@ -15,9 +15,10 @@
 
 import numpy as np
 import torch
+from ipdb import set_trace as debug
+
 from .base import H_functions
 
-from ipdb import set_trace as debug
 
 class SuperResolution(H_functions):
     def __init__(self, channels, img_dim, ratio, device): #ratio = 2 or 4

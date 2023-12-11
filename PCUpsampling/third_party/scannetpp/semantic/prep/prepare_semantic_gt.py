@@ -2,14 +2,14 @@
 Read training pth files and save only the ground truth labels as npy/txt files
 '''
 
-from pathlib import Path
-from common.file_io import write_json
-from common.utils.rle import rle_encode
-import torch
-from tqdm import tqdm
-import numpy as np
-from common.file_io import load_yaml_munch, read_txt_list
 import argparse
+from pathlib import Path
+
+import numpy as np
+import torch
+from common.file_io import load_yaml_munch, read_txt_list, write_json
+from common.utils.rle import rle_encode
+from tqdm import tqdm
 
 '''
 ScanNet++ format for semantic GT and predictions

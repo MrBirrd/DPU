@@ -1,27 +1,25 @@
+import math
 from collections import OrderedDict
 from curses import A_ALTCHARSET
+from functools import reduce
+from operator import mul
 from tkinter import OUTSIDE
 from typing import Tuple, Union
 
 import numpy as np
 import torch
 import torch.nn.functional as F
-from torch.nn import Dropout
-from torch import nn
-from timm.models.layers import drop, drop_path, trunc_normal_
-from mmseg.models.builder import BACKBONES
-
 from mmseg.models.backbones import ResNet
 from mmseg.models.backbones import VisionTransformer as MMVisionTransformer
-
-from timm.models.resnet import ResNet as TimmResNet
+from mmseg.models.builder import BACKBONES
+from timm.models.layers import drop, drop_path, trunc_normal_
 from timm.models.resnet import Bottleneck as TimmBottleneck
+from timm.models.resnet import ResNet as TimmResNet
+from torch import nn
+from torch.nn import Dropout
 
-from functools import reduce
-from operator import mul
-
-import math
 from .utils import *
+
 
 @BACKBONES.register_module()
 class CLIPVisionTransformer(nn.Module):

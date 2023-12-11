@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from .networks import get_network, LinLayers
+from .networks import LinLayers, get_network
 from .utils import get_state_dict
 
 

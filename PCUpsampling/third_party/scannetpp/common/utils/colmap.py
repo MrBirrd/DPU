@@ -29,13 +29,13 @@
 #
 # Author: Johannes L. Schoenberger (jsch-at-demuc-dot-de)
 
-from typing import List, Tuple, Dict
-import os
-import collections
-import numpy as np
-import struct
 import argparse
+import collections
+import os
+import struct
+from typing import Dict, List, Tuple
 
+import numpy as np
 
 CameraModel = collections.namedtuple(
     "CameraModel", ["model_id", "model_name", "num_params"])

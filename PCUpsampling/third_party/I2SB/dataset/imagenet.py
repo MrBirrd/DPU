@@ -5,18 +5,17 @@
 # for I2SB. To view a copy of this license, see the LICENSE file.
 # ---------------------------------------------------------------
 
-import os
 import io
+import os
 
-from PIL import Image
 import lmdb
-
 import torch
 import torchvision.datasets as datasets
-from torchvision import transforms
-from torch.utils.data import Dataset
-
 from ipdb import set_trace as debug
+from PIL import Image
+from torch.utils.data import Dataset
+from torchvision import transforms
+
 
 def lmdb_loader(path, lmdb_data):
     # In-memory binary streams

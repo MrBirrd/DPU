@@ -2,16 +2,13 @@
 Implements the Set Transformer from https://arxiv.org/abs/1810.00825 with
 some modifications to "inject" the diffusion noise level into the network.
 """
-import torch
-import torch.nn.functional as F
-from torch import nn, Tensor
-from einops import rearrange
 from typing import Callable
-import torch.nn as nn
 
 import torch
-from torch import Tensor, nn
+import torch.nn as nn
+import torch.nn.functional as F
 from einops import rearrange
+from torch import Tensor, nn
 
 
 class AdaNorm(nn.Module):

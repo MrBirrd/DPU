@@ -6,13 +6,13 @@ from __future__ import annotations
 
 import math
 from typing import Any, Sequence
-import torch
-import lightning.pytorch as pl
-from torch import nn, Tensor
-from tqdm.auto import tqdm
 
-from gecco_torch.reparam import Reparam, NoReparam
-from gecco_torch.structs import Example, Context3d
+import lightning.pytorch as pl
+import torch
+from gecco_torch.reparam import NoReparam, Reparam
+from gecco_torch.structs import Context3d, Example
+from torch import Tensor, nn
+from tqdm.auto import tqdm
 
 
 def ones(n: int):

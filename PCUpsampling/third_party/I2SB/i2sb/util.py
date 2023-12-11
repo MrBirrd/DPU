@@ -6,12 +6,14 @@
 # ---------------------------------------------------------------
 
 import os
-from torch.utils.tensorboard import SummaryWriter
-import wandb
 
 import torch
-from torch.utils.data import DataLoader
 from prefetch_generator import BackgroundGenerator
+from torch.utils.data import DataLoader
+from torch.utils.tensorboard import SummaryWriter
+
+import wandb
+
 
 class DataLoaderX(DataLoader):
     def __iter__(self):

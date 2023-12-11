@@ -1,14 +1,17 @@
-from torch import nn
-from torch.autograd import Function
-import torch
 import importlib
 import os
-from torch.cuda.amp import autocast, GradScaler, custom_fwd, custom_bwd 
+
+import torch
+from torch import nn
+from torch.autograd import Function
+from torch.cuda.amp import GradScaler, autocast, custom_bwd, custom_fwd
+
 cur_path = os.path.dirname(os.path.abspath(__file__))
 build_path = cur_path.replace('chamfer3D', 'tmp')
 os.makedirs(build_path, exist_ok=True)
 
 from torch.utils.cpp_extension import load
+
 chamfer_3D = load(name="chamfer_3D",
       sources=[
           "/".join(os.path.abspath(__file__).split('/')[:-1] + ["chamfer_cuda.cpp"]),

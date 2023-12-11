@@ -1,17 +1,11 @@
 import functools
 
-import torch.nn as nn
-import torch
 import numpy as np
-from modules import (
-    SharedMLP,
-    PVConv,
-    PointNetSAModule,
-    PointNetAModule,
-    PointNetFPModule,
-    Attention,
-    Swish,
-)
+import torch
+import torch.nn as nn
+
+from modules import (Attention, PointNetAModule, PointNetFPModule,
+                     PointNetSAModule, PVConv, SharedMLP, Swish)
 
 
 def _linear_gn_relu(in_channels, out_channels):

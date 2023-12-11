@@ -6,25 +6,17 @@
 # ---------------------------------------------------------------
 
 import os
-import requests
-from tqdm import tqdm
-
 import pickle
-
-import torch
-
-from guided_diffusion.script_util import (
-    model_and_diffusion_defaults,
-    create_model,
-    args_to_dict,
-)
-
 from argparse import Namespace
-
 from pathlib import Path
-from easydict import EasyDict as edict
 
+import requests
+import torch
+from easydict import EasyDict as edict
+from guided_diffusion.script_util import (args_to_dict, create_model,
+                                          model_and_diffusion_defaults)
 from ipdb import set_trace as debug
+from tqdm import tqdm
 
 ADM_IMG256_UNCOND_CKPT = "https://openaipublic.blob.core.windows.net/diffusion/jul-2021/256x256_diffusion_uncond.pt"
 I2SB_IMG256_UNCOND_PKL = "256x256_diffusion_uncond_fixedsigma.pkl"

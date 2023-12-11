@@ -2,27 +2,27 @@ import argparse
 import os
 import os.path as osp
 import shutil
+import tempfile
 import time
 import warnings
-import numpy as np
-import tempfile
 
 import mmcv
+import models
+import numpy as np
 import torch
 from mmcv.cnn.utils import revert_sync_batchnorm
+from mmcv.image import tensor2imgs
 from mmcv.parallel import MMDataParallel, MMDistributedDataParallel
 from mmcv.runner import (get_dist_info, init_dist, load_checkpoint,
                          wrap_fp16_model)
 from mmcv.utils import DictAction
-from mmcv.image import tensor2imgs
-
 from mmseg import digit_version
 from mmseg.apis import multi_gpu_test, single_gpu_test
 from mmseg.datasets import build_dataloader, build_dataset
+from mmseg.datasets.custom import *
 from mmseg.models import build_segmentor
 from mmseg.utils import setup_multi_processes
-import models
-from mmseg.datasets.custom import *
+
 
 def parse_args():
     parser = argparse.ArgumentParser(

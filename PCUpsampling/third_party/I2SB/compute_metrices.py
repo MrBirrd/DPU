@@ -5,26 +5,23 @@
 # for I2SB. To view a copy of this license, see the LICENSE file.
 # ---------------------------------------------------------------
 
-import os
 import argparse
+import os
+import pickle
 import random
 from pathlib import Path
-from easydict import EasyDict as edict
-import pickle
 
+import colored_traceback.always
 import numpy as np
 import torch
 import torchvision.transforms as transforms
-from torch.utils.data import DataLoader
-from torch.utils.data import Dataset
-
-from logger import Logger
-from evaluation.resnet import build_resnet50
+from easydict import EasyDict as edict
 from evaluation import fid_util
+from evaluation.resnet import build_resnet50
 from i2sb import download
-
-import colored_traceback.always
 from ipdb import set_trace as debug
+from logger import Logger
+from torch.utils.data import DataLoader, Dataset
 
 RESULT_DIR = Path("results")
 ADM_IMG256_FID_TRAIN_REF_CKPT = "https://openaipublic.blob.core.windows.net/diffusion/jul-2021/ref_batches/imagenet/256/VIRTUAL_imagenet256_labeled.npz"

@@ -1,9 +1,11 @@
-from utils.image_features import process_scene
 import argparse
+import gc
 import os
 import traceback
+
 import torch
-import gc
+
+from utils.image_features import process_scene
 
 
 def main():

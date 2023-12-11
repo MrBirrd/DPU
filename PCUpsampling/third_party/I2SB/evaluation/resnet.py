@@ -5,13 +5,13 @@
 # for I2SB. To view a copy of this license, see the LICENSE file.
 # ---------------------------------------------------------------
 
-import torch
-
-import torch.nn.functional as F
 from collections import OrderedDict
+
+import torch
+import torch.nn.functional as F
+from ipdb import set_trace as debug
 from torchvision.models import resnet50
 
-from ipdb import set_trace as debug
 
 class ImageNormalizer(torch.nn.Module):
 

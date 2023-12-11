@@ -1,9 +1,10 @@
-import torch
-import subprocess
-import numpy as np
-import os
-from PIL import Image
 import io
+import os
+import subprocess
+
+import numpy as np
+import torch
+from PIL import Image
 
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 

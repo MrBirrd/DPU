@@ -1,11 +1,10 @@
 import os
 import random
 from shutil import copyfile
-from loguru import logger
-
-import torch
 
 import numpy as np
+import torch
+from loguru import logger
 
 
 def set_global_gpu_env(opt):

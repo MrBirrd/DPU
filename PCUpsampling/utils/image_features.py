@@ -1,20 +1,20 @@
+import json
+import os
+import traceback
+from typing import Tuple
+
+import numpy as np
+import pyminiply
 import torch
 import torchvision.transforms as transforms
-from typing import Tuple
-from torch import Tensor
+from decord import VideoReader, cpu
 from einops import rearrange
-from third_party.scannetpp.common.utils.colmap import read_model
-from third_party.scannetpp.common.scene_release import ScannetppScene_Release
-import pyminiply
-import numpy as np
-import json
-from tqdm import tqdm
-from decord import VideoReader
-from decord import cpu
 from sklearn.neighbors import KDTree
-import os
+from torch import Tensor
+from tqdm import tqdm
 
-import traceback
+from third_party.scannetpp.common.scene_release import ScannetppScene_Release
+from third_party.scannetpp.common.utils.colmap import read_model
 
 try:
     from third_party.ZegCLIP.get_model import get_model, predict

@@ -1,23 +1,22 @@
-from collections import OrderedDict
 import imghdr
+import math
+from collections import OrderedDict
 from typing import Tuple, Union
 
 import numpy as np
 import torch
 import torch.nn.functional as F
-from torch import nn
-from timm.models.layers import drop, drop_path, trunc_normal_
-from mmseg.models.builder import BACKBONES
-
 from mmseg.models.backbones import ResNet
 from mmseg.models.backbones import VisionTransformer as MMVisionTransformer
-
-from timm.models.resnet import ResNet as TimmResNet
+from mmseg.models.builder import BACKBONES
+from timm.models.layers import drop, drop_path, trunc_normal_
 from timm.models.resnet import Bottleneck as TimmBottleneck
+from timm.models.resnet import ResNet as TimmResNet
+from torch import nn
 
-import math
-from .utils import *
 from ..segmentor.untils import tokenize
+from .utils import *
+
 
 @BACKBONES.register_module()
 class CLIPTextEncoder(nn.Module):

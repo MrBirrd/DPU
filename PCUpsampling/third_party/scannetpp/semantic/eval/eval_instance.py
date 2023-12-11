@@ -24,20 +24,19 @@
 # i.e., any ground truth label not in the valid label set
 # is ignored in the evaluation.
 
-import os, argparse
-from copy import deepcopy
-import numpy as np
-from pathlib import Path
-from tqdm import tqdm
-import numpy as np
+import argparse
+import os
 import time
+import warnings
+from copy import deepcopy
+from pathlib import Path
 
+import numpy as np
 import semantic.utils.instance_utils as instance_utils
 from common.file_io import load_json, load_yaml_munch, read_txt_list
 from common.scene_release import ScannetppScene_Release
 from common.utils.rle import rle_decode
-
-import warnings
+from tqdm import tqdm
 
 
 def evaluate_matches(matches, label_info, eval_opts):

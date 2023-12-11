@@ -1,9 +1,8 @@
 
 import numpy as np
+import pandas as pd
 from common.file_io import read_txt_list
 from scipy.spatial import KDTree
-import pandas as pd
-
 from semantic.prep.map_semantic import filter_map_classes
 
 

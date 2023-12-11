@@ -3,7 +3,9 @@ import copy
 import os
 import os.path as osp
 import time
+
 import mmcv
+import models
 import torch
 from mmcv.runner import init_dist
 from mmcv.utils import Config, DictAction, get_git_hash
@@ -12,7 +14,6 @@ from mmseg.apis import set_random_seed, train_segmentor
 from mmseg.datasets import build_dataset
 from mmseg.models import build_segmentor
 from mmseg.utils import collect_env, get_root_logger
-import models
 
 
 def parse_args():

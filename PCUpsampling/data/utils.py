@@ -1,12 +1,14 @@
+import os
+import random
 from typing import Tuple
-from torch import nn
-import torch
+
 import numpy as np
+import torch
+from scipy import spatial
+from torch import nn
+
 from modules.functional import trilinear_devoxelize
 from modules.voxelization import Voxelization
-from scipy import spatial
-import random
-import os
 
 
 def ply_to_np(pcd):

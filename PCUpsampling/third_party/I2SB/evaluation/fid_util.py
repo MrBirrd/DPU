@@ -6,15 +6,15 @@
 # ---------------------------------------------------------------
 
 import os
-from tqdm import tqdm
-import numpy as np
 from pathlib import Path
 
+import numpy as np
 import torch
 import torchvision
-from cleanfid.resize import build_resizer
 from cleanfid.features import build_feature_extractor
-from cleanfid.fid import get_batch_features, frechet_distance
+from cleanfid.fid import frechet_distance, get_batch_features
+from cleanfid.resize import build_resizer
+from tqdm import tqdm
 
 FID_REF_DIR = Path("data")
 
@@ -113,6 +113,7 @@ def compute_fid_ref_stat(opt, log):
 
 if __name__ == '__main__':
     import argparse
+
     from logger import Logger
 
     parser = argparse.ArgumentParser()

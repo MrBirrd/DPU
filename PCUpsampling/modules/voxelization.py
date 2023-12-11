@@ -1,8 +1,8 @@
 import torch
 import torch.nn as nn
+from torch.cuda.amp import GradScaler, autocast, custom_bwd, custom_fwd
 
 import modules.functional as F
-from torch.cuda.amp import autocast, GradScaler, custom_fwd, custom_bwd
 
 __all__ = ["Voxelization"]
 

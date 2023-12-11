@@ -1,8 +1,9 @@
-from torch import nn
-from torch.autograd import Function
-import torch
 import importlib
 import os
+
+import torch
+from torch import nn
+from torch.autograd import Function
 
 chamfer_found = importlib.find_loader("chamfer_5D") is not None
 if not chamfer_found:

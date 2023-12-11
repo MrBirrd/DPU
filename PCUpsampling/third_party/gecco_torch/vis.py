@@ -1,8 +1,8 @@
 from typing import Any
-import torch
-import matplotlib.pyplot as plt
-import lightning.pytorch as pl
 
+import lightning.pytorch as pl
+import matplotlib.pyplot as plt
+import torch
 from gecco_torch.diffusion import Diffusion
 from gecco_torch.structs import Example
 

@@ -1,8 +1,9 @@
-from point_cloud_utils import chamfer_distance
 import numpy as np
 import torch
-from torch import Tensor
 from loguru import logger
+from point_cloud_utils import chamfer_distance
+from torch import Tensor
+
 
 def print_stats(x: Tensor, name: str):
     xmean = torch.mean(x)

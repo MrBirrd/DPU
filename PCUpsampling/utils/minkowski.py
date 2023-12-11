@@ -1,5 +1,4 @@
 import torch.nn.functional as F
-
 from MinkowskiEngine.MinkowskiSparseTensor import SparseTensor
 from MinkowskiEngine.MinkowskiTensorField import TensorField
 

@@ -4,8 +4,8 @@ some modifications to "inject" the diffusion noise level into the network.
 """
 import torch
 import torch.nn.functional as F
-from torch import nn, Tensor
 from einops import rearrange
+from torch import Tensor, nn
 
 from third_party.gecco_torch.models.mlp import MLP
 from third_party.gecco_torch.models.normalization import AdaGN

@@ -6,13 +6,12 @@ and sampling points on the mesh to get the labels on these
 
 import argparse
 from pathlib import Path
-from common.file_io import load_yaml_munch, read_txt_list
 
 import torch
-from tqdm import tqdm
-
-from semantic.transforms.factory import get_transform
+from common.file_io import load_yaml_munch, read_txt_list
 from semantic.datasets.scannetpp_release import ScannetPP_Release_Dataset
+from semantic.transforms.factory import get_transform
+from tqdm import tqdm
 
 
 def main(args):

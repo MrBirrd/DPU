@@ -1,15 +1,17 @@
-from torch.utils.data import Dataset
-import torch
 import numpy as np
+import torch
+from torch.utils.data import Dataset
 
 try:
     import open3d as o3d
 except:
     pass
-from .utils import *
-from loguru import logger
 import os
+
+from loguru import logger
 from tqdm import tqdm
+
+from .utils import *
 
 
 class IndoorScenes(Dataset):

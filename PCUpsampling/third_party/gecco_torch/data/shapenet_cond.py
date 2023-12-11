@@ -1,16 +1,15 @@
 import os
 import re
-from typing import NamedTuple, Union, List
 from functools import partial
+from typing import List, NamedTuple, Union
 
-import torch
-import numpy as np
 import imageio as iio
-import multiprocess as mp
 import lightning.pytorch as pl
+import multiprocess as mp
+import numpy as np
+import torch
+from gecco_torch.structs import Context3d, Example
 from tqdm.auto import tqdm
-
-from gecco_torch.structs import Example, Context3d
 
 IM_SIZE = 137  # 137 x 137 pixels
 WORLD_MAT_RE = re.compile(r"world_mat_(\d+)")

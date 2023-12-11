@@ -9,9 +9,9 @@ import os
 
 import numpy as np
 import torch
-
 import torch.distributed as dist
 from torch.multiprocessing import Process
+
 
 def init_processes(rank, size, fn, args):
     """ Initialize the distributed environment. """

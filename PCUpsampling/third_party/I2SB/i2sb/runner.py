@@ -6,24 +6,22 @@
 # ---------------------------------------------------------------
 
 import os
-import numpy as np
 import pickle
 
+import distributed_util as dist_util
+import numpy as np
 import torch
 import torch.nn.functional as F
-from torch.optim import AdamW, lr_scheduler
-from torch.nn.parallel import DistributedDataParallel as DDP
-
-from torch_ema import ExponentialMovingAverage
-import torchvision.utils as tu
 import torchmetrics
-
-import distributed_util as dist_util
+import torchvision.utils as tu
 from evaluation import build_resnet50
+from torch.nn.parallel import DistributedDataParallel as DDP
+from torch.optim import AdamW, lr_scheduler
+from torch_ema import ExponentialMovingAverage
 
 from . import util
-from .network import Image256Net
 from .diffusion import Diffusion
+from .network import Image256Net
 
 #from ipdb import set_trace as debug
 

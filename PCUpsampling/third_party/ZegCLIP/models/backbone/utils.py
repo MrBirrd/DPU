@@ -1,21 +1,19 @@
+import math
 from collections import OrderedDict
 from typing import Tuple, Union
 
 import numpy as np
 import torch
 import torch.nn.functional as F
-from torch import nn
-from timm.models.layers import drop, drop_path, trunc_normal_
-from mmseg.models.builder import BACKBONES
-
 from mmseg.models.backbones import ResNet
 from mmseg.models.backbones import VisionTransformer as MMVisionTransformer
-
-from timm.models.resnet import ResNet as TimmResNet
+from mmseg.models.builder import BACKBONES
+from timm.models.layers import drop, drop_path, trunc_normal_
 from timm.models.resnet import Bottleneck as TimmBottleneck
-
-import math
+from timm.models.resnet import ResNet as TimmResNet
 from timm.models.vision_transformer import VisionTransformer
+from torch import nn
+
 
 class Bottleneck(nn.Module):
     expansion = 4

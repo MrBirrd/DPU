@@ -1,13 +1,15 @@
-from tqdm import tqdm
-import numpy as np
-import os
 import argparse
-import torch
-import pyminiply
-from modules.functional import furthest_point_sample
-from einops import rearrange
+import os
+
 import cudf
+import numpy as np
+import pyminiply
+import torch
 from cuml.neighbors import NearestNeighbors
+from einops import rearrange
+from tqdm import tqdm
+
+from modules.functional import furthest_point_sample
 
 FEATURES = ["dino", "dino_svd64", "rgb"]
 FACTOR = 3

@@ -1,13 +1,13 @@
-import numpy as np
-import os
 import argparse
-from glob import glob
-from cuml import TruncatedSVD
-import cudf
-from tqdm import tqdm
-import torch
 import gc
+import os
+from glob import glob
 
+import cudf
+import numpy as np
+import torch
+from cuml import TruncatedSVD
+from tqdm import tqdm
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

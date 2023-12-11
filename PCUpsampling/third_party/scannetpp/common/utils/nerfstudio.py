@@ -1,7 +1,7 @@
-from typing import List, Dict, Any, Tuple
 import json
-
 from pathlib import Path
+from typing import Any, Dict, List, Tuple
+
 import numpy as np
 from common.utils.colmap import Camera, Image, read_model
 

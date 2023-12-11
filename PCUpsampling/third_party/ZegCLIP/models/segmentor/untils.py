@@ -1,14 +1,13 @@
 
-from typing import Any, Union, List
-import torch
-
 import gzip
 import html
 import os
 from functools import lru_cache
+from typing import Any, List, Union
 
 import ftfy
 import regex as re
+import torch
 
 
 @lru_cache()

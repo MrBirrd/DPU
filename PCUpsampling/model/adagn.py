@@ -8,12 +8,14 @@
 """
 adaptive group norm 
 """
-from loguru import logger
-import torch.nn as nn
-import torch
-import numpy as np
-from .dense import dense
 import os
+
+import numpy as np
+import torch
+import torch.nn as nn
+from loguru import logger
+
+from .dense import dense
 
 
 class AdaGN(nn.Module):

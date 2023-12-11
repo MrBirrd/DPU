@@ -1,23 +1,15 @@
-import argparse
-import torch.distributed as dist
 import os
-import torch.multiprocessing as mp
-import torch.nn as nn
-import torch.utils.data
-from data.dataloader import get_dataloader
-from einops import repeat
-from model.diffusion_elucidated import ElucidatedDiffusion
-from model.diffusion_lucid import GaussianDiffusion as LUCID
-from model.diffusion_pointvoxel import PVD
-from omegaconf import DictConfig, OmegaConf
-from utils.file_utils import set_seed
-from utils.evaluation import evaluate
-from loguru import logger
-from utils.args import parse_args
+
 import pandas as pd
-import numpy as np
+import torch.distributed as dist
+import torch.multiprocessing as mp
+import torch.utils.data
+
+from data.dataloader import get_dataloader, get_npz_loader
 from model.loader import load_model
+from utils.args import parse_args
 from utils.evaluation import evaluate
+from utils.file_utils import set_seed
 
 
 @torch.no_grad()
@@ -40,7 +32,11 @@ def sample(gpu, cfg, output_dir):
         cfg.sampling.bs = int(cfg.sampling.bs / cfg.ngpus_per_node)
 
     # get the loaders
-    _, test_loader, _, _ = get_dataloader(cfg, sampling=True)
+    if "eval_folder" in cfg:
+        test_loader = get_npz_loader(cfg.eval_folder, cfg)
+        cfg.out_sampling = cfg.out_sampling.replace("sampling", "sampling_npz")
+    else:
+        _, test_loader, _, _ = get_dataloader(cfg, sampling=True)
 
     model, _ = load_model(cfg, gpu, smart=False)
 

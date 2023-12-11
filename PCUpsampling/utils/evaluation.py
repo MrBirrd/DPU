@@ -1,17 +1,19 @@
-from torch import Tensor
+import json
+
+import numpy as np
 import torch
 from loguru import logger
-import numpy as np
-import wandb
-from utils.visualize import visualize_pointcloud_batch
 from point_cloud_utils import chamfer_distance
-import json
-from modules.functional import furthest_point_sample
 from scipy import spatial
+from torch import Tensor
 from tqdm import tqdm
-from utils.utils import get_data_batch, to_cuda
-from metrics.metrics import print_stats, calculate_cd
+
+import wandb
 from metrics.emd_ import emd_module as EMD
+from metrics.metrics import calculate_cd, print_stats
+from modules.functional import furthest_point_sample
+from utils.utils import get_data_batch, to_cuda
+from utils.visualize import visualize_pointcloud_batch
 
 
 def new_x_chain(x, num_chain):

@@ -1,7 +1,7 @@
+import chamferdistcuda as chamfer
+import torch
 from torch import nn
 from torch.autograd import Function
-import torch
-import chamferdistcuda as chamfer
 
 
 # Chamfer's distance module

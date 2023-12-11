@@ -1,7 +1,7 @@
+from math import exp
 from typing import Optional
 
 import torch
-from math import exp
 import torch.nn as nn
 import torch.nn.functional as F
 

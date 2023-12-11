@@ -1,12 +1,14 @@
-import torch
-from .arkitscenes import IndoorScenes, IndoorScenesCut, ArkitScans
-from .scannetpp import ScanNetPPCut, ScanNetPPProcessed, NPZFolderTest
-from .shapenet import get_dataset_shapenet
-from loguru import logger
 import os
-from torch.utils.data import Dataset, DataLoader
-from torch.utils.data.distributed import DistributedSampler
+
 import numpy as np
+import torch
+from loguru import logger
+from torch.utils.data import DataLoader, Dataset
+from torch.utils.data.distributed import DistributedSampler
+
+from .arkitscenes import ArkitScans, IndoorScenes, IndoorScenesCut
+from .scannetpp import NPZFolderTest, ScanNetPPCut, ScanNetPPProcessed
+from .shapenet import get_dataset_shapenet
 
 
 def save_iter(dataloader, sampler):

@@ -1,14 +1,13 @@
 import argparse
-from pathlib import Path
 import json
 from copy import deepcopy
+from pathlib import Path
 
-import numpy as np
 import cv2
-from tqdm import tqdm
-
+import numpy as np
 from common.scene_release import ScannetppScene_Release
-from common.utils.utils import load_yaml_munch, load_json, read_txt_list
+from common.utils.utils import load_json, load_yaml_munch, read_txt_list
+from tqdm import tqdm
 
 
 def compute_resize_intrinsic(K, height, width, scale_factor):

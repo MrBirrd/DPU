@@ -4,11 +4,12 @@
 MaskFormer criterion.
 """
 import torch
+import torch.distributed as dist
 import torch.nn.functional as F
 from torch import nn
+
 from .misc import is_dist_avail_and_initialized, nested_tensor_from_tensor_list
 
-import torch.distributed as dist
 
 def get_world_size() -> int:
     if not dist.is_available():

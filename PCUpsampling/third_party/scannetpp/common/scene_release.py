@@ -1,5 +1,6 @@
 from pathlib import Path
 
+
 class ScannetppScene_Release:
     def __init__(self, scene_id, data_root=None):
         self._scene_id = scene_id
