@@ -12,7 +12,6 @@ from omegaconf import OmegaConf
 
 import wandb
 from data.dataloader import get_dataloader, save_iter
-from model.diffusion_elucidated import ElucidatedDiffusion
 from model.diffusion_lucid import GaussianDiffusion as LUCID
 from model.diffusion_pointvoxel import PVD
 from model.diffusion_rin import GaussianDiffusion as RINDIFFUSION
@@ -54,13 +53,22 @@ def train(gpu, cfg, output_dir, noises_init=None):
             rank=cfg.rank,
         )
 
+        global_batch_size = cfg.training.bs
         cfg.training.bs = int(cfg.training.bs / cfg.ngpus_per_node)
         cfg.sampling.bs = cfg.training.bs
+        logger.info(
+            "Distributed training with {} GPUs. Rank: {}, World size: {}, Global Batch size: {}, Minibatch size: {}",
+            cfg.ngpus_per_node,
+            cfg.rank,
+            cfg.world_size,
+            global_batch_size,
+            cfg.training.bs,
+        )
 
     # set seed
     set_seed(cfg)
     torch.cuda.empty_cache()
-    
+
     # setup data loader and sampler
     train_loader, val_loader, train_sampler, val_sampler = get_dataloader(cfg)
 
@@ -73,7 +81,7 @@ def train(gpu, cfg, output_dir, noises_init=None):
             config=OmegaConf.to_container(cfg, resolve=True),
             entity="matvogel",
         )
-    
+
     model, ckpt = load_model(cfg, gpu)
     optimizer, lr_scheduler = load_optim_sched(cfg, model, ckpt)
 
@@ -85,11 +93,11 @@ def train(gpu, cfg, output_dir, noises_init=None):
     eval_iter = save_iter(val_loader, val_sampler)
 
     torch.cuda.empty_cache()
-    
+
     # sample first batch
     next_batch = next(train_iter)
     next_batch = to_cuda(next_batch, gpu)
-    
+
     for step in range(cfg.start_step, cfg.training.steps):
         # chek if we have a new epoch
         if cfg.distribution_type == "multi":
@@ -125,10 +133,6 @@ def train(gpu, cfg, output_dir, noises_init=None):
         ampscaler.step(optimizer)
         ampscaler.update()
         optimizer.zero_grad()
-
-        # do ema update
-        if model.model_ema is not None:
-            model.model_ema.update()
 
         if step % cfg.training.log_interval == 0 and is_main_process:
             logger.info(
