@@ -49,8 +49,17 @@ def train(gpu, cfg, output_dir, noises_init=None):
             rank=cfg.rank,
         )
 
+        global_batch_size = cfg.training.bs
         cfg.training.bs = int(cfg.training.bs / cfg.ngpus_per_node)
         cfg.sampling.bs = cfg.training.bs
+        logger.info(
+            "Distributed training with {} GPUs. Rank: {}, World size: {}, Global Batch size: {}, Minibatch size: {}",
+            cfg.ngpus_per_node,
+            cfg.rank,
+            cfg.world_size,
+            global_batch_size,
+            cfg.training.bs,
+        )
 
     # set seed
     set_seed(cfg)

@@ -113,7 +113,6 @@ class ScanNetPPProcessed(Dataset):
                 break
             except Exception as e:
                 logger.error(f"Failed to load data {data}")
-                self.scene_batches.pop(index)
                 index = np.random.randint(0, len(self.scene_batches))
 
         # normalize the point coordinates

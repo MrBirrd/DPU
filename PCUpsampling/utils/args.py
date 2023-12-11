@@ -35,13 +35,15 @@ def parse_args():
     args, remaining_argv = parser.parse_known_args()
 
     # load config
-    if args.model_path != "":
+    if args.config is not None:
+        cfg = OmegaConf.load(args.config)
+    elif args.model_path != "":
         try:
             cfg = OmegaConf.load(os.path.join(os.path.dirname(args.model_path), "opt.yaml"))
         except FileNotFoundError:
             cfg = OmegaConf.load(args.config)
     else:
-        cfg = OmegaConf.load(args.config)
+        raise ValueError("config file must be specified or model path must be specified")
 
     # merge config with command line arguments
     opt = OmegaConf.merge(cfg, OmegaConf.create(vars(args)))
