@@ -15,11 +15,13 @@ from tqdm import tqdm
 
 from third_party.scannetpp.common.scene_release import ScannetppScene_Release
 from third_party.scannetpp.common.utils.colmap import read_model
+from cv2 import resize
 
 try:
     from third_party.ZegCLIP.get_model import get_model, predict
 except Exception:
     print(traceback.format_exc())
+    pass
 
 
 def load_dino(model_name):
@@ -234,11 +236,15 @@ def process_scene(
     movie_path,
     target_path,
     feature_type,
-    skip_scans: int = 5,
+    sampling_rate: int = 5,
     image_width: int = 1920,
     image_height: int = 1440,
+    mask_height: int = 192,
+    mask_width: int = 256,
+    downscale: bool = True,
     dino_model_name: str = "dinov2_vits14",
     overwrite: bool = False,
+    autoskip: bool = False,
 ):
     if os.path.exists(target_path + ".npy") and not overwrite:
         print("Already processed scene", scene_id)
@@ -252,6 +258,8 @@ def process_scene(
     _, images, _ = read_model(colmap_dir, ".txt", read=["images"])
     iphone_intrinsics_path = scene.iphone_pose_intrinsic_imu_path
     iphone_intrinsics = json.load(open(iphone_intrinsics_path))
+
+    scale_factor = mask_height / image_height
 
     ply, *_ = pyminiply.read(str(mesh_path))
     # remove nans or infs
@@ -283,16 +291,19 @@ def process_scene(
     batch_size = 2
     total_data = len(images)
 
-    if total_data < 30:
-        skip_scans = 1
-    elif total_data < 60:
-        skip_scans = 2
-    elif total_data < 90:
-        skip_scans = 3
-    elif total_data < 160:
-        skip_scans = 4
+    if autoskip:
+        if total_data < 30:
+            skip_scans = 1
+        elif total_data < 60:
+            skip_scans = 2
+        elif total_data < 90:
+            skip_scans = 3
+        elif total_data < 160:
+            skip_scans = 4
+        else:
+            skip_scans = 5
     else:
-        skip_scans = 5
+        skip_scans = sampling_rate
 
     images = list(images.values())
     images = images[::skip_scans]
@@ -323,27 +334,36 @@ def process_scene(
             ]
         )
 
+        # scale intrinsics and videoframes
+        if downscale:
+            intrinsic_matrices[:, :2, :] *= scale_factor
+            videoframes = np.array([resize(vf, (mask_width, mask_height)) for vf in videoframes])
+
         world_to_cameras = [images[i].world_to_camera for i in batch]
 
         Rs = np.array([world_to_camera[:3, :3] for world_to_camera in world_to_cameras])
         ts = np.array([world_to_camera[:-1, -1:] for world_to_camera in world_to_cameras])
 
         points_projected = project_point_cloud_batch(points_batch, ts, Rs, intrinsic_matrices)
-        valid_indices = filter_points_batch(points_projected, image_width, image_height)
+
+        if downscale:
+            valid_indices = filter_points_batch(points_projected, mask_width, mask_height)
+        else:
+            valid_indices = filter_points_batch(points_projected, image_width, image_height)
 
         # extract features
         if feature_type == "rgb":
             features = map_image_features_to_filtered_ptc_batch(videoframes, points_projected, valid_indices)
         elif feature_type == "dino":
             with torch.cuda.amp.autocast(enabled=True, dtype=torch.float16):
-                videoframes = torch.tensor(videoframes).permute(0, 3, 1, 2).type(torch.float16).cuda()
+                videoframes = torch.from_numpy(videoframes).permute(0, 3, 1, 2).type(torch.float16).cuda()
                 dino_feats = get_dino_features(model, videoframes)
 
             dino_feats = rearrange(dino_feats, "b c h w -> b h w c").cpu().numpy()
             features = map_image_features_to_filtered_ptc_batch(dino_feats, points_projected, valid_indices)
         elif feature_type == "clip":
             with torch.cuda.amp.autocast(enabled=True, dtype=torch.float16):
-                videoframes = torch.tensor(videoframes).permute(0, 3, 1, 2).type(torch.float16).cuda()
+                videoframes = torch.from_numpy(videoframes).permute(0, 3, 1, 2).type(torch.float16).cuda()
                 clip_feats = predict(model, videoframes)
             clip_feats = rearrange(clip_feats, "b c h w -> b h w c")
             features = map_image_features_to_filtered_ptc_batch(clip_feats, points_projected, valid_indices)

@@ -30,7 +30,7 @@ def predict(model, img):
             numpy_arrays.append(item.detach().cpu().numpy())
 
     features = torch.from_numpy(numpy_arrays[0]).cuda().half().contiguous()
-    
+
     # interpolate back
     features = torch.nn.functional.interpolate(features, (H, W), mode="bilinear")
 

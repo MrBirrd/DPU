@@ -36,7 +36,7 @@ def main():
     parser.add_argument(
         "--feature_type", type=str, default="rgb", help="Type of features to extract.", choices=["rgb", "dino", "clip"]
     )
-    parser.add_argument("--skip_scans", type=int, default=5, help="Number of scans to skip between each scan.")
+    parser.add_argument("--sampling_rate", type=int, default=5, help="Number of scans to skip between each scan.")
     parser.add_argument("--image_width", type=int, default=1920, help="Width of the images in the video.")
     parser.add_argument("--image_height", type=int, default=1440, help="Height of the images in the video.")
     parser.add_argument("--dino_model_name", type=str, default="dinov2_vits14", help="Name of the DINO model to use.")
@@ -71,7 +71,7 @@ def main():
                 movie_path=movie_path,
                 target_path=target_path,
                 feature_type=args.feature_type,
-                skip_scans=args.skip_scans,
+                sampling_rate=args.sampling_rate,
                 image_width=args.image_width,
                 image_height=args.image_height,
                 dino_model_name=args.dino_model_name,

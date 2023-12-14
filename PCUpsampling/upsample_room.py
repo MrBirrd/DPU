@@ -1,18 +1,11 @@
-import argparse
-
-import cudf
 import numpy as np
 import pyminiply
 import pyviz3d.visualizer as viz
 import torch
-from cuml.neighbors import NearestNeighbors
-from einops import rearrange
-from omegaconf import OmegaConf
 from scipy.spatial import cKDTree
 from tqdm import tqdm
-
-from model.diffusion_lucid import GaussianDiffusion
-from model.loader import load_model
+import open3d as o3d
+from model.loader import load_diffusion
 from modules.functional import furthest_point_sample
 from utils.args import parse_args
 
@@ -21,10 +14,10 @@ def main():
     cfg = parse_args()
     cfg.gpu = None
 
-    model, _ = load_model(cfg, None, smart=False)
+    model, ckpt = load_diffusion(cfg)
     model.eval()
 
-    room_path = "../datasets/scannetpp/02455b3d20/"
+    room_path = "../datasets/scannetpp/data/02455b3d20/"
     room_points = room_path + "/scans/mesh_aligned_0.05.ply"
     room_features = room_path + "/features/dino.npy"
 
@@ -40,13 +33,13 @@ def main():
 
     _, idxs = tree.query(centers.squeeze().cpu().numpy().T, k=npoints, p=2)
 
-    n_gpu_batches = int(np.ceil(len(idxs) / cfg.diffusion.sampling.bs))
+    n_gpu_batches = int(np.ceil(len(idxs) / cfg.sampling.bs))
 
     denoised_batches = []
     noisy_batches = []
 
     for gpu_batch in tqdm(range(0, n_gpu_batches)):
-        batch_idxs = idxs[gpu_batch * cfg.diffusion.sampling.bs : (gpu_batch + 1) * cfg.diffusion.sampling.bs]
+        batch_idxs = idxs[gpu_batch * cfg.sampling.bs : (gpu_batch + 1) * cfg.sampling.bs]
 
         batch_features = []
         batch_points = []
@@ -69,7 +62,7 @@ def main():
             with torch.cuda.amp.autocast():
                 out, out_noises = model.sample(
                     shape=batch_points.shape,
-                    cond=batch_features,
+                    cond=batch_features if not cfg.data.unconditional else None,
                     x_start=batch_points,
                     add_x_start_noise=True,
                     return_noised_hint=True,
@@ -95,6 +88,18 @@ def main():
     room_center = np.mean(pts_npy, axis=0)
     denoised_room -= room_center
     noisy_room -= room_center
+
+    # use open3d to voxel downsample
+    denoised_pcd = o3d.geometry.PointCloud()
+    denoised_pcd.points = o3d.utility.Vector3dVector(denoised_room)
+    denoised_pcd = denoised_pcd.voxel_down_sample(voxel_size=0.01)
+
+    noisy_pcd = o3d.geometry.PointCloud()
+    noisy_pcd.points = o3d.utility.Vector3dVector(noisy_room)
+    noisy_pcd = noisy_pcd.voxel_down_sample(voxel_size=0.01)
+
+    denoised_room = np.asarray(denoised_pcd.points)
+    noisy_room = np.asarray(noisy_pcd.points)
 
     v = viz.Visualizer()
     v.add_points("denoised", denoised_room, point_size=2, visible=False)

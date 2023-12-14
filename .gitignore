@@ -30,3 +30,4 @@ sampling.sh
 *.egg-info
 *.sh
 exported_model
+pyviz3d

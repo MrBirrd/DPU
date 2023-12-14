@@ -1,4 +1,5 @@
 import os
+from gecco_torch import diffusion
 
 import pandas as pd
 import torch.distributed as dist
@@ -6,7 +7,7 @@ import torch.multiprocessing as mp
 import torch.utils.data
 
 from data.dataloader import get_dataloader, get_npz_loader
-from model.loader import load_model
+from model.loader import load_model, load_diffusion
 from utils.args import parse_args
 from utils.evaluation import evaluate
 from utils.file_utils import set_seed
@@ -36,18 +37,18 @@ def sample(gpu, cfg, output_dir):
         test_loader = get_npz_loader(cfg.eval_folder, cfg)
         cfg.out_sampling = cfg.out_sampling.replace("sampling", "sampling_npz")
     else:
-        _, test_loader, _, _ = get_dataloader(cfg, sampling=True)
+        test_loader = get_dataloader(cfg, sampling=True)[1]
 
-    model, _ = load_model(cfg, gpu, smart=False)
+    model, _ = load_diffusion(cfg)
 
     ds_iter = iter(test_loader)
     model.eval()
 
     # run evaluatoin for each iteration and accumulate the stats
-    metrics_df = None
+    metrics_df = pd.DataFrame()
     for eval_iter in range(cfg.sampling.num_iter):
         metrics = evaluate(model, ds_iter, cfg, eval_iter, sampling=True, save_npy=True, debug=False)
-        if metrics_df is None:
+        if metrics_df.empty:
             metrics_df = pd.DataFrame.from_dict(metrics, orient="index").T
         else:
             metrics_df = pd.concat([metrics_df, pd.DataFrame.from_dict(metrics, orient="index").T])
