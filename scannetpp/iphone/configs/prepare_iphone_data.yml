@@ -7,8 +7,8 @@ extract_masks: false
 extract_depth: true
 
 # folder where the data is downloaded
-data_root: /home/mathi/Desktop/DPU/datasets/scannetpp/
+data_root: /cluster/project/cvg/Shared_datasets/scannet++/
 
 splits: [nvs_sem_train, nvs_sem_val]
 
-scene_ids: [02455b3d20]
+#scene_ids: [02455b3d20]
