@@ -1,21 +1,13 @@
-import argparse
 import json
-
 import torch.distributed as dist
 import torch.multiprocessing as mp
-import torch.nn as nn
-import torch.optim as optim
 import torch.utils.data
-from lion_pytorch import Lion
 from loguru import logger
 from omegaconf import OmegaConf
 
 import wandb
 from data.dataloader import get_dataloader, save_iter
-from model.diffusion_lucid import GaussianDiffusion as LUCID
-from model.diffusion_pointvoxel import PVD
-from model.diffusion_rin import GaussianDiffusion as RINDIFFUSION
-from model.loader import load_model, load_optim_sched
+from model.loader import load_optim_sched, load_diffusion
 from utils.args import parse_args
 from utils.evaluation import evaluate
 from utils.file_utils import *
@@ -82,7 +74,7 @@ def train(gpu, cfg, output_dir, noises_init=None):
             entity="matvogel",
         )
 
-    model, ckpt = load_model(cfg, gpu)
+    model, ckpt = load_diffusion(cfg)
     optimizer, lr_scheduler = load_optim_sched(cfg, model, ckpt)
 
     # setup amp scaler

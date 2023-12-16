@@ -1,7 +1,6 @@
 import math
 from collections import namedtuple
 from functools import partial
-from random import random
 
 import torch
 import torch.nn.functional as F
@@ -11,20 +10,12 @@ from torch.cuda.amp import autocast
 from tqdm import tqdm
 
 from model.dpm_sampler import DPM_Solver, NoiseScheduleVP, model_wrapper
-from model.loader import load_model
 from utils.losses import get_scaling, projection_loss
 
 ModelPrediction = namedtuple("ModelPrediction", ["pred_noise", "pred_x_start"])
-from ema_pytorch import EMA
+
 from loguru import logger
-
 from .loss import get_loss
-
-try:
-    from .unet_mink import MinkUnet
-except:
-    logger.error("MinkUnet not found, please install MinkowskiEngine")
-    pass
 
 # gaussian diffusion trainer class
 def exists(x):
@@ -137,6 +128,7 @@ class GaussianDiffusion(nn.Module):
     def __init__(
         self,
         cfg,
+        model,
         schedule_fn_kwargs=dict(),
         auto_normalize=False,
         offset_noise_strength=0.0,  # https://www.crosslabs.org/blog/diffusion-with-offset-noise
@@ -153,7 +145,7 @@ class GaussianDiffusion(nn.Module):
         self.reg_scale = cfg.diffusion.reg_scale
         self.cfg = cfg
 
-        self.model = load_model(cfg).to(cfg.gpu)
+        self.model = model
 
         # setup loss
         self.loss = get_loss(cfg.diffusion.loss_type)

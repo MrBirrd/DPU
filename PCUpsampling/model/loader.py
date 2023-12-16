@@ -3,14 +3,15 @@ from loguru import logger
 from torch import optim
 from torch.nn.parallel import DataParallel, DistributedDataParallel
 
-from model.unet_mink import MinkUnet
+try:
+    from model.unet_mink import MinkUnet
+except ImportError:
+    logger.warning("Minkowski Engine not installed. Minkowski models will not be available.")
+
 from model.unet_pointvoxel import PVCAdaptive, PVCLionSmall
 from third_party.gecco_torch.models.linear_lift import LinearLift
 from third_party.gecco_torch.models.set_transformer import SetTransformer
-from utils.utils import smart_load_model_weights
-
 from .diffusion_lucid import GaussianDiffusion as LUCID
-from .diffusion_pointvoxel import PVD
 
 
 def load_optim_sched(cfg, model, model_ckpt=None):
@@ -100,9 +101,10 @@ def load_model(cfg):
         )
     return model
 
-def load_diffusion(cfg, smart=False):
+def load_diffusion(cfg):
     # setup model
-    model = LUCID(cfg=cfg)
+    backbone = load_model(cfg).to(cfg.gpu)
+    model = LUCID(cfg=cfg, model=backbone)
     gpu = cfg.gpu
 
     # setup DDP model
