@@ -13,6 +13,7 @@ import cv2
 from PIL import Image
 from plyfile import PlyData, PlyElement
 import open3d as o3d
+from xarray import merge
 
 from common.scene_release import ScannetppScene_Release
 
@@ -22,10 +23,16 @@ def parse_args():
     parser.add_argument("--scene_id", type=str, default="02455b3d20")
     parser.add_argument("--data_root", type=str, required=True, help="The root directory of the data.")
     parser.add_argument("--output", type=str, default="pcl.ply", help="The output filename (PLY format).")
-    parser.add_argument("--sample_rate", type=int, default=30, help="Sample rate of the frames.")
-    parser.add_argument("--max_depth", type=float, default=10.0)
+    parser.add_argument("--sample_rate", type=int, default=10, help="Sample rate of the frames.")
+    parser.add_argument("--max_depth", type=float, default=5.0)
     parser.add_argument("--min_depth", type=float, default=0.1)
     parser.add_argument("--grid_size", type=float, default=0.05, help="Grid size for voxel downsampling.")
+    parser.add_argument("--n_outliers", type=int, default=50, help="Number of neighbors for outlier removal.")
+    parser.add_argument("--outlier_radius", type=float, default=0.1, help="Radius for outlier removal.")
+    parser.add_argument("--final_grid_size", type=float, default=0.05, help="Grid size for voxel downsampling.")
+    parser.add_argument("--final_n_outliers", type=int, default=20, help="Number of neighbors for outlier removal.")
+    parser.add_argument("--final_outlier_radius", type=float, default=0.05, help="Radius for outlier removal.")
+
     return parser.parse_args()
 
 
@@ -151,6 +158,8 @@ def backproject(
     point_subsample_rate: int = 4,
     use_voxel_subsample: bool = True,
     voxel_grid_size: float = 0.02,
+    n_outliers: int = 20,
+    outlier_radius: float = 0.1,
 ):
     """Backproject RGB-D image into a point cloud.
     The resolution of RGB and depth are not be the same (the aspect ratio should be the smae).
@@ -181,7 +190,7 @@ def backproject(
     xyz = xyz_one[:3, :].T
     rgb = image[y, x]
 
-    xyz, rgb, _ = outlier_removal(xyz, rgb, nb_points=20, radius=voxel_grid_size)
+    xyz, rgb, _ = outlier_removal(xyz, rgb, nb_points=n_outliers, radius=outlier_radius)
 
     if use_point_subsample:
         sample_indices = np.random.choice(np.arange(len(xyz)), len(xyz) // point_subsample_rate, replace=False)
@@ -191,6 +200,32 @@ def backproject(
         xyz, rgb = voxel_down_sample(xyz, rgb, voxel_size=voxel_grid_size)
 
     return xyz, rgb
+
+
+def apply_icp(source, target, threshold=0.02, trans_init=None):
+    """Align source point cloud to target point cloud using ICP"""
+    if trans_init is None:
+        trans_init = np.identity(4)  # Identity matrix as initial transformation
+
+    reg_icp = o3d.pipelines.registration.registration_icp(
+        source, target, threshold, trans_init, o3d.pipelines.registration.TransformationEstimationPointToPoint()
+    )
+    return reg_icp.transformation
+
+
+def merge_point_clouds(pcds):
+    """Merge a list of point clouds using ICP"""
+    if not pcds:
+        raise ValueError("No point clouds to merge")
+
+    merged_pcd = pcds[0]
+    for i in tqdm(range(1, len(pcds)), desc="Merging point clouds"):
+        trans_init = np.identity(4)  # or use some other initial guess
+        transformation = apply_icp(pcds[i], merged_pcd, threshold=0.02, trans_init=trans_init)
+        pcds[i].transform(transformation)
+        merged_pcd += pcds[i]
+
+    return merged_pcd
 
 
 def save_point_cloud(
@@ -274,19 +309,40 @@ def main():
             use_point_subsample=False,
             use_voxel_subsample=True,
             voxel_grid_size=args.grid_size,
+            outlier_radius=args.outlier_radius,
+            n_outliers=args.n_outliers,
         )
         all_xyz.append(xyz)
         all_rgb.append(rgb)
 
-    all_xyz = np.concatenate(all_xyz, axis=0)
-    all_rgb = np.concatenate(all_rgb, axis=0)
+    icp = False
+
+    if not icp:
+        all_xyz = np.concatenate(all_xyz, axis=0)
+        all_rgb = np.concatenate(all_rgb, axis=0)
+    else:
+        # use ICP to align the point clouds
+        all_pcd = [o3d.geometry.PointCloud() for _ in all_xyz]
+        for idx, colors in enumerate(all_rgb):
+            all_pcd[idx].colors = o3d.utility.Vector3dVector(colors / 255.0)
+            all_pcd[idx].points = o3d.utility.Vector3dVector(all_xyz[idx])
+
+        all_pcd = merge_point_clouds(all_pcd)
+
+        all_xyz = np.asarray(all_pcd.points)
+        all_rgb = np.asarray(all_pcd.colors) * 255.0
 
     # Voxel downsample again
-    all_xyz, all_rgb, _ = outlier_removal(all_xyz, all_rgb, nb_points=10, radius=0.1)
+    print("Final processing...")
+    all_xyz, all_rgb, _ = outlier_removal(
+        all_xyz, all_rgb, nb_points=args.final_n_outliers, radius=args.final_outlier_radius
+    )
     all_xyz, all_rgb = voxel_down_sample(all_xyz, all_rgb, voxel_size=args.grid_size)
 
+    filename = f"sr={args.sample_rate}_min={args.min_depth}_max={args.max_depth}_grid={args.grid_size}_outlier={args.outlier_radius}_n={args.n_outliers}_final_grid={args.final_grid_size}_final_outlier={args.final_outlier_radius}_final_n={args.final_n_outliers}_icp={icp}.ply"
+
     save_point_cloud(
-        filename=args.output,
+        filename=filename,
         points=all_xyz,
         rgb=all_rgb,
         binary=True,
