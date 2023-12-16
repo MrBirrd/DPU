@@ -11,4 +11,4 @@ data_root: /home/mathi/Desktop/DPU/datasets/scannetpp/
 
 splits: [nvs_sem_train, nvs_sem_val]
 
-scene_ids: [02455b3d20]
+#scene_ids: [02455b3d20]
