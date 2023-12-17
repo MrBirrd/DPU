@@ -1,7 +1,6 @@
 import math
 from collections import namedtuple
 from functools import partial
-from random import random
 
 import torch
 import torch.nn.functional as F
@@ -14,9 +13,8 @@ from model.dpm_sampler import DPM_Solver, NoiseScheduleVP, model_wrapper
 from utils.losses import get_scaling, projection_loss
 
 ModelPrediction = namedtuple("ModelPrediction", ["pred_noise", "pred_x_start"])
-from ema_pytorch import EMA
-from loguru import logger
 
+from loguru import logger
 from .loss import get_loss
 
 try:
@@ -138,6 +136,7 @@ class GaussianDiffusion(nn.Module):
         self,
         cfg,
         model,
+        model,
         schedule_fn_kwargs=dict(),
         auto_normalize=False,
         offset_noise_strength=0.0,  # https://www.crosslabs.org/blog/diffusion-with-offset-noise
@@ -157,7 +156,7 @@ class GaussianDiffusion(nn.Module):
 
         # setup loss
         self.loss = get_loss(cfg.diffusion.loss_type)
-        
+
         # dimensions
         self.channels = cfg.data.nc
         self.npoints = cfg.data.npoints

@@ -11,7 +11,7 @@ from tqdm import tqdm
 
 from modules.functional import furthest_point_sample
 
-FEATURES = ["dino", "dino_svd64", "rgb"]
+FEATURES = ["dino"]
 FACTOR = 3
 
 
