@@ -11,7 +11,6 @@ from torch.cuda.amp import autocast
 from tqdm import tqdm
 
 from model.dpm_sampler import DPM_Solver, NoiseScheduleVP, model_wrapper
-from model.loader import load_model
 from utils.losses import get_scaling, projection_loss
 
 ModelPrediction = namedtuple("ModelPrediction", ["pred_noise", "pred_x_start"])
@@ -25,6 +24,7 @@ try:
 except:
     logger.error("MinkUnet not found, please install MinkowskiEngine")
     pass
+
 
 # gaussian diffusion trainer class
 def exists(x):
@@ -137,6 +137,7 @@ class GaussianDiffusion(nn.Module):
     def __init__(
         self,
         cfg,
+        model,
         schedule_fn_kwargs=dict(),
         auto_normalize=False,
         offset_noise_strength=0.0,  # https://www.crosslabs.org/blog/diffusion-with-offset-noise
@@ -152,12 +153,11 @@ class GaussianDiffusion(nn.Module):
         min_snr_gamma = cfg.diffusion.min_snr_gamma
         self.reg_scale = cfg.diffusion.reg_scale
         self.cfg = cfg
-
-        self.model = load_model(cfg).to(cfg.gpu)
+        self.model = model
 
         # setup loss
         self.loss = get_loss(cfg.diffusion.loss_type)
-
+        
         # dimensions
         self.channels = cfg.data.nc
         self.npoints = cfg.data.npoints
@@ -244,7 +244,6 @@ class GaussianDiffusion(nn.Module):
         # offset noise strength - in blogpost, they claimed 0.1 was ideal
 
         self.offset_noise_strength = offset_noise_strength
-
         # derive loss weight
         # snr - signal noise ratio
 

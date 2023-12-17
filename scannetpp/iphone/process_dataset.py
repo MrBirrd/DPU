@@ -1,3 +1,4 @@
+from multiprocessing import Pool
 import os
 import subprocess
 import argparse
@@ -19,18 +20,20 @@ from PIL import Image
 from iphone.arkit_pcl import backproject, outlier_removal, voxel_down_sample, save_point_cloud
 from common.scene_release import ScannetppScene_Release
 from common.utils.utils import run_command, load_yaml_munch, load_json, read_txt_list
-import plyfile
+import gc
+from multiprocessing import Pool
+from functools import partial
 
 
 def extract_rgb(scene):
     scene.iphone_rgb_dir.mkdir(parents=True, exist_ok=True)
-    cmd = f"ffmpeg -i {scene.iphone_video_path} -start_number 0 -q:v 1 {scene.iphone_rgb_dir}/frame_%06d.jpg"
+    cmd = f"ffmpeg -hide_banner -loglevel error -i {scene.iphone_video_path} -start_number 0 -q:v 1 {scene.iphone_rgb_dir}/frame_%06d.jpg"
     run_command(cmd, verbose=True)
 
 
 def extract_masks(scene):
     scene.iphone_video_mask_dir.mkdir(parents=True, exist_ok=True)
-    cmd = f"ffmpeg -i {str(scene.iphone_video_mask_path)} -pix_fmt gray -start_number 0 {scene.iphone_video_mask_dir}/frame_%06d.png"
+    cmd = f"ffmpeg -hide_banner -loglevel error -i {str(scene.iphone_video_mask_path)} -pix_fmt gray -start_number 0 {scene.iphone_video_mask_dir}/frame_%06d.png"
     run_command(cmd, verbose=True)
 
 
@@ -79,13 +82,40 @@ def extract_depth(scene, sample_rate=1):
                 frame_id += 1
 
 
+def process_frame(frame_id, data, iphone_depth_dir, iphone_rgb_dir, args):
+    camera_to_world = np.array(data["aligned_pose"]).reshape(4, 4)
+    intrinsic = np.array(data["intrinsic"]).reshape(3, 3)
+    rgb = np.array(Image.open(os.path.join(iphone_rgb_dir, frame_id + ".jpg")), dtype=np.uint8)
+    depth = np.array(Image.open(os.path.join(iphone_depth_dir, frame_id + ".png")), dtype=np.float32) / 1000.0
+
+    xyz, rgb = backproject(
+        rgb,
+        depth,
+        camera_to_world,
+        intrinsic,
+        min_depth=args.min_depth,
+        max_depth=args.max_depth,
+        use_point_subsample=False,
+        use_voxel_subsample=True,
+        voxel_grid_size=args.grid_size,
+        outlier_radius=args.outlier_radius,
+        n_outliers=args.n_outliers,
+    )
+    return xyz, rgb
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--data_root", type=str, required=True)
-    parser.add_argument("--sr", type=int, default=30)
-    parser.add_argument("--max_depth", type=float, default=10.0)
+    parser.add_argument("--sample_rate", type=int, default=10, help="Sample rate of the frames.")
+    parser.add_argument("--max_depth", type=float, default=5.0)
     parser.add_argument("--min_depth", type=float, default=0.1)
     parser.add_argument("--grid_size", type=float, default=0.05, help="Grid size for voxel downsampling.")
+    parser.add_argument("--n_outliers", type=int, default=50, help="Number of neighbors for outlier removal.")
+    parser.add_argument("--outlier_radius", type=float, default=0.1, help="Radius for outlier removal.")
+    parser.add_argument("--final_grid_size", type=float, default=0.05, help="Grid size for voxel downsampling.")
+    parser.add_argument("--final_n_outliers", type=int, default=20, help="Number of neighbors for outlier removal.")
+    parser.add_argument("--final_outlier_radius", type=float, default=0.05, help="Radius for outlier removal.")
     args = parser.parse_args()
 
     scenes_root = os.path.join(args.data_root, "data")
@@ -112,7 +142,7 @@ def main():
         extract_rgb(scene)
         print("Extracted RGB")
         print("#" * 50)
-        extract_depth(scene, sample_rate=args.sr)
+        extract_depth(scene, sample_rate=args.sample_rate)
         print("Extracted Depth")
         print("#" * 50)
 
@@ -127,23 +157,10 @@ def main():
         all_xyz = []
         all_rgb = []
 
-        for frame_id, data in tqdm(frame_data[:: args.sr]):
-            camera_to_world = np.array(data["aligned_pose"]).reshape(4, 4)
-            intrinsic = np.array(data["intrinsic"]).reshape(3, 3)
-            rgb = np.array(Image.open(os.path.join(iphone_rgb_dir, frame_id + ".jpg")), dtype=np.uint8)
-            depth = np.array(Image.open(os.path.join(iphone_depth_dir, frame_id + ".png")), dtype=np.float32) / 1000.0
+        frame_data = frame_data[:: args.sample_rate]
 
-            xyz, rgb = backproject(
-                rgb,
-                depth,
-                camera_to_world,
-                intrinsic,
-                min_depth=args.min_depth,
-                max_depth=args.max_depth,
-                use_point_subsample=False,
-                use_voxel_subsample=True,
-                voxel_grid_size=args.grid_size,
-            )
+        for frame_id, data in tqdm(frame_data, desc="Processing frames"):
+            xyz, rgb = process_frame(frame_id, data, iphone_depth_dir, iphone_rgb_dir, args)
             all_xyz.append(xyz)
             all_rgb.append(rgb)
 
@@ -151,7 +168,9 @@ def main():
         all_rgb = np.concatenate(all_rgb, axis=0)
 
         # Voxel downsample again
-        all_xyz, all_rgb, _ = outlier_removal(all_xyz, all_rgb, nb_points=10, radius=0.1)
+        all_xyz, all_rgb, _ = outlier_removal(
+            all_xyz, all_rgb, nb_points=args.final_n_outliers, radius=args.final_outlier_radius
+        )
         all_xyz, all_rgb = voxel_down_sample(all_xyz, all_rgb, voxel_size=args.grid_size)
 
         iphone_scan_path = os.path.join(scene.data_root, scene_id, "scans", "iphone.ply")
@@ -162,10 +181,12 @@ def main():
             binary=True,
             verbose=True,
         )
+
         print("Saved point cloud with {} points tp {}".format(all_xyz.shape[0], iphone_scan_path))
         # remove the extracted frames and depth
         os.system("rm -rf {}".format(iphone_rgb_dir))
         os.system("rm -rf {}".format(iphone_depth_dir))
+        gc.collect()
 
 
 if __name__ == "__main__":

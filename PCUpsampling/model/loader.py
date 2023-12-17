@@ -5,12 +5,11 @@ from torch.nn.parallel import DataParallel, DistributedDataParallel
 
 from model.unet_mink import MinkUnet
 from model.unet_pointvoxel import PVCAdaptive, PVCLionSmall
+from model.diffusion_lucid import GaussianDiffusion as LUCID
+
 from third_party.gecco_torch.models.linear_lift import LinearLift
 from third_party.gecco_torch.models.set_transformer import SetTransformer
 from utils.utils import smart_load_model_weights
-
-from .diffusion_lucid import GaussianDiffusion as LUCID
-from .diffusion_pointvoxel import PVD
 
 
 def load_optim_sched(cfg, model, model_ckpt=None):
@@ -29,6 +28,8 @@ def load_optim_sched(cfg, model, model_ckpt=None):
             weight_decay=cfg.training.optimizer.weight_decay,
             betas=(cfg.training.optimizer.beta1, cfg.training.optimizer.beta2),
         )
+    else:
+        raise NotImplementedError(cfg.training.optimizer.type)
 
     # setup lr scheduler
     if cfg.training.scheduler.type == "ExponentialLR":
@@ -55,7 +56,7 @@ def load_model(cfg):
                 dropout=cfg.model.dropout,
                 extra_feature_channels=cfg.model.extra_feature_channels,
             )
-        if cfg.model.PVD.size == "large":
+        elif cfg.model.PVD.size == "large":
             model = PVCAdaptive(
                 out_dim=cfg.model.out_dim,
                 input_dim=cfg.model.in_dim,
@@ -68,6 +69,8 @@ def load_model(cfg):
                 dropout=cfg.model.dropout,
                 extra_feature_channels=cfg.model.extra_feature_channels,
             )
+        else:
+            raise NotImplementedError(cfg.model.PVD.size)
     elif cfg.model.type == "Mink":
         model = MinkUnet(
             dim=cfg.model.time_embed_dim,
@@ -94,15 +97,18 @@ def load_model(cfg):
             out_dim=cfg.model.out_dim,
         )
     else:
+        model = None
         raise NotImplementedError(cfg.unet)
     logger.info(
-            f"Generated model with following number of params (M): {sum(p.numel() for p in model.parameters() if p.requires_grad) / 1e6:.2f}"
-        )
+        f"Generated model with following number of params (M): {sum(p.numel() for p in model.parameters() if p.requires_grad) / 1e6:.2f}"
+    )
     return model
+
 
 def load_diffusion(cfg, smart=False):
     # setup model
-    model = LUCID(cfg=cfg)
+    backbone = load_model(cfg)
+    model = LUCID(cfg=cfg, model=backbone)
     gpu = cfg.gpu
 
     # setup DDP model

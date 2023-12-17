@@ -13,9 +13,13 @@ from einops import rearrange
 
 from model.set_transformer import SetTransformer
 
-from .pvcnn2_ada import (LinearAttention, SharedMLP, create_mlp_components,
-                         create_pointnet2_fp_modules,
-                         create_pointnet2_sa_components)
+from .pvcnn2_ada import (
+    LinearAttention,
+    SharedMLP,
+    create_mlp_components,
+    create_pointnet2_fp_modules,
+    create_pointnet2_sa_components,
+)
 from .pvcnn_generation import PVCNN2Base
 from .rin import Attention
 
