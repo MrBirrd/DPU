@@ -107,6 +107,7 @@ def process_frame(frame_id, data, iphone_depth_dir, iphone_rgb_dir, args):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--data_root", type=str, required=True)
+    parser.add_argument("--split", type=int, default=None, help="Split id to process")
     parser.add_argument("--sample_rate", type=int, default=10, help="Sample rate of the frames.")
     parser.add_argument("--max_depth", type=float, default=5.0)
     parser.add_argument("--min_depth", type=float, default=0.1)
@@ -131,6 +132,11 @@ def main():
             scenes_filtered.append(scene_id)
 
     scenes_filtered.sort()
+
+    # create 10 splits
+    batch_size = int(np.ceil(len(scenes_filtered) / 10))
+    if args.split is not None:
+        scenes_filtered = scenes_filtered[args.split * batch_size : (args.split + 1) * batch_size]
 
     # process the scenes
     for scene_id in tqdm(scenes_filtered, desc="Scenes"):
