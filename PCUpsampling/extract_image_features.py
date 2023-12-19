@@ -36,7 +36,13 @@ def main():
     parser.add_argument(
         "--feature_type", type=str, default="rgb", help="Type of features to extract.", choices=["rgb", "dino", "clip"]
     )
-    parser.add_argument("--sampling_rate", type=int, default=5, help="Number of scans to skip between each scan.")
+    parser.add_argument(
+        "--source_cloud",
+        type=str,
+        default="iphone",
+        help="Source of the pointcloud coordinates.",
+    )
+    parser.add_argument("--sampling_rate", type=int, default=20, help="Number of scans to skip between each scan.")
     parser.add_argument("--image_width", type=int, default=1920, help="Width of the images in the video.")
     parser.add_argument("--image_height", type=int, default=1440, help="Height of the images in the video.")
     parser.add_argument("--dino_model_name", type=str, default="dinov2_vits14", help="Name of the DINO model to use.")
@@ -76,6 +82,9 @@ def main():
                 image_height=args.image_height,
                 dino_model_name=args.dino_model_name,
                 overwrite=args.overwrite,
+                pointcloud_source=args.source_cloud,
+                downscale=True,
+                batch_size=8,
             )
             print("Done with scene", scene_id)
             torch.cuda.empty_cache()

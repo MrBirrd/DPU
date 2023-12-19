@@ -16,6 +16,7 @@ from tqdm import tqdm
 from third_party.scannetpp.common.scene_release import ScannetppScene_Release
 from third_party.scannetpp.common.utils.colmap import read_model
 from cv2 import resize
+import open3d as o3d
 
 try:
     from third_party.ZegCLIP.get_model import get_model, predict
@@ -242,9 +243,11 @@ def process_scene(
     mask_height: int = 192,
     mask_width: int = 256,
     downscale: bool = True,
+    batch_size: int = 2,
     dino_model_name: str = "dinov2_vits14",
     overwrite: bool = False,
     autoskip: bool = False,
+    pointcloud_source: str = "iphone",
 ):
     if os.path.exists(target_path + ".npy") and not overwrite:
         print("Already processed scene", scene_id)
@@ -253,6 +256,12 @@ def process_scene(
     # load up scene configuration
     scene = ScannetppScene_Release(scene_id, data_root=data_root)
     mesh_path = scene.scan_mesh_path
+    if pointcloud_source == "iphone":
+        mesh_path = os.path.dirname(mesh_path) + "/iphone.ply"
+    elif pointcloud_source == "faro":
+        pass
+    else:
+        raise ValueError("Unknown pointcloud source")
 
     colmap_dir = scene.iphone_colmap_dir
     _, images, _ = read_model(colmap_dir, ".txt", read=["images"])
@@ -261,11 +270,15 @@ def process_scene(
 
     scale_factor = mask_height / image_height
 
-    ply, *_ = pyminiply.read(str(mesh_path))
+    pcd = o3d.io.read_point_cloud(mesh_path)
+
+    points = np.asarray(pcd.points)
+    colors = np.asarray(pcd.colors)
+
     # remove nans or infs
-    ply = ply[~np.isnan(ply).any(axis=1)]
-    ply = ply[~np.isinf(ply).any(axis=1)]
-    points = ply[:, :3]
+    removal_mask = np.any(np.isnan(points), axis=1) | np.any(np.isinf(points), axis=1)
+    points = points[~removal_mask]
+    colors = colors[~removal_mask]
 
     # create videoreader and read the frames
     vr = VideoReader(movie_path, ctx=cpu(0))
@@ -288,7 +301,6 @@ def process_scene(
     ptc_feats_count = np.zeros((len(points), 1), dtype=np.int32)
 
     # calculate features in batches, first skip every nth scan
-    batch_size = 2
     total_data = len(images)
 
     if autoskip:
