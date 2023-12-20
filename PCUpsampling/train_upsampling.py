@@ -106,9 +106,13 @@ def train(gpu, cfg, output_dir, noises_init=None):
             next_batch = next(train_iter)
             next_batch = to_cuda(next_batch, gpu)
 
-            x, feature_cond = get_data_batch(batch=data, cfg=cfg, return_dict=False, device=gpu)
+            data_batch = get_data_batch(batch=data, cfg=cfg)
+            x0 = data_batch["hr_points"]
+            x1 = data_batch["lr_points"] if data_batch["lr_points"] is not None else None
+            features = data_batch["features"] if data_batch["features"] is not None else None
+
             # forward pass
-            loss = model(x, cond=feature_cond)
+            loss = model(x0, x1=x1, cond=features)
 
             loss /= cfg.training.accumulation_steps
 
@@ -145,17 +149,14 @@ def train(gpu, cfg, output_dir, noises_init=None):
             )
 
         if (step + 1) % cfg.training.viz_interval == 0 and is_main_process:
-            try:
-                model.eval()
-                evaluate(model, eval_iter, cfg, step)
-                model.train()
-            except Exception as e:
-                logger.error("Error during evaluation: {}", e)
+            model.eval()
+            evaluate(model, eval_iter, cfg, step + 1)
+            model.train()
 
         if (step + 1) % cfg.training.save_interval == 0:
             if is_main_process:
                 save_dict = {
-                    "step": step,
+                    "step": step + 1,
                     "model_state": model.state_dict(),
                     "optimizer_state": optimizer.state_dict(),
                 }

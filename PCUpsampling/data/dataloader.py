@@ -1,13 +1,14 @@
 import os
+from git import Union
 
 import numpy as np
 import torch
 from loguru import logger
 from torch.utils.data import DataLoader, Dataset
 from torch.utils.data.distributed import DistributedSampler
-
+from typing import Union, Tuple
 from .arkitscenes import ArkitScans, IndoorScenes, IndoorScenesCut
-from .scannetpp import NPZFolderTest, ScanNetPPCut, ScanNetPPProcessed
+from .scannetpp import NPZFolderTest, ScanNetPPCut, ScanNetPP_Faro, ScanNetPP_iPhone
 from .shapenet import get_dataset_shapenet
 
 
@@ -24,7 +25,7 @@ def save_iter(dataloader, sampler):
             yield next(iterator)
 
 
-def get_npz_loader(root, cfg):
+def get_npz_loader(root, cfg) -> DataLoader:
     """Return a dataloader for a folder of npz files."""
     ds = NPZFolderTest(root, features=cfg.data.point_features)
     loader = DataLoader(
@@ -38,7 +39,9 @@ def get_npz_loader(root, cfg):
     return loader
 
 
-def get_dataloader(opt, sampling=False):
+def get_dataloader(
+    opt, sampling: bool = False
+) -> Tuple[DataLoader, DataLoader, DistributedSampler, DistributedSampler]:
     """
     Returns train and test dataloaders along with their respective samplers.
 
@@ -85,25 +88,24 @@ def get_dataloader(opt, sampling=False):
             unconditional=opt.data.unconditional,
         )
     elif opt.data.dataset == "ScanNetPP":
-        train_dataset = (
-            ScanNetPPCut(
-                npoints=opt.data.npoints, root=opt.data.data_dir, mode="training", features=opt.data.point_features
-            )
-            if not sampling
-            else None
+        train_dataset = ScanNetPPCut(
+            npoints=opt.data.npoints, root=opt.data.data_dir, mode="training", features=opt.data.point_features
         )
         test_dataset = ScanNetPPCut(
             npoints=opt.data.npoints, root=opt.data.data_dir, mode="validation", features=opt.data.point_features
         )
-    elif opt.data.dataset == "ScanNetPPProcessed":
-        train_dataset = (
-            ScanNetPPProcessed(
-                root=opt.data.data_dir, mode="training", features=opt.data.point_features, augment=opt.data.augment
-            )
-            if not sampling
-            else None
+    elif opt.data.dataset == "ScanNetPP_Faro":
+        train_dataset = ScanNetPP_Faro(
+            root=opt.data.data_dir, mode="training", features=opt.data.point_features, augment=opt.data.augment
         )
-        test_dataset = ScanNetPPProcessed(
+        test_dataset = ScanNetPP_Faro(
+            root=opt.data.data_dir, mode="validation", features=opt.data.point_features, augment=opt.data.augment
+        )
+    elif opt.data.dataset == "ScanNetPP_iPhone":
+        train_dataset = ScanNetPP_iPhone(
+            root=opt.data.data_dir, mode="training", features=opt.data.point_features, augment=opt.data.augment
+        )
+        test_dataset = ScanNetPP_iPhone(
             root=opt.data.data_dir, mode="validation", features=opt.data.point_features, augment=opt.data.augment
         )
     else:
@@ -111,16 +113,8 @@ def get_dataloader(opt, sampling=False):
 
     # setup the samplers
     if opt.distribution_type == "multi":
-        train_sampler = (
-            DistributedSampler(train_dataset, num_replicas=opt.world_size, rank=opt.rank)
-            if train_dataset is not None
-            else None
-        )
-        test_sampler = (
-            DistributedSampler(test_dataset, num_replicas=opt.world_size, rank=opt.rank)
-            if test_dataset is not None
-            else None
-        )
+        train_sampler = DistributedSampler(train_dataset, num_replicas=opt.world_size, rank=opt.rank)
+        test_sampler = DistributedSampler(test_dataset, num_replicas=opt.world_size, rank=opt.rank)
     else:
         train_sampler = None
         test_sampler = None

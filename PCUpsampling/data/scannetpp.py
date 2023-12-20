@@ -11,13 +11,14 @@ from tqdm import tqdm
 from utils.ops import random_rotate_pointcloud_horizontally
 
 from .utils import *
+from typing import Optional
 
 EULER_FEATURE_ROOT = "/cluster/scratch/matvogel/scannetpp"
 VALID_FEATURES = ["dino", "rgb", "dino_svd64"]
 
 
 class NPZFolderTest(Dataset):
-    def __init__(self, root, features=None) -> None:
+    def __init__(self, root, features=None):
         super().__init__()
         self.root = root
         if features not in VALID_FEATURES:
@@ -52,8 +53,8 @@ class NPZFolderTest(Dataset):
         return data
 
 
-class ScanNetPPProcessed(Dataset):
-    def __init__(self, root, mode="training", features=None, augment=False) -> None:
+class ScanNetPP_NPZ(Dataset):
+    def __init__(self, root, mode="training", features=None, augment=False):
         super().__init__()
         self.root = root
         self.mode = mode
@@ -100,6 +101,11 @@ class ScanNetPPProcessed(Dataset):
     def __len__(self):
         return len(self.scene_batches)
 
+
+class ScanNetPP_Faro(ScanNetPP_NPZ):
+    def __init__(self, root, mode="training", features=None, augment=False):
+        super().__init__(root=root, mode=mode, features=features, augment=augment)
+
     def __getitem__(self, index):
         batch_data = {}
 
@@ -135,8 +141,54 @@ class ScanNetPPProcessed(Dataset):
         return batch_data
 
 
+class ScanNetPP_iPhone(ScanNetPP_NPZ):
+    def __init__(self, root, mode="training", features=None, augment=False):
+        super().__init__(root=root, mode=mode, features=features, augment=augment)
+
+    def __getitem__(self, index):
+        batch_data = {}
+
+        # try to load the data and retry if it fails
+        while True:
+            try:
+                data = self.scene_batches[index]
+                data_dict = np.load(data["npz"])
+                points_faro = data_dict["faro"]
+                points_iphone = data_dict["iphone"]
+                # append the features if they are available
+                if self.features is not None:
+                    features = data_dict[self.features]
+                    batch_data["features"] = torch.from_numpy(features).float()
+                break
+            except Exception as e:
+                logger.error(f"Failed to load data {data}")
+                index = np.random.randint(0, len(self.scene_batches))
+
+        # normalize the point coordinates
+        center = np.mean(points_iphone, axis=0)
+        points_iphone -= center
+        points_faro -= center
+
+        scale = np.max(np.linalg.norm(points_iphone, axis=1))
+        points_iphone /= scale
+        points_faro /= scale
+
+        # random rotation augmentation
+        if self.augment and np.random.rand() < 0.2:
+            points_iphone, theta = random_rotate_pointcloud_horizontally(points_iphone)
+            points_faro, theta = random_rotate_pointcloud_horizontally(points_faro, theta=theta)
+
+        batch_data["idx"] = index
+        batch_data["hr_points"] = torch.from_numpy(points_faro).float()
+        batch_data["lr_points"] = torch.from_numpy(points_iphone).float()
+        batch_data["center"] = center
+        batch_data["scale"] = scale
+
+        return batch_data
+
+
 class ScanNetPPCut(Dataset):
-    def __init__(self, root, npoints, mode="training", features=None) -> None:
+    def __init__(self, root, npoints, mode="training", features: Optional[str] = None) -> None:
         super().__init__()
         self.root = root
         self.npoints = npoints
@@ -233,9 +285,9 @@ class ScanNetPPCut(Dataset):
 
         data = {
             "idx": index,
-            "train_points": torch.from_numpy(points).float(),
-            "train_points_center": center,
-            "train_points_scale": scale,
+            "hr_points": torch.from_numpy(points).float(),
+            "center": center,
+            "scale": scale,
         }
 
         # append the features if they are available

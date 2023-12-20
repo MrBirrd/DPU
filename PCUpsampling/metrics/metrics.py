@@ -21,9 +21,10 @@ def calculate_stats(x: Tensor):
     stats = {"mean": xmean, "std": xstd, "min": xmin, "max": xmax}
     return stats
 
+
 def calculate_cd(pred, gt):
-    cds =  []
-    
+    cds = []
+
     try:
         for x_pred, x_gt in zip(pred, gt):
             cd = chamfer_distance(
@@ -41,6 +42,7 @@ def calculate_cd(pred, gt):
         pred = torch.from_numpy(xgnp).cuda()
         # evaluate again
         for x_pred, x_gt in zip(pred, gt):
+            print(x_pred.shape, x_gt.shape)
             cd = chamfer_distance(
                 x_pred.cpu().permute(1, 0).numpy(),
                 x_gt.cpu().permute(1, 0).numpy(),

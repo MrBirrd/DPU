@@ -2,6 +2,8 @@ import torch
 from loguru import logger
 from torch import optim
 from torch.nn.parallel import DataParallel, DistributedDataParallel
+from model.i2sb import I2SB
+from functools import partial
 
 try:
     from model.unet_mink import MinkUnet
@@ -112,27 +114,33 @@ def load_model(cfg):
 def load_diffusion(cfg, smart=False):
     # setup model
     backbone = load_model(cfg).to(cfg.gpu)
-    model = LUCID(cfg=cfg, model=backbone)
+    if cfg.diffusion.formulation.lower() == "lucid":
+        model = LUCID(cfg=cfg, model=backbone)
+    elif cfg.diffusion.formulation.lower() == "i2sb":
+        model = I2SB(cfg=cfg, model=backbone)
+    else:
+        raise NotImplementedError(cfg.diffusion.formulation)
+
     gpu = cfg.gpu
 
     # setup DDP model
     if cfg.distribution_type == "multi":
 
-        def _transform_(m):
+        def ddp_transform(m):
             return DistributedDataParallel(m, device_ids=[gpu], output_device=gpu)
 
         torch.cuda.set_device(gpu)
         model.cuda(gpu)
-        model.multi_gpu_wrapper(_transform_)
+        model.multi_gpu_wrapper(ddp_transform)
 
     # setup data parallel model
     elif cfg.distribution_type == "single":
 
-        def _transform_(m):
+        def dp_transform(m):
             return DataParallel(m)
 
         model = model.cuda()
-        model.multi_gpu_wrapper(_transform_)
+        model.multi_gpu_wrapper(dp_transform)
 
     # setup single gpu model
     elif gpu is not None:

@@ -21,71 +21,7 @@ from .pvcnn2_ada import (
     create_pointnet2_sa_components,
 )
 from .pvcnn_generation import PVCNN2Base
-from .rin import Attention
-
-
-def get_neighbor_index(vertices: "(bs, vertice_num, 3)", neighbor_num: int):
-    """
-    Return: (bs, vertice_num, neighbor_num)
-    """
-    bs, v, _ = vertices.size()
-    device = vertices.device
-    inner = torch.bmm(vertices, vertices.transpose(1, 2))  # (bs, v, v)
-    quadratic = torch.sum(vertices**2, dim=2)  # (bs, v)
-    distance = inner * (-2) + quadratic.unsqueeze(1) + quadratic.unsqueeze(2)
-    neighbor_index = torch.topk(distance, k=neighbor_num + 1, dim=-1, largest=False)[1]
-    neighbor_index = neighbor_index[:, :, 1:]
-    return neighbor_index
-
-
-def get_nearest_index(target: "(bs, v1, 3)", source: "(bs, v2, 3)"):
-    """
-    Return: (bs, v1, 1)
-    """
-    inner = torch.bmm(target, source.transpose(1, 2))  # (bs, v1, v2)
-    s_norm_2 = torch.sum(source**2, dim=2)  # (bs, v2)
-    t_norm_2 = torch.sum(target**2, dim=2)  # (bs, v1)
-    d_norm_2 = s_norm_2.unsqueeze(1) + t_norm_2.unsqueeze(2) - 2 * inner
-    nearest_index = torch.topk(d_norm_2, k=1, dim=-1, largest=False)[1]
-    return nearest_index
-
-
-def indexing_neighbor(tensor: "(bs, vertice_num, dim)", index: "(bs, vertice_num, neighbor_num)"):
-    """
-    Return: (bs, vertice_num, neighbor_num, dim)
-    """
-    bs, v, n = index.size()
-    id_0 = torch.arange(bs).view(-1, 1, 1)
-    tensor_indexed = tensor[id_0, index]
-    return tensor_indexed
-
-
-class NeighborPooling(nn.Module):
-    def __init__(self, pooling_rate: int = 4, neighbor_num: int = 4):
-        super().__init__()
-        self.pooling_rate = pooling_rate
-        self.neighbor_num = neighbor_num
-
-    def forward(self, vertices: "(bs, vertice_num, 3)", feature_map: "(bs, vertice_num, channel_num)"):
-        """
-        Return:
-            vertices_pool: (bs, pool_vertice_num, 3),
-            feature_map_pool: (bs, pool_vertice_num, channel_num)
-        """
-        bs, vertice_num, _ = vertices.size()
-        neighbor_index = get_neighbor_index(vertices, self.neighbor_num)
-        neighbor_feature = indexing_neighbor(feature_map, neighbor_index)
-        # (bs, vertice_num, neighbor_num, channel_num)
-        pooled_feature = torch.max(neighbor_feature, dim=2)[0]
-        # (bs, vertice_num, channel_num)
-
-        pool_num = int(vertice_num / self.pooling_rate)
-        sample_idx = torch.randperm(vertice_num)[:pool_num]
-        vertices_pool = vertices[:, sample_idx, :]
-        # (bs, pool_num, 3)
-        feature_map_pool = pooled_feature[:, sample_idx, :]
-        # (bs, pool_num, channel_num)
-        return vertices_pool, feature_map_pool
+from .attention import Attention
 
 
 class PVCNN2Unet(nn.Module):
@@ -198,7 +134,7 @@ class PVCNN2Unet(nn.Module):
 
         self.fp_layers = nn.ModuleList(fp_layers)
 
-        layers, _ = create_mlp_components(
+        layers, *_ = create_mlp_components(
             in_channels=channels_fp_features,
             out_channels=[128, dropout, out_dim],  # was 0.5
             classifier=True,
@@ -238,6 +174,7 @@ class PVCNN2Unet(nn.Module):
         coords_list, in_features_list = [], []
         in_features_list.append(features)
 
+        temb = None
         if t is not None:
             if t.ndim == 0 and not len(t.shape) == 1:
                 t = t.view(1).expand(B)

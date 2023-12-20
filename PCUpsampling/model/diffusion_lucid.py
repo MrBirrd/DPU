@@ -8,9 +8,11 @@ from einops import rearrange, reduce, repeat
 from torch import nn
 from torch.cuda.amp import autocast
 from tqdm import tqdm
-
+from typing import Optional
+from torch import Tensor
 from model.dpm_sampler import DPM_Solver, NoiseScheduleVP, model_wrapper
-from utils.losses import get_scaling, projection_loss
+from utils.losses import projection_loss
+from model.modules import DiffusionModel
 
 ModelPrediction = namedtuple("ModelPrediction", ["pred_noise", "pred_x_start"])
 
@@ -45,7 +47,7 @@ def identity(t, *args, **kwargs):
     return t
 
 
-def linear_beta_schedule(timesteps, beta_start=0.0001, beta_end=0.02):
+def linear_beta_schedule(timesteps, beta_start=0.0001, beta_end=0.02) -> Tensor:
     """
     linear schedule, proposed in original ddpm paper
     """
@@ -55,7 +57,7 @@ def linear_beta_schedule(timesteps, beta_start=0.0001, beta_end=0.02):
     return torch.linspace(beta_start, beta_end, timesteps, dtype=torch.float64)
 
 
-def cosine_beta_schedule(timesteps, s=0.008):
+def cosine_beta_schedule(timesteps, s=0.008) -> Tensor:
     """
     cosine schedule
     as proposed in https://openreview.net/forum?id=-NEXDKk8gZ
@@ -131,7 +133,7 @@ def dynamic_threshold_percentile(x, threshold=0.975):
     return x
 
 
-class GaussianDiffusion(nn.Module):
+class GaussianDiffusion(DiffusionModel):
     def __init__(
         self,
         cfg,
@@ -267,15 +269,6 @@ class GaussianDiffusion(nn.Module):
     @property
     def device(self):
         return self.betas.device
-
-    def multi_gpu_wrapper(self, f):
-        self.model = f(self.model)
-
-    def train(self):
-        self.model.train()
-
-    def eval(self):
-        self.model.eval()
 
     def predict_start_from_noise(self, x_t, t, noise):
         return (
