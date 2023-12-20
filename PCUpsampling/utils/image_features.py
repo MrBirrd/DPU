@@ -256,6 +256,10 @@ def process_scene(
     # load up scene configuration
     scene = ScannetppScene_Release(scene_id, data_root=data_root)
     mesh_path = scene.scan_mesh_path
+
+    if not os.path.exists(mesh_path):
+        return
+
     if pointcloud_source == "iphone":
         mesh_path = os.path.dirname(mesh_path) + "/iphone.ply"
     elif pointcloud_source == "faro":
@@ -270,7 +274,7 @@ def process_scene(
 
     scale_factor = mask_height / image_height
 
-    pcd = o3d.io.read_point_cloud(mesh_path)
+    pcd = o3d.io.read_point_cloud(str(mesh_path))
 
     points = np.asarray(pcd.points)
     colors = np.asarray(pcd.colors)
@@ -286,7 +290,6 @@ def process_scene(
     # create extractors
     if feature_type == "rgb":
         f_shape = 3
-        pass
     elif feature_type == "dino":
         f_shape = 384
         print("Loading DINO model")
@@ -307,13 +310,13 @@ def process_scene(
         if total_data < 30:
             skip_scans = 1
         elif total_data < 60:
-            skip_scans = 2
-        elif total_data < 90:
             skip_scans = 3
-        elif total_data < 160:
-            skip_scans = 4
-        else:
+        elif total_data < 90:
             skip_scans = 5
+        elif total_data < 160:
+            skip_scans = 8
+        else:
+            skip_scans = 10
     else:
         skip_scans = sampling_rate
 

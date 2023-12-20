@@ -136,7 +136,6 @@ class GaussianDiffusion(nn.Module):
         self,
         cfg,
         model,
-        model,
         schedule_fn_kwargs=dict(),
         auto_normalize=False,
         offset_noise_strength=0.0,  # https://www.crosslabs.org/blog/diffusion-with-offset-noise
