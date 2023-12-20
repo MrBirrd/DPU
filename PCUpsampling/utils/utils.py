@@ -1,9 +1,23 @@
 import numpy as np
 import torch
 import torch.nn.init as init
+from torch import Tensor
+from typing import Optional, Tuple, Union, List, Dict
+from einops import rearrange
 
 
-def to_cuda(data, device):
+def to_cuda(data, device) -> Union[Tensor, List, Tuple, Dict, None]:
+    """
+    Moves the input data to the specified device (GPU) if available.
+
+    Args:
+        data: The input data to be moved to the device.
+        device: The device (GPU) to move the data to.
+
+    Returns:
+        The input data moved to the specified device.
+
+    """
     if data is None:
         return None
     if isinstance(data, (list, tuple)):
@@ -16,23 +30,61 @@ def to_cuda(data, device):
         return data.to(device, non_blocking=True)
 
 
-def get_data_batch(batch, cfg, return_dict=False, device=None):
-    target = batch["train_points"].transpose(1, 2)
+def ensure_size(x: Tensor) -> Tensor:
+    """
+    Ensures that the input tensor has the correct size and dimensions.
+
+    Args:
+        x (torch.Tensor): The input tensor.
+
+    Returns:
+        torch.Tensor: The input tensor with the correct size and dimensions.
+    """
+    if x.dim() == 2:
+        x = x.unsqueeze(1)
+    assert x.dim() == 3
+    if x.size(1) > x.size(2):
+        x = x.transpose(1, 2)
+    return x
+
+
+def get_data_batch(batch, cfg):
+    """
+    Get a batch of data for training or testing.
+
+    Args:
+        batch (dict): A dictionary containing the batch data.
+        cfg (dict): A dictionary containing the configuration settings.
+
+    Returns:
+        dict: A dictionary containing the processed batch data.
+    """
+    hr_points = batch["hr_points"].transpose(1, 2)
 
     # load conditioning features
     if not cfg.data.unconditional:
-        feature_cond = batch["features"] if "features" in batch else None
-        lowres_cond = batch["train_points_lowres"].transpose(1, 2) if "train_points_lowres" in batch else None
+        features = batch["features"] if "features" in batch else None
+        lr_points = batch["lr_points"] if "lr_points" in batch else None
     else:
-        feature_cond, lowres_cond = None, None
+        features, lr_points = None, None
 
-    if return_dict:
-        return {
-            "target": target,
-            "feature_cond": feature_cond,
-            "lowres_cond": lowres_cond,
-        }
-    return target, feature_cond
+    features = ensure_size(features) if features is not None else None
+    lr_points = ensure_size(lr_points) if lr_points is not None else None
+    hr_points = ensure_size(hr_points)
+
+    # ensure that the number of channels is correct, if we have colors, we put them to the features
+    hr_points = hr_points[:, :3, :]
+    lr_colors = lr_points[:, 3:, :] if lr_points is not None else None
+    lr_points = lr_points[:, :3, :] if lr_points is not None else None
+
+    if lr_colors is not None and lr_colors.shape[-1] > 0:
+        features = torch.cat([lr_colors, features], dim=1) if features is not None else lr_colors
+
+    return {
+        "hr_points": hr_points,
+        "lr_points": lr_points,
+        "features": features,
+    }
 
 
 def smart_load_model_weights(model, pretrained_dict):

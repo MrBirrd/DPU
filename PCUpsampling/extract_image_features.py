@@ -65,7 +65,7 @@ def main():
 
     for scene_id in scenes:
         # construct paths
-        target_path = os.path.join(args.output_dir, scene_id, "features", f"{args.feature_type}")
+        target_path = os.path.join(args.output_dir, scene_id, "features", f"{args.feature_type}_{args.source_cloud}")
         os.makedirs(os.path.dirname(target_path), exist_ok=True)
         movie_path = os.path.join(args.data_root, scene_id, "iphone", "rgb.mp4")
 
@@ -84,6 +84,7 @@ def main():
                 overwrite=args.overwrite,
                 pointcloud_source=args.source_cloud,
                 downscale=True,
+                autoskip=True,
                 batch_size=8,
             )
             print("Done with scene", scene_id)

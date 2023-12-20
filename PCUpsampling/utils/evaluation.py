@@ -14,6 +14,7 @@ from metrics.metrics import calculate_cd, print_stats
 from modules.functional import furthest_point_sample
 from utils.utils import get_data_batch, to_cuda
 from utils.visualize import visualize_pointcloud_batch
+import os
 
 
 def new_x_chain(x, num_chain):
@@ -22,6 +23,8 @@ def new_x_chain(x, num_chain):
 
 def save_visualizations(items, out_dir, step):
     for item in items:
+        if item is None:
+            continue
         ptc, name = item
         visualize_pointcloud_batch(
             "%s/%03d_%s.png" % (out_dir, step, name),
@@ -30,7 +33,9 @@ def save_visualizations(items, out_dir, step):
 
 
 def log_wandb(name, out_dir, step):
-    wandb_img = wandb.Image("%s/%03d_%s.png" % (out_dir, step, name))
+    out_path = "%s/%03d_%s.png" % (out_dir, step, name)
+    os.makedirs(os.path.dirname(out_path), exist_ok=True)
+    wandb_img = wandb.Image(out_path)
     wandb.log({name: wandb_img}, step=step)
 
 
@@ -47,42 +52,35 @@ def evaluate(model, eval_iter, cfg, step, sampling=False, save_npy=False, debug=
     eval_data = next(eval_iter)
     eval_data = to_cuda(eval_data, cfg.gpu)
 
-    gt, features = get_data_batch(batch=eval_data, cfg=cfg, device=cfg.gpu)
+    data_batch = get_data_batch(batch=eval_data, cfg=cfg)
+    x0 = data_batch["hr_points"]
+    x1 = data_batch["lr_points"] if data_batch["lr_points"] is not None else None
+    features = data_batch["features"] if data_batch["features"] is not None else None
+
+    # get the right x_start
+    if cfg.diffusion.sampling_hint:
+        x_start = x0
+    elif cfg.diffusion.formulation.lower() == "i2sb":
+        x_start = x1
+    else:
+        x_start = None
 
     with torch.no_grad():
-        pred, x_start = model.sample(
-            shape=new_x_chain(gt, cfg.sampling.bs).shape,
+        sample_data = model.sample(
             cond=features,
-            x_start=gt if cfg.diffusion.sampling_hint else None,
-            return_noised_hint=True,
+            x1=x_start,
+            return_noised_hint=True if cfg.diffusion.sampling_hint else False,
             clip=False,
         )
 
-        if debug:
-            pred_trajectory = torch.cat(
-                model.sample(
-                    shape=new_x_chain(gt, 1).shape,
-                    cond=features[0].unsqueeze(0) if features is not None else None,
-                    x_start=gt if cfg.diffusion.sampling_hint else None,
-                    freq=0.1,
-                    clip=False,
-                ),
-                dim=0,
-            )
-            # log and save the trajectory
-            print_stats(pred, "x_gen_eval")
-            print_stats(pred_trajectory, "x_gen_all")
-            save_visualizations((pred_trajectory, "trajectory"), out_dir, step)
-            save_ptc("trajectory", pred_trajectory, out_dir, step)
-            if not sampling:
-                log_wandb("trajectory", out_dir, step)
+    pred = sample_data["x_pred"]
 
     # visualize the pointclouds
     save_visualizations(
         [
             (pred, "pred"),
-            (x_start, "hints"),
-            (gt, "gt"),
+            (x_start, "start") if x_start is not None else None,
+            (x0, "gt"),
         ],
         out_dir,
         step,
@@ -94,10 +92,10 @@ def evaluate(model, eval_iter, cfg, step, sampling=False, save_npy=False, debug=
     n_points = n_points - n_points % 128
 
     pred = pred[..., :n_points]
-    gt = gt[..., :n_points]
-    x_start = x_start[..., :n_points]
+    x0 = x0[..., :n_points]
+    x_start = x_start[..., :n_points] if x_start is not None else None
 
-    cd, emd, eval_loss = get_metrics(model, gt, pred)
+    cd, emd, eval_loss = get_metrics(model, x0, pred)
     # print the stats
     batch_metrics = {
         "CD": cd,
@@ -106,7 +104,7 @@ def evaluate(model, eval_iter, cfg, step, sampling=False, save_npy=False, debug=
     }
 
     if x_start is not None:
-        cd_hint, emd_hint, eval_loss_hint = get_metrics(model, gt, x_start)
+        cd_hint, emd_hint, eval_loss_hint = get_metrics(model, x0, x_start)
         batch_metrics["CD_hint"] = cd_hint
         batch_metrics["EMD_hint"] = emd_hint
         batch_metrics["eval_loss_hint_unweighted"] = eval_loss_hint
@@ -116,12 +114,12 @@ def evaluate(model, eval_iter, cfg, step, sampling=False, save_npy=False, debug=
     if not sampling:
         wandb.log(batch_metrics, step=step)
         log_wandb("pred", out_dir, step)
-        log_wandb("hints", out_dir, step)
+        log_wandb("start", out_dir, step)
         log_wandb("gt", out_dir, step)
     elif save_npy:
         save_ptc("pred", pred, out_dir, step)
-        save_ptc("hints", x_start, out_dir, step)
-        save_ptc("gt", gt, out_dir, step)
+        save_ptc("start", x_start, out_dir, step)
+        save_ptc("gt", x0, out_dir, step)
 
     return batch_metrics
 

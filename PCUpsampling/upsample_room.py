@@ -8,6 +8,7 @@ import open3d as o3d
 from model.loader import load_diffusion
 from modules.functional import furthest_point_sample
 from utils.args import parse_args
+import os
 
 
 def main():
@@ -19,7 +20,7 @@ def main():
 
     room_path = "../datasets/scannetpp/data/02455b3d20/"
     room_points = room_path + "/scans/mesh_aligned_0.05.ply"
-    room_features = room_path + "/features/dino.npy"
+    room_features = room_path + "/features/dino_faro.npy"
 
     pts_npy, *_ = pyminiply.read(room_points)
     feats = np.load(room_features)
@@ -37,6 +38,7 @@ def main():
 
     denoised_batches = []
     noisy_batches = []
+    gt_batches = []
 
     for gpu_batch in tqdm(range(0, n_gpu_batches)):
         batch_idxs = idxs[gpu_batch * cfg.sampling.bs : (gpu_batch + 1) * cfg.sampling.bs]
@@ -71,6 +73,7 @@ def main():
 
             out = out.cpu().detach().permute(0, 2, 1).numpy()
             out_noises = out_noises.cpu().detach().permute(0, 2, 1).numpy()
+            batch_points = batch_points.cpu().detach().permute(0, 2, 1).numpy()
 
             # renormalize
             for idx, (center, scale) in enumerate(scales):
@@ -78,33 +81,21 @@ def main():
                 out[idx] += center
                 out_noises[idx] *= scale
                 out_noises[idx] += center
+                batch_points[idx] *= scale
+                batch_points[idx] += center
 
         denoised_batches.append(out)
         noisy_batches.append(out_noises)
+        gt_batches.append(batch_points)
 
     denoised_room = np.concatenate(denoised_batches, axis=0).reshape(-1, 3)
     noisy_room = np.concatenate(noisy_batches, axis=0).reshape(-1, 3)
+    gt_batches = np.concatenate(gt_batches, axis=0).reshape(-1, 3)
 
-    room_center = np.mean(pts_npy, axis=0)
-    denoised_room -= room_center
-    noisy_room -= room_center
-
-    # use open3d to voxel downsample
-    denoised_pcd = o3d.geometry.PointCloud()
-    denoised_pcd.points = o3d.utility.Vector3dVector(denoised_room)
-    denoised_pcd = denoised_pcd.voxel_down_sample(voxel_size=0.01)
-
-    noisy_pcd = o3d.geometry.PointCloud()
-    noisy_pcd.points = o3d.utility.Vector3dVector(noisy_room)
-    noisy_pcd = noisy_pcd.voxel_down_sample(voxel_size=0.01)
-
-    denoised_room = np.asarray(denoised_pcd.points)
-    noisy_room = np.asarray(noisy_pcd.points)
-
-    v = viz.Visualizer()
-    v.add_points("denoised", denoised_room, point_size=2, visible=False)
-    v.add_points("noised", noisy_room, point_size=2, visible=False)
-    v.save(".viz")
+    model_name = cfg.model_path.split("/")[-2]
+    np.save(f"denoised_{model_name}.npy", denoised_room)
+    np.save(f"noised_{model_name}.npy", noisy_room)
+    np.save(f"gt_{model_name}.npy", gt_batches)
 
 
 if __name__ == "__main__":
