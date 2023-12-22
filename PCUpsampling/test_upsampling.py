@@ -1,5 +1,4 @@
 import os
-from gecco_torch import diffusion
 
 import pandas as pd
 import torch.distributed as dist

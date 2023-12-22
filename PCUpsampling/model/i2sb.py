@@ -233,13 +233,13 @@ class I2SB(DiffusionModel):
         **kwargs,
     ) -> Dict:
         if self.cfg.diffusion.sampling_strategy == "DDPM":
-            xs, _ = self.ddpm_sampling(
+            xs, x0s = self.ddpm_sampling(
                 x1=x1,
                 features=features,
                 cond=cond,
                 clip_denoise=clip,
                 nfe=self.cfg.diffusion.sampling_timesteps,
-                verbose=False,
+                verbose=True,
             )
             data = {
                 "x_chain": xs,

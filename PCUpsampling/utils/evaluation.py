@@ -74,6 +74,7 @@ def evaluate(model, eval_iter, cfg, step, sampling=False, save_npy=False, debug=
         )
 
     pred = sample_data["x_pred"]
+    chain = sample_data["x_chain"][0]
 
     # visualize the pointclouds
     save_visualizations(
@@ -81,6 +82,7 @@ def evaluate(model, eval_iter, cfg, step, sampling=False, save_npy=False, debug=
             (pred, "pred"),
             (x_start, "start") if x_start is not None else None,
             (x0, "gt"),
+            (chain, "chain")
         ],
         out_dir,
         step,
