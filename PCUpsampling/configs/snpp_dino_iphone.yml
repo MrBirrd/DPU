@@ -1,5 +1,5 @@
 data:
-  data_dir: /cluster/scratch/matvogel/scannetprocessed/
+  data_dir: /cluster/scratch/matvogel/snpp_processed/
   dataset: "ScanNetPP_iPhone"
   augment: false
   point_features: dino
@@ -26,7 +26,7 @@ diffusion:
   clip: false
   beta_start: 1.e-7
   beta_end: 1.e-6
-  beta_max: 1.e-4
+  beta_max: 0.3
   ot_ode: true
   reg_scale: 0
 model:
@@ -66,15 +66,15 @@ training:
   grad_clip:
     enabled: false
     value: 10.0
-  bs: 4
+  bs: 32
   overfit: false
   amp: true
-  steps: 200_000
+  steps: 500_000
   accumulation_steps: 1
   log_interval: 10 # steps
   save_interval: 10000
   viz_interval: 10000
   seed: 42
 sampling:
-  bs: 4
+  bs: 32
   num_iter: 1
