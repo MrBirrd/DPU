@@ -1,8 +1,9 @@
 data:
-  data_dir: /cluster/scratch/matvogel/snpp_processed/
+  data_dir: /home/mathi/data/snpp_processed/
   dataset: "ScanNetPP_iPhone"
-  augment: false
-  point_features: dino
+  augment: true
+  point_features: none
+  use_rgb_features: true
   unconditional: false
   workers: 4
   npoints: 8192
@@ -11,8 +12,8 @@ data:
   upsample_frac: 8 # when downsampling from the ground truth
   normalize: true # unit cube/sphere normalization
 diffusion:
-  timesteps: 1000
-  timesteps_clip: 1000
+  timesteps: 400
+  timesteps_clip: 400
   sampling_timesteps: 10
   formulation: i2sb # PVD ¦ LUCID ¦ EDM
   objective: pred_noise # pred_noise ¦ pred_v ¦ pred_x0
@@ -26,24 +27,30 @@ diffusion:
   clip: false
   beta_start: 1.e-7
   beta_end: 1.e-6
-  beta_max: 0.3
+  beta_max: 1.e-7
   ot_ode: true
   reg_scale: 0
 model:
   type: PVD # Mink ¦ PVD
   ema: false
   in_dim: 3
-  extra_feature_channels: 387 # 3 RGB + 384 (DINO)
+  extra_feature_channels: 3 # 3 RGB + 384 (DINO)
   out_dim: 3
   time_embed_dim: 64
   dropout: 0.1
   EMA:
     decay: 0.999
   PVD:
-    use_attention: true
+    attention_type: linear
+    attention_heads: 12
     size: large
-    use_st: false
+    attentions: [0, 0, 0, 1, 1]
     channels: [256, 256, 512, 512, 1024]
+    voxel_resolutions: [32, 16, 8, 8]
+    n_sa_blocks: [1, 2, 3, 4]
+    n_fp_blocks: [1, 2, 3, 4]
+    radius: [0.1, 0.2, 0.4, 0.8]
+    out_mlp: 128
   ST:
     fdim: 256
     inducers: 128
@@ -56,17 +63,17 @@ model:
 training:
   optimizer:
     type: AdamW
-    lr: 1.e-3
+    lr: 1.e-4
     beta1: 0.9
     beta2: 0.999
-    weight_decay: 0.0
+    weight_decay: 1.e-5
   scheduler:
     type: constant
     lr_gamma: 0.999
   grad_clip:
     enabled: false
     value: 10.0
-  bs: 32
+  bs: 4
   overfit: false
   amp: true
   steps: 500_000
@@ -76,5 +83,5 @@ training:
   viz_interval: 10000
   seed: 42
 sampling:
-  bs: 32
+  bs: 4
   num_iter: 1

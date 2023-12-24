@@ -1,22 +1,30 @@
 import math
 from collections import namedtuple
 from functools import partial
+from typing import Optional
 
 import torch
 import torch.nn.functional as F
 from einops import rearrange, reduce, repeat
-from torch import nn
+from model.dpm_sampler import DPM_Solver, NoiseScheduleVP, model_wrapper
+from model.utils import (
+    DiffusionModel,
+    default,
+    dynamic_threshold_percentile,
+    extract,
+    identity,
+    normalize_to_neg_one_to_one,
+    unnormalize_to_zero_to_one,
+)
 from torch.cuda.amp import autocast
 from tqdm import tqdm
-from typing import Optional
 from torch import Tensor
-from model.dpm_sampler import DPM_Solver, NoiseScheduleVP, model_wrapper
 from utils.losses import projection_loss
-from model.modules import DiffusionModel
 
 ModelPrediction = namedtuple("ModelPrediction", ["pred_noise", "pred_x_start"])
 
 from loguru import logger
+
 from .loss import get_loss
 
 try:
@@ -27,26 +35,6 @@ except:
 
 
 # gaussian diffusion trainer class
-def exists(x):
-    return x is not None
-
-
-def default(val, d):
-    if exists(val):
-        return val
-    return d() if callable(d) else d
-
-
-def extract(a, t, x_shape):
-    b, *_ = t.shape
-    out = a.gather(-1, t)
-    return out.reshape(b, *((1,) * (len(x_shape) - 1)))
-
-
-def identity(t, *args, **kwargs):
-    return t
-
-
 def linear_beta_schedule(timesteps, beta_start=0.0001, beta_end=0.02) -> Tensor:
     """
     linear schedule, proposed in original ddpm paper
@@ -104,33 +92,6 @@ def adapted_sigmoid_beta_schedule(timesteps, beta_start=0.0001, beta_end=0.02, a
     sigmoid_function = 1 / (1 + torch.exp(-a * (t / timesteps) + b))
     beta_schedule = beta_start + (beta_end - beta_start) * sigmoid_function
     return torch.clip(beta_schedule, 0, 0.999)  # Clipping to avoid very high values
-
-
-def normalize_to_neg_one_to_one(x):
-    return x * 2.0 - 1.0
-
-
-def unnormalize_to_zero_to_one(x):
-    return (x + 1.0) / 2.0
-
-
-def right_pad_dims_to(x, t):
-    padding_dims = x.ndim - t.ndim
-    if padding_dims <= 0:
-        return t
-    return t.view(*t.shape, *((1,) * padding_dims))
-
-
-def dynamic_threshold_percentile(x, threshold=0.975):
-    """
-    dynamic thresholding, based on percentile
-    """
-    s = torch.quantile(rearrange(x, "b ... -> b (...)").abs(), threshold, dim=-1)
-    s.clamp_(min=1.0)
-    s = right_pad_dims_to(x, s)
-    x = x.clamp(-s, s) / s
-
-    return x
 
 
 class GaussianDiffusion(DiffusionModel):

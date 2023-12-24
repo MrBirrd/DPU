@@ -4,13 +4,12 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from .networks import get_network, LinLayers
+from .networks import LinLayers, get_network
 from .utils import get_state_dict
 
 
 class LPIPS(nn.Module):
-    """LPIPS score that supports inputing a invalid mask, and consider only the patches that are not affected by the invalid regions.
-    """
+    """LPIPS score that supports inputing a invalid mask, and consider only the patches that are not affected by the invalid regions."""
 
     def __init__(
         self,

@@ -2,23 +2,23 @@ from collections import OrderedDict
 
 
 def filter_classes(mapping, thresh, count_type):
-    '''
+    """
     mapping: dataframe with class, count, semantic_map_to, instance_map_to
     return: dataframe with counts > thresh
-    '''
+    """
     filtered = mapping[mapping[count_type] >= thresh]
     return filtered
 
 
 def map_classes(mapping, method):
-    '''
+    """
     mapping: dataframe with class, count, semantic_map_to, instance_map_to
     return: list of classes
-    '''
-    if method == 'semantic':
-        map_key = 'semantic_map_to'
-    elif method == 'instance':
-        map_key = 'instance_map_to'
+    """
+    if method == "semantic":
+        map_key = "semantic_map_to"
+    elif method == "instance":
+        map_key = "instance_map_to"
 
     new_classes = []
     # create a dict with classes to be mapped
@@ -28,14 +28,14 @@ def map_classes(mapping, method):
 
     for i in range(mapping.shape[0]):
         row = mapping.iloc[i]
-        class_name = row['class']
+        class_name = row["class"]
         map_target = row[map_key]
 
         # map to None or some other label -> dont add this class to the label list
         try:
             if len(map_target) > 0:
                 # map to None -> dont use this class
-                if map_target == 'None':
+                if map_target == "None":
                     pass
                 else:
                     # map to something else -> use this class
@@ -46,7 +46,7 @@ def map_classes(mapping, method):
                     # x->y but y not in list
                     if map_target not in new_classes:
                         new_classes.append(map_target)
-        except TypeError: 
+        except TypeError:
             # nan values -> no mapping, keep label as is
             if class_name not in new_classes:
                 new_classes.append(class_name)
@@ -55,11 +55,12 @@ def map_classes(mapping, method):
 
     return new_classes, map_dict
 
+
 def filter_map_classes(mapping, thresh, count_type, mapping_type):
-    '''
+    """
     'count': instance count
     'voxel_count': voxel count
-    '''
+    """
     filtered = filter_classes(mapping, thresh, count_type=count_type)
     mapped_classes, map_dict = map_classes(filtered, mapping_type)
 

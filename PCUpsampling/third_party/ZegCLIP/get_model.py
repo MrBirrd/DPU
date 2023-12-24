@@ -5,7 +5,6 @@ import torch
 from mmcv.runner import load_checkpoint
 from mmseg.models import build_segmentor
 from omegaconf import DictConfig
-
 from third_party.ZegCLIP.models.segmentor.zegclip import ZegCLIP
 
 

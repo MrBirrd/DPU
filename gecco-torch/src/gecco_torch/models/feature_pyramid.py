@@ -8,10 +8,9 @@ from dataclasses import dataclass
 from typing import Literal
 
 import torch
-from torch import nn, Tensor
 import torchvision.models as tvm
-
 from gecco_torch.structs import Context3d
+from torch import Tensor, nn
 
 
 @dataclass
@@ -46,9 +45,7 @@ class ConvNeXtExtractor(FeaturePyramidExtractor):
         self.stages = nn.ModuleList()
         for i in range(0, len(convnext.features), 2):
             # group together each downsampling + processing stage
-            self.stages.append(
-                nn.Sequential(convnext.features[i], convnext.features[i + 1])
-            )
+            self.stages.append(nn.Sequential(convnext.features[i], convnext.features[i + 1]))
 
         self.stages = self.stages[:n_stages]
         self._remove_stochastic_depth()

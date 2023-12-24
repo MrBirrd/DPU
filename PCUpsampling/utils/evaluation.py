@@ -1,20 +1,19 @@
 import json
+import os
 
 import numpy as np
 import torch
+import wandb
 from loguru import logger
+from metrics.emd_ import emd_module as EMD
+from metrics.metrics import calculate_cd, print_stats
+from modules.functional import furthest_point_sample
 from point_cloud_utils import chamfer_distance
 from scipy import spatial
 from torch import Tensor
 from tqdm import tqdm
-
-import wandb
-from metrics.emd_ import emd_module as EMD
-from metrics.metrics import calculate_cd, print_stats
-from modules.functional import furthest_point_sample
 from utils.utils import get_data_batch, to_cuda
 from utils.visualize import visualize_pointcloud_batch
-import os
 
 
 def new_x_chain(x, num_chain):
@@ -78,12 +77,7 @@ def evaluate(model, eval_iter, cfg, step, sampling=False, save_npy=False, debug=
 
     # visualize the pointclouds
     save_visualizations(
-        [
-            (pred, "pred"),
-            (x_start, "start") if x_start is not None else None,
-            (x0, "gt"),
-            (chain, "chain")
-        ],
+        [(pred, "pred"), (x_start, "start") if x_start is not None else None, (x0, "gt"), (chain, "chain")],
         out_dir,
         step,
     )

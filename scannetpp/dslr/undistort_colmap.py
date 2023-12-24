@@ -1,18 +1,17 @@
 import argparse
+import json
 import os
+import shutil
 import tempfile
 from pathlib import Path
-import shutil
-import json
 
 import imageio
 import numpy as np
-from tqdm import tqdm
-
-from common.utils.colmap import read_model, write_model, Image
 from common.scene_release import ScannetppScene_Release
-from common.utils.utils import run_command, load_yaml_munch, load_json, read_txt_list
+from common.utils.colmap import Image, read_model, write_model
 from common.utils.nerfstudio import convert_camera
+from common.utils.utils import load_json, load_yaml_munch, read_txt_list, run_command
+from tqdm import tqdm
 
 
 def undistort_anon_masks(
@@ -35,7 +34,7 @@ def undistort_anon_masks(
     with tempfile.TemporaryDirectory() as tmpdir:
         tmpdir = Path(tmpdir)
 
-        cameras, images, points3D = read_model(input_model_dir, '.txt')
+        cameras, images, points3D = read_model(input_model_dir, ".txt")
         new_images = {}
         # Replace the image path (ends with '.JPG') with the mask path (ends with '.png')
         for image_id, image in images.items():
@@ -58,12 +57,7 @@ def undistort_anon_masks(
             f" --output_path {undistort_dir}"
         )
         if crop:
-            command += (
-                f" --roi_min_x 0.125"
-                f" --roi_min_y 0"
-                f" --roi_max_x 0.875"
-                f" --roi_max_y 1"
-            )
+            command += f" --roi_min_x 0.125" f" --roi_min_y 0" f" --roi_max_x 0.875" f" --roi_max_y 1"
         run_command(command)
 
         # # Convert model from .bin to .txt
@@ -120,12 +114,7 @@ def undistort_images(
             f" --output_path {undistort_dir}"
         )
         if crop:
-            command += (
-                f" --roi_min_x 0.125"
-                f" --roi_min_y 0"
-                f" --roi_max_x 0.875"
-                f" --roi_max_y 1"
-            )
+            command += f" --roi_min_x 0.125" f" --roi_min_y 0" f" --roi_max_x 0.875" f" --roi_max_y 1"
         run_command(command)
 
         # Convert model from .bin to .txt
@@ -159,21 +148,21 @@ def main(args):
     cfg = load_yaml_munch(args.config_file)
 
     # get the scenes to process
-    if cfg.get('scene_ids'):
+    if cfg.get("scene_ids"):
         scene_ids = cfg.scene_ids
-    elif cfg.get('splits'):
+    elif cfg.get("splits"):
         scene_ids = []
         for split in cfg.splits:
-            split_path = Path(cfg.data_root) / 'splits' / f'{split}.txt'
+            split_path = Path(cfg.data_root) / "splits" / f"{split}.txt"
             scene_ids += read_txt_list(split_path)
 
     # get the options to process
     # go through each scene
-    for scene_id in tqdm(scene_ids, desc='scene'):
-        scene = ScannetppScene_Release(scene_id, data_root=Path(cfg.data_root) / 'data')
+    for scene_id in tqdm(scene_ids, desc="scene"):
+        scene = ScannetppScene_Release(scene_id, data_root=Path(cfg.data_root) / "data")
         train_test_list = load_json(scene.dslr_train_test_lists_path)
-        train_list = train_test_list['train']
-        test_list = train_test_list['test']
+        train_list = train_test_list["train"]
+        test_list = train_test_list["test"]
         assert len(train_list) > 0
         assert len(test_list) > 0
 
@@ -202,9 +191,9 @@ def main(args):
         )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     p = argparse.ArgumentParser()
-    p.add_argument('config_file', help='Path to config file')
+    p.add_argument("config_file", help="Path to config file")
     args = p.parse_args()
 
     main(args)

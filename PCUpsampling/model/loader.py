@@ -1,20 +1,21 @@
+from functools import partial
+
 import torch
 from loguru import logger
+from model.i2sb import I2SB
 from torch import optim
 from torch.nn.parallel import DataParallel, DistributedDataParallel
-from model.i2sb import I2SB
-from functools import partial
 
 try:
     from model.unet_mink import MinkUnet
 except ImportError:
     logger.warning("Minkowski Engine not installed. Minkowski models will not be available.")
 
-from model.unet_pointvoxel import PVCAdaptive, PVCLionSmall
 from model.diffusion_lucid import GaussianDiffusion as LUCID
-
+from model.unet_pointvoxel import PVCNN2Unet
 from third_party.gecco_torch.models.linear_lift import LinearLift
 from third_party.gecco_torch.models.set_transformer import SetTransformer
+
 from .diffusion_lucid import GaussianDiffusion as LUCID
 
 
@@ -52,29 +53,9 @@ def load_optim_sched(cfg, model, model_ckpt=None):
 def load_model(cfg):
     if cfg.model.type == "PVD":
         if cfg.model.PVD.size == "small":
-            model = PVCLionSmall(
-                out_dim=cfg.model.out_dim,
-                input_dim=cfg.model.in_dim,
-                npoints=cfg.data.npoints,
-                embed_dim=cfg.model.time_embed_dim,
-                use_att=cfg.model.use_attention,
-                use_st=cfg.model.PVD.use_st,
-                dropout=cfg.model.dropout,
-                extra_feature_channels=cfg.model.extra_feature_channels,
-            )
+            raise NotImplementedError(cfg.model.PVD.size)
         elif cfg.model.PVD.size == "large":
-            model = PVCAdaptive(
-                out_dim=cfg.model.out_dim,
-                input_dim=cfg.model.in_dim,
-                npoints=cfg.data.npoints,
-                channels=cfg.model.PVD.channels,
-                embed_dim=cfg.model.time_embed_dim,
-                use_att=cfg.model.PVD.use_attention,
-                use_st=cfg.model.PVD.use_st,
-                st_params=cfg.model.ST,
-                dropout=cfg.model.dropout,
-                extra_feature_channels=cfg.model.extra_feature_channels,
-            )
+            model = PVCNN2Unet(cfg)
         else:
             raise NotImplementedError(cfg.model.PVD.size)
     elif cfg.model.type == "Mink":
@@ -147,7 +128,7 @@ def load_diffusion(cfg, smart=False):
         torch.cuda.set_device(gpu)
         model = model.cuda(gpu)
     else:
-        raise ValueError("distribution_type = multi | single | None")
+        raise ValueError("distribution_type = multi | single")
 
     # load the model weights
     cfg.start_step = 0

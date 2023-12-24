@@ -65,11 +65,12 @@ def sigmoid_focal_loss(inputs, targets, num_masks, alpha: float = 0.25, gamma: f
 
     return loss.mean(1).sum() / num_masks
 
+
 def cosine_margin_loss(q, e, labels, tau=1.0, m=0.5):
-    assert q.shape[1]+1 == e.shape[0]
+    assert q.shape[1] + 1 == e.shape[0]
     bs, n_cls, n_dim = q.shape
-    q = q.reshape(bs*n_cls, n_dim)
-    pos = torch.exp(F.cosine_similarity(q, e[labels.long()].reshape(bs*n_cls, n_dim)) / tau)
+    q = q.reshape(bs * n_cls, n_dim)
+    pos = torch.exp(F.cosine_similarity(q, e[labels.long()].reshape(bs * n_cls, n_dim)) / tau)
     neg = torch.exp(F.cosine_similarity(q.unsqueeze(1), e.unsqueeze(0), dim=-1) / tau)
     neg = torch.sum(neg, dim=-1) + m
     return 1 - torch.mean(torch.div(pos, neg))
@@ -117,8 +118,8 @@ class SegPlusCriterion(nn.Module):
 
         bs, n_cls, H, W = target_masks.size()
         _, _, H_, W_ = src_masks.size()
-        src_masks = src_masks.reshape(bs*n_cls, H_, W_)
-        target_masks = target_masks.reshape(bs*n_cls, H, W)
+        src_masks = src_masks.reshape(bs * n_cls, H_, W_)
+        target_masks = target_masks.reshape(bs * n_cls, H, W)
         # upsample predictions to the target size
         src_masks = F.interpolate(
             src_masks[:, None], size=target_masks.shape[-2:], mode="bilinear", align_corners=False
@@ -147,7 +148,7 @@ class SegPlusCriterion(nn.Module):
 
         target_masks_dice = target_masks_dice.flatten(1)
         target_masks_dice = target_masks_dice.view(src_masks_dice.shape)
-        
+
         losses = {
             "loss_mask": sigmoid_focal_loss(src_masks, target_masks, num_masks),
             "loss_dice": dice_loss(src_masks_dice, target_masks_dice, num_masks),
@@ -156,13 +157,13 @@ class SegPlusCriterion(nn.Module):
 
     def _get_target_mask_binary_cross_entropy(self, out_masks, targets):
         B, C = out_masks.size()[:2]
-        H, W = targets[0]['masks'].size()
-        target_masks_o = torch.zeros(B, C, H*W).to(out_masks.device) 
+        H, W = targets[0]["masks"].size()
+        target_masks_o = torch.zeros(B, C, H * W).to(out_masks.device)
         for i, target in enumerate(targets):
-            mask = target['masks'].long().reshape(-1)
-            idx = torch.arange(0, H*W, 1).long().to(out_masks.device) 
-            mask_o = mask[mask!=255]
-            idx = idx[mask!=255]
+            mask = target["masks"].long().reshape(-1)
+            idx = torch.arange(0, H * W, 1).long().to(out_masks.device)
+            mask_o = mask[mask != 255]
+            idx = idx[mask != 255]
             target_masks_o[i, mask_o, idx] = 1
         return target_masks_o.reshape(B, C, H, W)
 
@@ -177,7 +178,6 @@ class SegPlusCriterion(nn.Module):
         batch_idx = torch.cat([torch.full_like(tgt, i) for i, (_, tgt) in enumerate(indices)])
         tgt_idx = torch.cat([tgt for (_, tgt) in indices])
         return batch_idx, tgt_idx
-
 
     def get_loss(self, loss, outputs, targets, indices, num_masks):
         loss_map = {"masks": self.loss_masks}
@@ -195,16 +195,14 @@ class SegPlusCriterion(nn.Module):
 
         # Retrieve the matching between the outputs of the last layer and the targets
 
-        labels = [x['labels'] for x in targets]
+        labels = [x["labels"] for x in targets]
         indices_new = []
         for label in labels:
             t = torch.arange(len(label))
             indices_new.append([label, t])
         indices = indices_new
         num_masks = sum(len(t["labels"]) for t in targets)
-        num_masks = torch.as_tensor(
-            [num_masks], dtype=torch.float, device=next(iter(outputs.values())).device
-        )
+        num_masks = torch.as_tensor([num_masks], dtype=torch.float, device=next(iter(outputs.values())).device)
         if is_dist_avail_and_initialized():
             torch.distributed.all_reduce(num_masks)
         num_masks = torch.clamp(num_masks / get_world_size(), min=1).item()
@@ -224,4 +222,3 @@ class SegPlusCriterion(nn.Module):
                     losses.update(l_dict)
 
         return losses
-

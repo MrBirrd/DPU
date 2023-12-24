@@ -1,14 +1,15 @@
+import os
+
 import numpy as np
+import open3d as o3d
 import pyminiply
 import pyviz3d.visualizer as viz
 import torch
-from scipy.spatial import cKDTree
-from tqdm import tqdm
-import open3d as o3d
 from model.loader import load_diffusion
 from modules.functional import furthest_point_sample
+from scipy.spatial import cKDTree
+from tqdm import tqdm
 from utils.args import parse_args
-import os
 
 
 def main():

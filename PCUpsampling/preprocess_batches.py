@@ -1,15 +1,16 @@
 import argparse
 import os
+
+import cudf
 import numpy as np
+import open3d as o3d
 import pyminiply
 import torch
-from sklearn import neighbors
-from einops import rearrange
-from tqdm import tqdm
-import open3d as o3d
-from modules.functional import furthest_point_sample
 from cuml.neighbors import NearestNeighbors
-import cudf
+from einops import rearrange
+from modules.functional import furthest_point_sample
+from sklearn import neighbors
+from tqdm import tqdm
 
 FEATURES = ["dino"]
 FACTOR = 3

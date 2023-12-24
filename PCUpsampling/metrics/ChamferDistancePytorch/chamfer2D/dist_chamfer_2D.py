@@ -10,20 +10,26 @@ if not chamfer_found:
     ## Cool trick from https://github.com/chrdiller
     print("Jitting Chamfer 2D")
     cur_path = os.path.dirname(os.path.abspath(__file__))
-    build_path = cur_path.replace('chamfer2D', 'tmp')
+    build_path = cur_path.replace("chamfer2D", "tmp")
     os.makedirs(build_path, exist_ok=True)
 
     from torch.utils.cpp_extension import load
-    chamfer_2D = load(name="chamfer_2D",
-                  sources=[
-                      "/".join(os.path.abspath(__file__).split('/')[:-1] + ["chamfer_cuda.cpp"]),
-                      "/".join(os.path.abspath(__file__).split('/')[:-1] + ["chamfer2D.cu"]),
-                  ], build_directory=build_path)
+
+    chamfer_2D = load(
+        name="chamfer_2D",
+        sources=[
+            "/".join(os.path.abspath(__file__).split("/")[:-1] + ["chamfer_cuda.cpp"]),
+            "/".join(os.path.abspath(__file__).split("/")[:-1] + ["chamfer2D.cu"]),
+        ],
+        build_directory=build_path,
+    )
     print("Loaded JIT 2D CUDA chamfer distance")
 
 else:
     import chamfer_2D
+
     print("Loaded compiled 2D CUDA chamfer distance")
+
 
 # Chamfer's distance module @thibaultgroueix
 # GPU tensors only
@@ -31,9 +37,9 @@ class chamfer_2DFunction(Function):
     @staticmethod
     def forward(ctx, xyz1, xyz2):
         batchsize, n, dim = xyz1.size()
-        assert dim==2, "Wrong last dimension for the chamfer distance 's input! Check with .size()"
+        assert dim == 2, "Wrong last dimension for the chamfer distance 's input! Check with .size()"
         _, m, dim = xyz2.size()
-        assert dim==2, "Wrong last dimension for the chamfer distance 's input! Check with .size()"
+        assert dim == 2, "Wrong last dimension for the chamfer distance 's input! Check with .size()"
         device = xyz1.device
 
         device = xyz1.device
@@ -66,9 +72,7 @@ class chamfer_2DFunction(Function):
 
         gradxyz1 = gradxyz1.to(device)
         gradxyz2 = gradxyz2.to(device)
-        chamfer_2D.backward(
-            xyz1, xyz2, gradxyz1, gradxyz2, graddist1, graddist2, idx1, idx2
-        )
+        chamfer_2D.backward(xyz1, xyz2, gradxyz1, gradxyz2, graddist1, graddist2, idx1, idx2)
         return gradxyz1, gradxyz2
 
 

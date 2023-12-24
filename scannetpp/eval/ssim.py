@@ -1,17 +1,14 @@
+from math import exp
 from typing import Optional
 
 import torch
-from math import exp
 import torch.nn as nn
 import torch.nn.functional as F
 
 
 def gaussian(kernel_size: int, sigma: float) -> torch.Tensor:
     gauss = torch.Tensor(
-        [
-            exp(-((x - kernel_size // 2) ** 2) / float(2 * sigma**2))
-            for x in range(kernel_size)
-        ],
+        [exp(-((x - kernel_size // 2) ** 2) / float(2 * sigma**2)) for x in range(kernel_size)],
     ).float()
     return gauss / gauss.sum()
 
@@ -41,9 +38,7 @@ def get_mask_with_kernel(mask: torch.Tensor, kernel_size: int = 11) -> torch.Ten
 
     # The border area will be filled with 0 (invalid pixels) because the original image is padded
     # Those regions are not considered in the ssim calculation
-    mask = torch.nn.functional.pad(
-        mask, (pad_w, pad_w, pad_h, pad_h), mode="constant", value=0
-    )
+    mask = torch.nn.functional.pad(mask, (pad_w, pad_w, pad_h, pad_h), mode="constant", value=0)
     mask = torch.nn.functional.conv2d(mask, kernel)
     full_value = kernel_size * kernel_size
     new_mask = mask >= full_value
@@ -51,10 +46,7 @@ def get_mask_with_kernel(mask: torch.Tensor, kernel_size: int = 11) -> torch.Ten
 
 
 def ssim(
-    img1: torch.Tensor,
-    img2: torch.Tensor,
-    mask: Optional[torch.Tensor] = None,
-    kernel_size: int = 11
+    img1: torch.Tensor, img2: torch.Tensor, mask: Optional[torch.Tensor] = None, kernel_size: int = 11
 ) -> torch.Tensor:
     """Calculate SSIM (structural similarity) for a batch of images
     Args:
@@ -69,9 +61,7 @@ def ssim(
     assert img1.size() == img2.size()
     assert img1.min() >= 0 and img1.max() <= 1
     assert img2.min() >= 0 and img2.max() <= 1
-    assert (
-        len(img1.shape) == 4
-    ), "image input should have shape (batch, channel, height, width)"
+    assert len(img1.shape) == 4, "image input should have shape (batch, channel, height, width)"
     if mask is not None:
         assert len(mask.shape) == 3, f"mask should have shape (batch, height, width) instead of {mask.shape}"
 
@@ -110,7 +100,5 @@ def _ssim(img1, img2, kernel, channel):
     C1 = 0.01**2
     C2 = 0.03**2
 
-    ssim_map = ((2 * mu1_mu2 + C1) * (2 * sigma12 + C2)) / (
-        (mu1_sq + mu2_sq + C1) * (sigma1_sq + sigma2_sq + C2)
-    )
+    ssim_map = ((2 * mu1_mu2 + C1) * (2 * sigma12 + C2)) / ((mu1_sq + mu2_sq + C1) * (sigma1_sq + sigma2_sq + C2))
     return ssim_map

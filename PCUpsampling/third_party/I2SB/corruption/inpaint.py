@@ -21,9 +21,10 @@ from PIL import Image, ImageDraw
 
 FREEFORM_URL = "https://drive.google.com/file/d/1-5YRGsekjiRKQWqo0BV5RVQu0bagc12w/view?usp=share_link"
 
+
 # code adoptted from
 # https://bit.ly/eval- pix2pix
-def bbox2mask(img_shape, bbox, dtype='uint8'):
+def bbox2mask(img_shape, bbox, dtype="uint8"):
     """Generate mask in ndarray from bbox.
 
     The returned mask has the shape of (h, w, 1). '1' indicates the
@@ -44,9 +45,10 @@ def bbox2mask(img_shape, bbox, dtype='uint8'):
     height, width = img_shape[:2]
 
     mask = np.zeros((height, width, 1), dtype=dtype)
-    mask[bbox[0]:bbox[0] + bbox[2], bbox[1]:bbox[1] + bbox[3], :] = 1
+    mask[bbox[0] : bbox[0] + bbox[2], bbox[1] : bbox[1] + bbox[3], :] = 1
 
     return mask
+
 
 # code adoptted from
 # https://bit.ly/eval-pix2pix
@@ -57,7 +59,7 @@ def load_masks(filename):
     # shape = [10950, 256, 256] # Uncomment this for places2.
 
     # Load the npz file.
-    with open(filename, 'rb') as f:
+    with open(filename, "rb") as f:
         data = f.read()
 
     data = dict(np.load(io.BytesIO(data)))
@@ -67,10 +69,11 @@ def load_masks(filename):
 
     # Unpack and reshape the masks.
     for key in data:
-        data[key] = np.unpackbits(data[key], axis=None)[:np.prod(shape)].reshape(shape).astype(np.uint8)
+        data[key] = np.unpackbits(data[key], axis=None)[: np.prod(shape)].reshape(shape).astype(np.uint8)
 
     # data[key] contains [10000, 256, 256] array i.e. 10000 256x256 masks.
     return data
+
 
 def load_freeform_masks(op_type):
     data_dir = Path("data")
@@ -92,35 +95,38 @@ def load_freeform_masks(op_type):
         np.savez(mask_fn, mask=masks[key])
 
     # [10000, 256, 256] --> [10000, 1, 256, 256]
-    return np.load(mask_fn)["mask"][:,None]
+    return np.load(mask_fn)["mask"][:, None]
+
 
 def get_center_mask(image_size):
     h, w = image_size
-    mask = bbox2mask(image_size, (h//4, w//4, h//2, w//2))
-    return torch.from_numpy(mask).permute(2,0,1)
+    mask = bbox2mask(image_size, (h // 4, w // 4, h // 2, w // 2))
+    return torch.from_numpy(mask).permute(2, 0, 1)
+
 
 def build_inpaint_center(opt, log, mask_type):
     assert mask_type == "center"
 
     log.info(f"[Corrupt] Inpaint: {mask_type=}  ...")
 
-    center_mask = get_center_mask([opt.image_size, opt.image_size])[None,...] # [1,1,256,256]
+    center_mask = get_center_mask([opt.image_size, opt.image_size])[None, ...]  # [1,1,256,256]
     center_mask = center_mask.to(opt.device)
 
     def inpaint_center(img):
         # img: [-1,1]
         mask = center_mask
         # img[mask==0] = img[mask==0], img[mask==1] = 1 (white)
-        return img * (1. - mask) + mask, mask
+        return img * (1.0 - mask) + mask, mask
 
     return inpaint_center
+
 
 def build_inpaint_freeform(opt, log, mask_type):
     assert "freeform" in mask_type
 
     log.info(f"[Corrupt] Inpaint: {mask_type=}  ...")
 
-    freeform_masks = load_freeform_masks(mask_type) # [10000, 1, 256, 256]
+    freeform_masks = load_freeform_masks(mask_type)  # [10000, 1, 256, 256]
     n_freeform_masks = freeform_masks.shape[0]
     freeform_masks = torch.from_numpy(freeform_masks).to(opt.device)
 
@@ -129,6 +135,6 @@ def build_inpaint_freeform(opt, log, mask_type):
         index = np.random.randint(n_freeform_masks, size=img.shape[0])
         mask = freeform_masks[index]
         # img[mask==0] = img[mask==0], img[mask==1] = 1 (white)
-        return img * (1. - mask) + mask, mask
+        return img * (1.0 - mask) + mask, mask
 
     return inpaint_freeform

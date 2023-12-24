@@ -1,16 +1,15 @@
 import os
 import re
-from typing import NamedTuple, Union, List
 from functools import partial
+from typing import List, NamedTuple, Union
 
-import torch
-import numpy as np
 import imageio as iio
-import multiprocess as mp
 import lightning.pytorch as pl
+import multiprocess as mp
+import numpy as np
+import torch
+from gecco_torch.structs import Context3d, Example
 from tqdm.auto import tqdm
-
-from gecco_torch.structs import Example, Context3d
 
 IM_SIZE = 137  # 137 x 137 pixels
 WORLD_MAT_RE = re.compile(r"world_mat_(\d+)")
@@ -155,9 +154,7 @@ class ShapeNetVol(torch.utils.data.ConcatDataset):
                     continue
                 subroots.append(maybe_dir_path)
 
-            models = [
-                ShapeNetVolClass(subroot, split, **kw) for subroot in tqdm(subroots)
-            ]
+            models = [ShapeNetVolClass(subroot, split, **kw) for subroot in tqdm(subroots)]
         else:
             assert isinstance(split, (list, tuple))
             assert all(isinstance(path, str) for path in split)
@@ -208,9 +205,7 @@ class ShapenetCondDataModule(pl.LightningDataModule):
             self.train,
             batch_size=self.batch_size,
             num_workers=self.num_workers,
-            sampler=torch.utils.data.RandomSampler(
-                self.train, replacement=True, num_samples=self.epoch_size
-            ),
+            sampler=torch.utils.data.RandomSampler(self.train, replacement=True, num_samples=self.epoch_size),
             pin_memory=True,
             shuffle=False,
         )
@@ -219,9 +214,7 @@ class ShapenetCondDataModule(pl.LightningDataModule):
         if self.val_size is None:
             sampler = None
         else:
-            sampler = torch.utils.data.RandomSampler(
-                self.val, replacement=True, num_samples=self.val_size
-            )
+            sampler = torch.utils.data.RandomSampler(self.val, replacement=True, num_samples=self.val_size)
 
         return torch.utils.data.DataLoader(
             self.val,

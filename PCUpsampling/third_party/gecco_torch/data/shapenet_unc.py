@@ -127,9 +127,7 @@ class ShapeNetUncondDataModule(pl.LightningDataModule):
         else:
             kw = dict(
                 shuffle=False,
-                sampler=ConcatenatedSampler(
-                    self.train, self.epoch_size * self.batch_size, seed=None
-                ),
+                sampler=ConcatenatedSampler(self.train, self.epoch_size * self.batch_size, seed=None),
             )
 
         return torch.utils.data.DataLoader(

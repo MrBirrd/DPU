@@ -15,20 +15,63 @@ import copy
 import functools
 import os
 from functools import partial
+from typing import List
 
+import modules.functional as F
 import numpy as np
 import torch
 import torch.nn as nn
 from einops import rearrange
 from loguru import logger
+
 # from utils.checker import *
 from torch.cuda.amp import GradScaler, autocast, custom_bwd, custom_fwd
-
-import modules.functional as F
 
 from .adagn import AdaGN
 
 quiet = int(os.environ.get("quiet", 0))
+
+
+def create_pvc_layer_params(cfg):
+    npoints = cfg.data.npoints
+    channels = cfg.model.PVD.channels
+    n_sa_blocks = cfg.model.PVD.n_sa_blocks
+    n_fp_blocks = cfg.model.PVD.n_fp_blocks
+    radius = cfg.model.PVD.radius
+    voxel_resolutions = cfg.model.PVD.voxel_resolutions
+    
+    n_centers = []
+    sa_blocks = []
+    fp_blocks = []
+    n_channels = len(channels)
+    
+    for i in range(n_channels-1):
+        n_centers.append(npoints // 4**(i+1))
+        
+        # create set abstraction blocks
+        if i != n_channels - 2:
+            sa_blocks.append((
+                (channels[i], n_sa_blocks[i], voxel_resolutions[i]), 
+                (n_centers[i], radius[i], 32, (channels[i], channels[i+1]))
+                ))
+        else:
+            sa_blocks.append((
+                None, 
+                (n_centers[i], radius[i], 32, (channels[i], channels[i], channels[i+1]))
+                ))
+
+    vox_res_idxs = [i for i in range(len(channels) - 1)]
+    fp_blocks_idxs = vox_res_idxs
+    in_channels_idxs = [min(i, n_channels-2) for i in range(2, len(channels) - 1)]
+    
+    # in_channels, out_channels X | out_channels, num_blocks, voxel_resolution
+    fp_blocks = [
+        ((channels[3], channels[3]), (channels[3], n_fp_blocks[3], voxel_resolutions[3])),
+        ((channels[3], channels[3]), (channels[3], n_fp_blocks[2], voxel_resolutions[2])),
+        ((channels[3], channels[2]), (channels[2], n_fp_blocks[1], voxel_resolutions[1])),
+        ((channels[2], channels[2], channels[1]), (channels[1], n_fp_blocks[0], voxel_resolutions[0])),
+    ]
+    return sa_blocks, fp_blocks
 
 
 class SE3d(nn.Module):
@@ -224,8 +267,8 @@ class PVConv(nn.Module):
         with_se=False,
         add_point_feat=True,
         attention=False,
+        attention_fn=LinearAttention,
         dropout=0.1,
-        verbose=True,
         use_conditioning=False,
         cfg={},
     ):
@@ -262,7 +305,7 @@ class PVConv(nn.Module):
             voxel_layers.append(SE3d(out_channels))
         self.voxel_layers = nn.ModuleList(voxel_layers)
         if attention:
-            self.attn = LinearAttention(out_channels, verbose=verbose)
+            self.attn = attention_fn(out_channels)
         else:
             self.attn = None
         if add_point_feat:
@@ -525,7 +568,8 @@ def create_pointnet2_sa_components(
     extra_feature_channels,
     input_dim=3,
     embed_dim=64,
-    use_att=False,
+    attention_fn=None,
+    attention_layers=None,
     force_att=0,
     dropout=0.1,
     with_se=False,
@@ -548,15 +592,17 @@ def create_pointnet2_sa_components(
     sa_layers, sa_in_channels = [], []
     c = 0
     num_centers = None
-    for conv_configs, sa_configs in sa_blocks:
+    for idx, (conv_configs, sa_configs) in enumerate(sa_blocks):
         k = 0
         sa_in_channels.append(in_channels)
         sa_blocks = []
+        use_att = attention_layers[idx]
+        
         if conv_configs is not None:
             out_channels, num_blocks, voxel_resolution = conv_configs
             out_channels = int(r * out_channels)
             for p in range(num_blocks):
-                attention = ((c + 1) % 2 == 0 and use_att and p == 0) or (force_att and c > 0)
+                attention = use_att and p == 0
                 if voxel_resolution is None:
                     block = functools.partial(SharedMLP, conditioning=use_conditioning)
                 else:
@@ -565,11 +611,11 @@ def create_pointnet2_sa_components(
                         kernel_size=3,
                         resolution=int(vr * voxel_resolution),
                         attention=attention,
+                        attention_fn = attention_fn,
                         dropout=dropout,
                         with_se=with_se,  # with_se_relu=True,
                         normalize=normalize,
                         eps=eps,
-                        verbose=verbose,
                         cfg=cfg,
                     )
 
@@ -626,8 +672,9 @@ def create_pointnet2_fp_modules(
     fp_blocks,
     in_channels,
     sa_in_channels,
+    attention_layers,
+    attention_fn,
     embed_dim=64,
-    use_att=False,
     dropout=0.1,
     has_temb=1,
     with_se=False,
@@ -656,12 +703,13 @@ def create_pointnet2_fp_modules(
             )
         )
         in_channels = out_channels[-1]
-
+        use_att = attention_layers[fp_idx]
+        
         if conv_configs is not None:
             out_channels, num_blocks, voxel_resolution = conv_configs
             out_channels = int(r * out_channels)
             for p in range(num_blocks):
-                attention = (c + 1) % 2 == 0 and c < len(fp_blocks) - 1 and use_att and p == 0
+                attention = c < len(fp_blocks) - 1 and use_att and p == 0
                 if voxel_resolution is None:
                     block = functools.partial(SharedMLP, cfg=cfg)
                 else:
@@ -670,11 +718,11 @@ def create_pointnet2_fp_modules(
                         kernel_size=3,
                         resolution=int(vr * voxel_resolution),
                         attention=attention,
+                        attention_fn=attention_fn,
                         dropout=dropout,
                         with_se=with_se,  # with_se_relu=True,
                         normalize=normalize,
                         eps=eps,
-                        verbose=verbose,
                         cfg=cfg,
                     )
 

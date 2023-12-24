@@ -14,18 +14,18 @@ from rich.logging import RichHandler
 
 
 def get_time(sec):
-    h = int(sec//3600)
-    m = int((sec//60)%60)
-    s = int(sec%60)
-    return h,m,s
+    h = int(sec // 3600)
+    m = int((sec // 60) % 60)
+    s = int(sec % 60)
+    return h, m, s
+
 
 class TimeFilter(logging.Filter):
-
     def filter(self, record):
         try:
-          start = self.start
+            start = self.start
         except AttributeError:
-          start = self.start = time.time()
+            start = self.start = time.time()
 
         time_elapsed = get_time(time.time() - start)
 
@@ -34,11 +34,13 @@ class TimeFilter(logging.Filter):
         # self.last = record.relativeCreated/1000.0
         return True
 
+
 class Logger(object):
     def __init__(self, rank=0, log_dir=".log"):
         # other libraries may set logging before arriving at this line.
         # by reloading logging, we can get rid of previous configs set by other libraries.
         from importlib import reload
+
         reload(logging)
         self.rank = rank
         if self.rank == 0:
@@ -51,10 +53,7 @@ class Logger(object):
                 format="(%(relative)s) %(message)s",
                 datefmt="[%X]",
                 force=True,
-                handlers=[
-                    RichHandler(show_path=False),
-                    RichHandler(console=file_console, show_path=False)
-                ],
+                handlers=[RichHandler(show_path=False), RichHandler(console=file_console, show_path=False)],
             )
             # https://stackoverflow.com/questions/31521859/python-logging-module-time-since-last-log
             log = logging.getLogger()

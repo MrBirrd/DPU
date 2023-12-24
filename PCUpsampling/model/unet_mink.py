@@ -5,13 +5,12 @@ from typing import Any
 import MinkowskiEngine as ME
 import torch
 import torch.nn.functional as F
+from data.utils import FeatureVoxelConcatenation
 from einops import rearrange, repeat
 from einops.layers.torch import Rearrange
 from MinkowskiEngine.MinkowskiOps import to_sparse_all
 from torch import einsum, nn
 from torch.nn import Module
-
-from data.utils import FeatureVoxelConcatenation
 
 
 class MinowskiIdentity(nn.Module):

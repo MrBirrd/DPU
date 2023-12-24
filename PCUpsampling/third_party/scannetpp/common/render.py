@@ -15,8 +15,7 @@ except ImportError:
 
 from common.scene_release import ScannetppScene_Release
 from common.utils.colmap import Image, read_model, write_model
-from common.utils.utils import (load_json, load_yaml_munch, read_txt_list,
-                                run_command)
+from common.utils.utils import load_json, load_yaml_munch, read_txt_list, run_command
 
 
 def main(args):
@@ -60,10 +59,14 @@ def main(args):
             params = camera.params[4:]
             camera_model = camera.model
             render_engine.setupCamera(
-                camera.height, camera.width,
-                fx, fy, cx, cy,
+                camera.height,
+                camera.width,
+                fx,
+                fy,
+                cx,
+                cy,
                 camera_model,
-                params,      # Distortion parameters np.array([k1, k2, k3, k4]) or np.array([k1, k2, p1, p2])
+                params,  # Distortion parameters np.array([k1, k2, k3, k4]) or np.array([k1, k2, p1, p2])
             )
 
             near = cfg.get("near", 0.05)

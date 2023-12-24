@@ -5,10 +5,9 @@ convert the data between "viewable" representation (simple xyz) and the
 "diffusion" representation (possibly normalized, logarithmically spaced, etc).
 """
 import torch
-from torch import Tensor
-from kornia.geometry.camera.perspective import project_points, unproject_points
-
 from gecco_torch.structs import Context3d
+from kornia.geometry.camera.perspective import project_points, unproject_points
+from torch import Tensor
 
 
 class Reparam(torch.nn.Module):

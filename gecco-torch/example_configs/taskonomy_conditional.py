@@ -1,18 +1,16 @@
 import os
 
-import torch
 import lightning.pytorch as pl
-
-from gecco_torch.diffusion import EDMPrecond, Diffusion
-from gecco_torch.reparam import UVLReparam
-from gecco_torch.diffusion import Diffusion, LogUniformSchedule, EDMLoss
-from gecco_torch.models.set_transformer import SetTransformer
+import torch
+from gecco_torch.data.taskonomy import TaskonomyDataModule
+from gecco_torch.diffusion import Diffusion, EDMLoss, EDMPrecond, LogUniformSchedule
+from gecco_torch.ema import EMACallback
+from gecco_torch.models.activation import GaussianActivation
 from gecco_torch.models.feature_pyramid import ConvNeXtExtractor
 from gecco_torch.models.ray import RayNetwork
-from gecco_torch.models.activation import GaussianActivation
+from gecco_torch.models.set_transformer import SetTransformer
+from gecco_torch.reparam import UVLReparam
 from gecco_torch.vis import PCVisCallback
-from gecco_torch.data.taskonomy import TaskonomyDataModule
-from gecco_torch.ema import EMACallback
 
 dataset_path = "/cvlabdata1/cvlab/datasets_tyszkiew/taskonomy_256x256/"
 NUM_STEPS = 1_000_000
@@ -94,9 +92,7 @@ def trainer():
                 save_top_k=1,
                 mode="min",
             ),
-            PCVisCallback(
-                n=8, n_steps=128, point_size=0.05
-            ),  # visualize point clouds in tensorboard
+            PCVisCallback(n=8, n_steps=128, point_size=0.05),  # visualize point clouds in tensorboard
         ],
         max_epochs=num_epochs,
         precision="16-mixed",

@@ -1,13 +1,13 @@
 import json
+
 import torch.distributed as dist
 import torch.multiprocessing as mp
 import torch.utils.data
-from loguru import logger
-from omegaconf import OmegaConf
-
 import wandb
 from data.dataloader import get_dataloader, save_iter
-from model.loader import load_optim_sched, load_diffusion
+from loguru import logger
+from model.loader import load_diffusion, load_optim_sched
+from omegaconf import OmegaConf
 from utils.args import parse_args
 from utils.evaluation import evaluate
 from utils.file_utils import *
@@ -132,7 +132,7 @@ def train(gpu, cfg, output_dir, noises_init=None):
 
         if step % cfg.training.log_interval == 0 and is_main_process:
             logger.info(
-                "[{:>3d}/{:>3d}]\tloss: {:>10.4f},\t" "netpNorm: {:>10.2f},\tnetgradNorm: {:>10.2f}\t",
+                "[{:>3d}/{:>3d}]\tloss: {:>10.6f},\t" "netpNorm: {:>10.2f},\tnetgradNorm: {:>10.4f}\t",
                 step,
                 cfg.training.steps,
                 loss_accum,

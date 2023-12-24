@@ -1,9 +1,7 @@
-import numpy as np
+from typing import Dict, List, Optional, Tuple, Union
 import torch
 import torch.nn.init as init
 from torch import Tensor
-from typing import Optional, Tuple, Union, List, Dict
-from einops import rearrange
 
 
 def to_cuda(data, device) -> Union[Tensor, List, Tuple, Dict, None]:
@@ -68,18 +66,25 @@ def get_data_batch(batch, cfg):
     else:
         features, lr_points = None, None
 
+    hr_points = ensure_size(hr_points)
+    
     features = ensure_size(features) if features is not None else None
     lr_points = ensure_size(lr_points) if lr_points is not None else None
-    hr_points = ensure_size(hr_points)
+    
+    lr_colors = ensure_size(batch["lr_colors"]) if "lr_colors" in batch else None
+    hr_colors = ensure_size(batch["hr_colors"]) if "hr_colors" in batch else None
 
-    # ensure that the number of channels is correct, if we have colors, we put them to the features
-    hr_points = hr_points[:, :3, :]
-    lr_colors = lr_points[:, 3:, :] if lr_points is not None else None
-    lr_points = lr_points[:, :3, :] if lr_points is not None else None
-
-    if lr_colors is not None and lr_colors.shape[-1] > 0:
+    # concatenate colors to features
+    if lr_colors is not None and lr_colors.shape[-1] > 0 and cfg.data.use_rgb_features:
         features = torch.cat([lr_colors, features], dim=1) if features is not None else lr_colors
 
+    # unconditionals training (no features) at all
+    if cfg.data.unconditional:
+        features = None
+        lr_points = None
+    
+    assert hr_points.shape == lr_points.shape
+    
     return {
         "hr_points": hr_points,
         "lr_points": lr_points,

@@ -1,4 +1,5 @@
 import os
+from typing import Optional
 
 import numpy as np
 import pyminiply
@@ -7,11 +8,9 @@ from loguru import logger
 from scipy import spatial
 from torch.utils.data import Dataset
 from tqdm import tqdm
-
 from utils.ops import random_rotate_pointcloud_horizontally
 
 from .utils import *
-from typing import Optional
 
 EULER_FEATURE_ROOT = "/cluster/scratch/matvogel/scannetpp"
 VALID_FEATURES = ["dino", "rgb", "dino_svd64"]
@@ -99,7 +98,7 @@ class ScanNetPP_NPZ(Dataset):
         logger.info(f"Loaded {len(self.scene_batches)} batches")
 
     def __len__(self):
-        return len(self.scene_batches)
+        return len(self.scene_batches) * int(1e4)
 
 
 class ScanNetPP_Faro(ScanNetPP_NPZ):
@@ -112,7 +111,7 @@ class ScanNetPP_Faro(ScanNetPP_NPZ):
         # try to load the data and retry if it fails
         while True:
             try:
-                data = self.scene_batches[index]
+                data = self.scene_batches[index % len(self.scene_batches)]
                 data_dict = np.load(data["npz"])
                 points = data_dict["points"]
                 # append the features if they are available
@@ -122,7 +121,7 @@ class ScanNetPP_Faro(ScanNetPP_NPZ):
                 break
             except Exception as e:
                 logger.error(f"Failed to load data {data}")
-                index = np.random.randint(0, len(self.scene_batches))
+                index = np.random.randint(0, self.__len__())
 
         # normalize the point coordinates
         center = np.mean(points, axis=0)
@@ -151,10 +150,18 @@ class ScanNetPP_iPhone(ScanNetPP_NPZ):
         # try to load the data and retry if it fails
         while True:
             try:
-                data = self.scene_batches[index]
+                data = self.scene_batches[index % len(self.scene_batches)]
                 data_dict = np.load(data["npz"])
-                points_faro = data_dict["faro"]
-                points_iphone = data_dict["iphone"]
+                faro = data_dict["faro"]
+                iphone = data_dict["iphone"]
+                # extract the points
+                points_iphone = iphone[:, :3]
+                points_faro = faro[:, :3]
+                # extract the colors
+                if iphone.shape[1] > 3:
+                    batch_data["lr_colors"] = torch.from_numpy(iphone[:, 3:]).float()
+                if faro.shape[1] > 3:
+                    batch_data["hr_colors"] = torch.from_numpy(faro[:, 3:]).float() 
                 # append the features if they are available
                 if self.features is not None:
                     features = data_dict[self.features]
@@ -162,7 +169,7 @@ class ScanNetPP_iPhone(ScanNetPP_NPZ):
                 break
             except Exception as e:
                 logger.error(f"Failed to load data {data}")
-                index = np.random.randint(0, len(self.scene_batches))
+                index = np.random.randint(0, self.__len__())
 
         # normalize the point coordinates
         center = np.mean(points_iphone, axis=0)

@@ -1,8 +1,7 @@
+import modules.functional as F
 import torch
 import torch.nn as nn
 from torch.cuda.amp import custom_bwd, custom_fwd
-
-import modules.functional as F
 
 __all__ = ["BallQuery"]
 

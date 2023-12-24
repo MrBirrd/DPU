@@ -44,11 +44,7 @@ class Attention(nn.Module):
 
     def forward(self, x):
         B, N, C = x.shape
-        qkv = (
-            self.qkv(x)
-            .reshape(B, N, 3, self.num_heads, C // self.num_heads)
-            .permute(2, 0, 3, 1, 4)
-        )
+        qkv = self.qkv(x).reshape(B, N, 3, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
         q, k, v = (
             qkv[0],
             qkv[1],
@@ -161,11 +157,7 @@ class BlockWithMasking(nn.Module):
             x = x + self.drop_path(self.attn(self.norm_1(x), attn_mask))
             x = x + self.drop_path(self.mlp(self.norm_2(x)))
         else:
-            x = (
-                x
-                + self.drop_path(self.attn(self.norm_1(x), attn_mask))
-                * self.layer_scale_gamma1
-            )
+            x = x + self.drop_path(self.attn(self.norm_1(x), attn_mask)) * self.layer_scale_gamma1
             x = x + self.drop_path(self.mlp(self.norm_2(x))) * self.layer_scale_gamma2
         return x
 
@@ -261,18 +253,12 @@ class SimpleTransformer(nn.Module):
         if self.pre_transformer_layer:
             tokens = self.pre_transformer_layer(tokens)
         if use_checkpoint and checkpoint_blk_ids is None:
-            checkpoint_blk_ids = [
-                blk_id
-                for blk_id in range(len(self.blocks))
-                if blk_id % checkpoint_every_n == 0
-            ]
+            checkpoint_blk_ids = [blk_id for blk_id in range(len(self.blocks)) if blk_id % checkpoint_every_n == 0]
         if checkpoint_blk_ids:
             checkpoint_blk_ids = set(checkpoint_blk_ids)
         for blk_id, blk in enumerate(self.blocks):
             if use_checkpoint and blk_id in checkpoint_blk_ids:
-                tokens = checkpoint.checkpoint(
-                    blk, tokens, attn_mask, use_reentrant=False
-                )
+                tokens = checkpoint.checkpoint(blk, tokens, attn_mask, use_reentrant=False)
             else:
                 tokens = blk(tokens, attn_mask=attn_mask)
         if self.post_transformer_layer:

@@ -4,8 +4,15 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from modules import (Attention, PointNetAModule, PointNetFPModule,
-                     PointNetSAModule, PVConv, SharedMLP, Swish)
+from PCUpsampling.model.utils import (
+    Attention,
+    PointNetAModule,
+    PointNetFPModule,
+    PointNetSAModule,
+    PVConv,
+    SharedMLP,
+    Swish,
+)
 
 
 def _linear_gn_relu(in_channels, out_channels):

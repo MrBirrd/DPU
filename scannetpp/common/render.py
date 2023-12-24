@@ -6,15 +6,16 @@ from pathlib import Path
 import imageio
 import numpy as np
 from tqdm import tqdm
+
 try:
     import renderpy
 except ImportError:
     print("renderpy not installed. Please install renderpy from https://github.com/liu115/renderpy")
     sys.exit(1)
 
-from common.utils.colmap import read_model, write_model, Image
 from common.scene_release import ScannetppScene_Release
-from common.utils.utils import run_command, load_yaml_munch, load_json, read_txt_list
+from common.utils.colmap import Image, read_model, write_model
+from common.utils.utils import load_json, load_yaml_munch, read_txt_list, run_command
 
 
 def main(args):
@@ -58,10 +59,14 @@ def main(args):
             params = camera.params[4:]
             camera_model = camera.model
             render_engine.setupCamera(
-                camera.height, camera.width,
-                fx, fy, cx, cy,
+                camera.height,
+                camera.width,
+                fx,
+                fy,
+                cx,
+                cy,
                 camera_model,
-                params,      # Distortion parameters np.array([k1, k2, k3, k4]) or np.array([k1, k2, p1, p2])
+                params,  # Distortion parameters np.array([k1, k2, k3, k4]) or np.array([k1, k2, p1, p2])
             )
 
             near = cfg.get("near", 0.05)

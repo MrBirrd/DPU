@@ -1,7 +1,6 @@
+import modules.functional as F
 import torch
 import torch.nn as nn
-
-import modules.functional as F
 from modules.ball_query import BallQuery
 from modules.shared_mlp import SharedMLP
 

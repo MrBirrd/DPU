@@ -154,9 +154,7 @@ class ShapeNetVol(torch.utils.data.ConcatDataset):
                     continue
                 subroots.append(maybe_dir_path)
 
-            models = [
-                ShapeNetVolClass(subroot, split, **kw) for subroot in tqdm(subroots)
-            ]
+            models = [ShapeNetVolClass(subroot, split, **kw) for subroot in tqdm(subroots)]
         else:
             assert isinstance(split, (list, tuple))
             assert all(isinstance(path, str) for path in split)
@@ -207,9 +205,7 @@ class ShapenetCondDataModule(pl.LightningDataModule):
             self.train,
             batch_size=self.batch_size,
             num_workers=self.num_workers,
-            sampler=torch.utils.data.RandomSampler(
-                self.train, replacement=True, num_samples=self.epoch_size
-            ),
+            sampler=torch.utils.data.RandomSampler(self.train, replacement=True, num_samples=self.epoch_size),
             pin_memory=True,
             shuffle=False,
         )
@@ -218,9 +214,7 @@ class ShapenetCondDataModule(pl.LightningDataModule):
         if self.val_size is None:
             sampler = None
         else:
-            sampler = torch.utils.data.RandomSampler(
-                self.val, replacement=True, num_samples=self.val_size
-            )
+            sampler = torch.utils.data.RandomSampler(self.val, replacement=True, num_samples=self.val_size)
 
         return torch.utils.data.DataLoader(
             self.val,

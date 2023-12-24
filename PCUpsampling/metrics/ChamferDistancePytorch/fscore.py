@@ -15,4 +15,3 @@ def fscore(dist1, dist2, threshold=0.001):
     fscore = 2 * precision_1 * precision_2 / (precision_1 + precision_2)
     fscore[torch.isnan(fscore)] = 0
     return fscore, precision_1, precision_2
-

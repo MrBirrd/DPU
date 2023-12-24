@@ -1,7 +1,6 @@
-from torch.autograd import Function
-
 # from modules.functional.backend import _backend
 from modules.functional.backend import _backend
+from torch.autograd import Function
 
 __all__ = ["grouping"]
 

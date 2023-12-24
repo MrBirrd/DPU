@@ -105,9 +105,7 @@ class PCVisCallback(pl.Callback):
             # distinguish them by color
             vertices = torch.cat([self.batch.data, samples], dim=1)
 
-            colors = torch.zeros(
-                *vertices.shape, device=vertices.device, dtype=torch.uint8
-            )
+            colors = torch.zeros(*vertices.shape, device=vertices.device, dtype=torch.uint8)
             colors[:, : self.batch.data.shape[1], 1] = 255  # green for ground truth
             colors[:, self.batch.data.shape[1] :, 0] = 255  # red for samples
 

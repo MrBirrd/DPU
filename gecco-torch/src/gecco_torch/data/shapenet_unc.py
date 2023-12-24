@@ -1,10 +1,10 @@
 import os
+
+import lightning.pytorch as pl
 import numpy as np
 import torch
-import lightning.pytorch as pl
-
-from gecco_torch.structs import Example
 from gecco_torch.data.samplers import ConcatenatedSampler, FixedSampler
+from gecco_torch.structs import Example
 
 id_to_name = {
     "04379243": "table",
@@ -127,9 +127,7 @@ class ShapeNetUncondDataModule(pl.LightningDataModule):
         else:
             kw = dict(
                 shuffle=False,
-                sampler=ConcatenatedSampler(
-                    self.train, self.epoch_size * self.batch_size, seed=None
-                ),
+                sampler=ConcatenatedSampler(self.train, self.epoch_size * self.batch_size, seed=None),
             )
 
         return torch.utils.data.DataLoader(

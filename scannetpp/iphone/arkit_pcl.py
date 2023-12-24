@@ -1,21 +1,20 @@
 """
 The script reads the iphone RGB, depth images, and the corresponding camera poses and intrinsics, and backproject them into a point cloud.s
 """
-from typing import List, Tuple, Dict, Optional, Any
 import argparse
 import json
-import time
 import os
+import time
+from typing import Any, Dict, List, Optional, Tuple
 
-from tqdm import tqdm
-import numpy as np
 import cv2
+import numpy as np
+import open3d as o3d
+from common.scene_release import ScannetppScene_Release
 from PIL import Image
 from plyfile import PlyData, PlyElement
-import open3d as o3d
+from tqdm import tqdm
 from xarray import merge
-
-from common.scene_release import ScannetppScene_Release
 
 
 def parse_args():

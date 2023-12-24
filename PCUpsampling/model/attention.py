@@ -4,11 +4,10 @@ from typing import Optional
 
 import torch
 import torch.nn.functional as F
+from einops import rearrange
 from einops.layers.torch import Rearrange
 from packaging import version
-from torch import einsum, nn
-from torch import Tensor
-from einops import rearrange
+from torch import Tensor, einsum, nn
 
 FlashAttentionConfig = namedtuple("FlashAttentionConfig", ["enable_flash", "enable_math", "enable_mem_efficient"])
 
@@ -189,8 +188,6 @@ class MultiHeadedRMSNorm(nn.Module):
 
 
 # positional embeds
-
-
 class LearnedSinusoidalPosEmb(nn.Module):
     def __init__(self, dim):
         super().__init__()

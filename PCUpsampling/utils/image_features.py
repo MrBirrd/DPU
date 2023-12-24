@@ -4,19 +4,18 @@ import traceback
 from typing import Tuple
 
 import numpy as np
+import open3d as o3d
 import pyminiply
 import torch
 import torchvision.transforms as transforms
+from cv2 import resize
 from decord import VideoReader, cpu
 from einops import rearrange
 from sklearn.neighbors import KDTree
-from torch import Tensor
-from tqdm import tqdm
-
 from third_party.scannetpp.common.scene_release import ScannetppScene_Release
 from third_party.scannetpp.common.utils.colmap import read_model
-from cv2 import resize
-import open3d as o3d
+from torch import Tensor
+from tqdm import tqdm
 
 try:
     from third_party.ZegCLIP.get_model import get_model, predict

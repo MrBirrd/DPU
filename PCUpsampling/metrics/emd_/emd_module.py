@@ -112,5 +112,6 @@ def test_emd():
     d = (x1 - x2) * (x1 - x2)
     print("Verified EMD: %lf" % np.sqrt(d.cpu().sum(-1)).mean())
 
+
 if __name__ == "__main__":
     test_emd()

@@ -39,25 +39,19 @@ def downscale_frames(
     out_mask_dir,
 ):
     scale_factor = 1 / downscale_factor
-    new_K, new_height, new_width = compute_resize_intrinsic(
-        K, height, width, scale_factor
-    )
+    new_K, new_height, new_width = compute_resize_intrinsic(K, height, width, scale_factor)
 
     for frame in tqdm(frames, desc="frame"):
         image_path = Path(input_image_dir) / frame["file_path"]
         image = cv2.imread(str(image_path))
-        resized_image = cv2.resize(
-            image, (new_width, new_height), interpolation=cv2.INTER_CUBIC
-        )
+        resized_image = cv2.resize(image, (new_width, new_height), interpolation=cv2.INTER_CUBIC)
         out_image_path = Path(out_image_dir) / frame["file_path"]
         out_image_path.parent.mkdir(parents=True, exist_ok=True)
         cv2.imwrite(str(out_image_path), resized_image)
 
         mask_path = Path(input_mask_dir) / frame["mask_path"]
         mask = cv2.imread(str(mask_path), cv2.IMREAD_GRAYSCALE)
-        resized_mask = cv2.resize(
-            mask, (new_width, new_height), interpolation=cv2.INTER_CUBIC
-        )
+        resized_mask = cv2.resize(mask, (new_width, new_height), interpolation=cv2.INTER_CUBIC)
         # Filter the mask valid: 255, invalid: 0
         resized_mask[resized_mask < 255] = 0
         out_mask_path = Path(out_mask_dir) / frame["mask_path"]

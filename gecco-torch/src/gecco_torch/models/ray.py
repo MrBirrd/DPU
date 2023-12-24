@@ -7,14 +7,13 @@ For unconditional modelling you should use gecco_torch.models.LinearLift instead
 through the SetTransformer.
 """
 import torch
-from torch import nn, Tensor
 from einops import rearrange
-from kornia.geometry.camera.perspective import project_points
-
-from gecco_torch.reparam import Reparam
-from gecco_torch.structs import Context3d
 from gecco_torch.models.feature_pyramid import FeaturePyramidContext
 from gecco_torch.models.set_transformer import SetTransformer
+from gecco_torch.reparam import Reparam
+from gecco_torch.structs import Context3d
+from kornia.geometry.camera.perspective import project_points
+from torch import Tensor, nn
 
 
 class GroupNormBNC(nn.GroupNorm):
@@ -77,9 +76,7 @@ class RayNetwork(nn.Module):
         # perform the projective lookup on each feature map
         lookups = []
         for feature in features:
-            lookup = torch.nn.functional.grid_sample(
-                feature, hw_flat * 2 - 1, align_corners=False
-            )
+            lookup = torch.nn.functional.grid_sample(feature, hw_flat * 2 - 1, align_corners=False)
             lookup = rearrange(lookup, "b c n 1 -> b n c")
             lookups.append(lookup)
 
@@ -104,17 +101,13 @@ class RayNetwork(nn.Module):
             geometry_f32 = geometry.to(dtype=torch.float32)
             features_f32 = [f.to(dtype=torch.float32) for f in post_context.features]
             raw_ctx_f32 = raw_ctx.apply_to_tensors(lambda t: t.to(dtype=torch.float32))
-            img_features_raw = self.extract_image_features(
-                geometry_f32, features_f32, raw_ctx_f32
-            )
+            img_features_raw = self.extract_image_features(geometry_f32, features_f32, raw_ctx_f32)
 
         # the projection brings the number of channels to the dimension of the SetTransformer
         img_features = self.img_feature_proj(img_features_raw)
         point_features = xyz_features + img_features
 
         # run the SetTransformer
-        processed, out_cache = self.backbone(
-            point_features, t_features, do_cache, cache
-        )
+        processed, out_cache = self.backbone(point_features, t_features, do_cache, cache)
 
         return self.output_proj(processed), out_cache

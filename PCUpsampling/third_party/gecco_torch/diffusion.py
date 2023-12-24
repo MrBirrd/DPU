@@ -51,9 +51,7 @@ class EDMPrecond(nn.Module):
         c_noise = sigma.log() / 4
         c_noise = c_noise
 
-        F_x, cache = self.model(
-            (c_in * x), c_noise, raw_context, post_context, do_cache, cache
-        )
+        F_x, cache = self.model((c_in * x), c_noise, raw_context, post_context, do_cache, cache)
         denoised = c_skip * x + c_out * F_x
 
         if not do_cache:
@@ -78,9 +76,7 @@ class LogNormalSchedule(nn.Module):
         return f"sigma_max={self.sigma_max}, mean={self.mean}, std={self.std}"
 
     def forward(self, data: Tensor) -> Tensor:
-        rnd_normal = torch.randn(
-            [data.shape[0], *ones(data.ndim - 1)], device=data.device
-        )
+        rnd_normal = torch.randn([data.shape[0], *ones(data.ndim - 1)], device=data.device)
         return (rnd_normal * self.P_std + self.P_mean).exp()
 
 
@@ -109,9 +105,7 @@ class LogUniformSchedule(nn.Module):
             u = div * u
             u = u + div * torch.arange(data.shape[0], device=data.device)
 
-        sigma = (
-            u * (self.log_sigma_max - self.log_sigma_min) + self.log_sigma_min
-        ).exp()
+        sigma = (u * (self.log_sigma_max - self.log_sigma_min) + self.log_sigma_min).exp()
         return sigma.reshape(-1, *ones(data.ndim - 1))
 
 
@@ -121,9 +115,7 @@ class EDMLoss(nn.Module):
     "Elucidating the Design Space of Diffusion-Based Generative Models" by Kerras et al.
     """
 
-    def __init__(
-        self, schedule: nn.Module, sigma_data: float = 1.0, loss_scale: float = 100.0
-    ):
+    def __init__(self, schedule: nn.Module, sigma_data: float = 1.0, loss_scale: float = 100.0):
         super().__init__()
 
         self.schedule = schedule
@@ -250,20 +242,13 @@ class Diffusion(pl.LightningModule):
     def example_param(self) -> Tensor:
         return next(self.parameters())
 
-    def t_steps(
-        self, num_steps: int, sigma_max: float, sigma_min: float, rho: float
-    ) -> Tensor:
+    def t_steps(self, num_steps: int, sigma_max: float, sigma_min: float, rho: float) -> Tensor:
         """
         Returns an array of sampling time steps for the given parameters.
         """
-        step_indices = torch.arange(
-            num_steps, dtype=torch.float64, device=self.example_param.device
-        )
+        step_indices = torch.arange(num_steps, dtype=torch.float64, device=self.example_param.device)
         t_steps = (
-            sigma_max ** (1 / rho)
-            + step_indices
-            / (num_steps - 1)
-            * (sigma_min ** (1 / rho) - sigma_max ** (1 / rho))
+            sigma_max ** (1 / rho) + step_indices / (num_steps - 1) * (sigma_min ** (1 / rho) - sigma_max ** (1 / rho))
         ) ** rho
         t_steps = torch.cat([t_steps, torch.zeros_like(t_steps[:1])])  # t_N = 0
         return t_steps
@@ -315,11 +300,7 @@ class Diffusion(pl.LightningModule):
             x_cur = x_next
 
             # Increase noise temporarily.
-            gamma = (
-                min(S_churn / num_steps, math.sqrt(2.0) - 1)
-                if S_min <= t_cur <= S_max
-                else 0
-            )
+            gamma = min(S_churn / num_steps, math.sqrt(2.0) - 1) if S_min <= t_cur <= S_max else 0
             t_hat = t_cur + gamma * t_cur
             noise = torch.randn(x_cur.shape, device=device, generator=rng, dtype=dtype)
             x_hat = x_cur + (t_hat**2 - t_cur**2).sqrt() * S_noise * noise
@@ -391,14 +372,10 @@ class Diffusion(pl.LightningModule):
         rng: torch.Generator = torch.Generator(device=net_device)
         if seed is not None:
             rng: torch.Generator = rng.manual_seed(seed)
-        randn = lambda shape: torch.randn(
-            shape, device=net_device, dtype=net_dtype, generator=rng
-        )
+        randn = lambda shape: torch.randn(shape, device=net_device, dtype=net_dtype, generator=rng)
 
         if (new_latents is None) == (n_new is None):
-            raise ValueError(
-                "Either new_latents or n_new must be specified, but not both."
-            )
+            raise ValueError("Either new_latents or n_new must be specified, but not both.")
         if new_latents is None:
             new_latents = randn((data.shape[0], n_new, data.shape[2]))
         assert isinstance(new_latents, Tensor)
@@ -439,15 +416,9 @@ class Diffusion(pl.LightningModule):
                 x_cur = x_next
 
                 # Increase noise temporarily.
-                gamma = (
-                    min(S_churn / num_steps, math.sqrt(2) - 1)
-                    if S_min <= t_cur <= S_max
-                    else 0
-                )
+                gamma = min(S_churn / num_steps, math.sqrt(2) - 1) if S_min <= t_cur <= S_max else 0
                 t_hat = t_cur + gamma * t_cur
-                x_hat = x_cur + (t_hat**2 - t_cur**2).sqrt() * S_noise * randn(
-                    x_cur.shape
-                )
+                x_hat = x_cur + (t_hat**2 - t_cur**2).sqrt() * S_noise * randn(x_cur.shape)
 
                 # Euler step.
                 denoised = call_net_cached(x_hat, t_hat, context, cache)

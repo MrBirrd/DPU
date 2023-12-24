@@ -28,10 +28,10 @@ def get_output_dir(prefix, cfg):
 def set_seed(opt):
     if opt.training.seed is None:
         opt.training.seed = 42
-    
-    # different seed per gpu    
+
+    # different seed per gpu
     opt.training.seed += opt.rank
-    
+
     logger.info("Random Seed: {}", opt.training.seed)
     random.seed(opt.training.seed)
     torch.manual_seed(opt.training.seed)

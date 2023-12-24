@@ -1,12 +1,13 @@
 from functools import partial
+from typing import Dict, List, Optional, Tuple, Union
+
 import numpy as np
 import torch
 import torch.nn.functional as F
 from loguru import logger
-from tqdm import tqdm
 from torch import Tensor
-from typing import Optional, Tuple, Union, List, Dict
-from model.modules import DiffusionModel
+from tqdm import tqdm
+from model.utils import DiffusionModel
 
 
 def space_indices(num_steps: int, count: int):
@@ -114,7 +115,7 @@ class I2SB(DiffusionModel):
         gt = (xt - x0) / std_fwd
         return gt.detach()
 
-    def q_sample(self, step, x0, x1, ot_ode=False):
+    def q_sample(self, step, x0, x1):
         """Sample q(x_t | x_0, x_1), i.e. eq 11"""
 
         assert x0.shape == x1.shape
@@ -125,11 +126,13 @@ class I2SB(DiffusionModel):
         std_sb = unsqueeze_xdim(self.std_sb[step], xdim)
 
         xt = mu_x0 * x0 + mu_x1 * x1
-        if not ot_ode:
+
+        if not self.ot_ode:
             xt = xt + std_sb * torch.randn_like(xt)
+
         return xt.detach()
 
-    def p_posterior(self, nprev, n, x_n, x0, ot_ode=False):
+    def p_posterior(self, nprev, n, x_n, x0):
         """Sample p(x_{nprev} | x_n, x_0), i.e. eq 4"""
 
         assert nprev < n
@@ -140,12 +143,12 @@ class I2SB(DiffusionModel):
         mu_x0, mu_xn, var = compute_gaussian_product_coef(std_nprev, std_delta)
 
         xt_prev = mu_x0 * x0 + mu_xn * x_n
-        if not ot_ode and nprev > 0:
+        if not self.ot_ode and nprev > 0:
             xt_prev = xt_prev + var.sqrt() * torch.randn_like(xt_prev)
 
         return xt_prev
 
-    def sample_ddpm(self, steps, pred_x0_fn, x1, cond=None, features=None, ot_ode=False, log_steps=None, verbose=True):
+    def sample_ddpm(self, steps, pred_x0_fn, x1, cond=None, features=None, log_steps=None, verbose=True):
         xt = x1.detach().to(self.device)
 
         xs = []
@@ -161,7 +164,7 @@ class I2SB(DiffusionModel):
         for prev_step, step in pair_steps:
             assert prev_step < step, f"{prev_step=}, {step=}"
             pred_x0 = pred_x0_fn(xt, step, features=features, cond=cond)
-            xt = self.p_posterior(prev_step, step, xt, pred_x0, ot_ode=ot_ode)
+            xt = self.p_posterior(prev_step, step, xt, pred_x0)
 
             if prev_step in log_steps:
                 pred_x0s.append(pred_x0.detach().cpu())
@@ -193,16 +196,10 @@ class I2SB(DiffusionModel):
 
         def pred_x0_fn(xt, step, features=None, cond=None):
             step = torch.full((xt.shape[0],), step, device=self.device, dtype=torch.long)
-
-            step_features = None
-            xt_cond = None
-
-            if features is not None:
-                step_features = torch.cat([step.unsqueeze(-1), features.unsqueeze(-1)], dim=1)
-            if cond is not None:
-                xt_cond = torch.cat([xt, cond], dim=1)
-
-            out = self.model(xt if xt_cond is None else xt_cond, step if step_features is None else step_features)
+            out = self.model(
+                torch.cat([xt, cond], dim=1) if cond is not None else xt,
+                torch.cat([step.unsqueeze(-1), features.unsqueeze(-1)], dim=1) if features is not None else step,
+                )
             return self.compute_pred_x0(step, xt, out, clip_denoise=clip_denoise)
 
         xs, pred_x0 = self.sample_ddpm(
@@ -211,7 +208,6 @@ class I2SB(DiffusionModel):
             x1,
             cond=cond,
             features=features,
-            ot_ode=self.ot_ode,
             log_steps=log_steps,
             verbose=verbose,
         )
@@ -259,7 +255,7 @@ class I2SB(DiffusionModel):
         self, x0: Tensor, x1: Tensor, cond: Optional[Tensor] = None, features: Optional[Tensor] = None, *args, **kwargs
     ) -> Tensor:
         step = torch.randint(0, self.timesteps, (x0.shape[0],)).to(self.device)
-        xt = self.q_sample(step, x0, x1, ot_ode=self.ot_ode)
+        xt = self.q_sample(step, x0, x1)
         gt = self.compute_gt(step, x0, xt)
 
         # timestep features

@@ -17,7 +17,7 @@ from torch.autograd import Variable
 def test_chamfer(distChamfer, dim):
     points1 = torch.rand(4, 100, dim).cuda()
     points2 = torch.rand(4, 200, dim, requires_grad=True).cuda()
-    dist1, dist2, idx1, idx2= distChamfer(points1, points2)
+    dist1, dist2, idx1, idx2 = distChamfer(points1, points2)
 
     loss = torch.sum(dist1)
     loss.backward()
@@ -32,7 +32,7 @@ def test_chamfer(distChamfer, dim):
     xd1 = idx1 - myidx1
     xd2 = idx2 - myidx2
     assert (
-            torch.norm(xd1.float()) + torch.norm(xd2.float()) == 0
+        torch.norm(xd1.float()) + torch.norm(xd2.float()) == 0
     ), "chamfer cuda and chamfer normal are not giving the same results"
     print(f"fscore :", fscore(dist1, dist2))
     print("Unit test passed")
@@ -52,7 +52,6 @@ def timings(distChamfer, dim):
         loss.backward()
     print(f"Ellapsed time forward backward is {(time.time() - start)/num_it} seconds.")
 
-
     print("Timings : Start Pythonic version")
     start = time.time()
     for i in range(num_it):
@@ -64,9 +63,8 @@ def timings(distChamfer, dim):
     print(f"Ellapsed time  forward backward  is {(time.time() - start)/num_it} seconds.")
 
 
-
-dims = [2,3,5]
-for i,cham in enumerate([cham2D, cham3D, cham5D]):
+dims = [2, 3, 5]
+for i, cham in enumerate([cham2D, cham3D, cham5D]):
     print(f"testing Chamfer {dims[i]}D")
     test_chamfer(cham, dims[i])
     timings(cham, dims[i])

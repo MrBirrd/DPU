@@ -14,11 +14,10 @@ from mmseg.models.builder import HEADS
 from mmseg.models.decode_heads.decode_head import BaseDecodeHead
 from mmseg.models.losses import accuracy
 from mmseg.ops import Upsample, resize
+from third_party.ZegCLIP.models.decode_heads.utils import positional_encoding
 from timm.models.layers import trunc_normal_
 from torch import Tensor
 from torch.nn import TransformerDecoder, TransformerDecoderLayer
-
-from third_party.ZegCLIP.models.decode_heads.utils import positional_encoding
 
 
 def trunc_normal_init(

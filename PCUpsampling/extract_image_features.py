@@ -4,7 +4,6 @@ import os
 import traceback
 
 import torch
-
 from utils.image_features import process_scene
 
 

@@ -59,9 +59,7 @@ def evaluate_scene(
     for image_fn in image_list:
         image_name = image_fn.split(".")[0]
         gt_image_path = os.path.join(gt_dir, image_name + gt_file_format)
-        assert os.path.exists(
-            gt_image_path
-        ), f"{scene_id} GT image not found: {image_fn}"
+        assert os.path.exists(gt_image_path), f"{scene_id} GT image not found: {image_fn}"
         gt_image = Image.open(gt_image_path)
 
         pred_image_path = None
@@ -81,9 +79,7 @@ def evaluate_scene(
             mask = Image.open(mask_path)
             mask = torch.from_numpy(np.array(mask)).to(device)
             mask = (mask > 0).bool()
-            assert (
-                len(mask.shape) == 2
-            ), f"mask should have 2 channels (H, W) but get shape: {mask.shape}"
+            assert len(mask.shape) == 2, f"mask should have 2 channels (H, W) but get shape: {mask.shape}"
             assert (
                 mask.shape[0] == gt_image.size[1] and mask.shape[1] == gt_image.size[0]
             ), f"mask shape {mask.shape} does not match GT image size: {gt_image.size}"
@@ -95,17 +91,13 @@ def evaluate_scene(
                 # Auto resized to match the GT image size
                 pred_image = pred_image.resize(gt_image.size, Image.BICUBIC)
             else:
-                assert (
-                    False
-                ), f"GT and pred images have different sizes: {gt_image.size} != {pred_image.size}"
+                assert False, f"GT and pred images have different sizes: {gt_image.size} != {pred_image.size}"
 
         gt_image = torch.from_numpy(np.array(gt_image)).float() / 255.0
         gt_image = gt_image.to(device)
         pred_image = torch.from_numpy(np.array(pred_image)).float() / 255.0
         pred_image = pred_image.to(device)
-        assert (
-            len(gt_image.shape) == 3
-        ), f"GT image should have 3 channels (H, W, 3) but get shape: {gt_image.shape}"
+        assert len(gt_image.shape) == 3, f"GT image should have 3 channels (H, W, 3) but get shape: {gt_image.shape}"
         assert (
             len(pred_image.shape) == 3
         ), f"pred image should have 3 channels (H, W, 3) but get shape: {pred_image.shape}"
@@ -131,15 +123,9 @@ def evaluate_scene(
         lpips_values.append(lpips.item())
 
     if verbose:
-        print(
-            f"Scene: {scene_id} PSNR: {np.mean(psnr_values):.4f} +/- {np.std(psnr_values):.4f}"
-        )
-        print(
-            f"Scene: {scene_id} SSIM: {np.mean(ssim_values):.4f} +/- {np.std(ssim_values):.4f}"
-        )
-        print(
-            f"Scene: {scene_id} LPIPS: {np.mean(lpips_values):.4f} +/- {np.std(lpips_values):.4f}"
-        )
+        print(f"Scene: {scene_id} PSNR: {np.mean(psnr_values):.4f} +/- {np.std(psnr_values):.4f}")
+        print(f"Scene: {scene_id} SSIM: {np.mean(ssim_values):.4f} +/- {np.std(ssim_values):.4f}")
+        print(f"Scene: {scene_id} LPIPS: {np.mean(lpips_values):.4f} +/- {np.std(lpips_values):.4f}")
     return psnr_values, ssim_values, lpips_values
 
 
@@ -163,9 +149,7 @@ def evaluate_all(data_root, pred_dir, scene_list, device="cpu", verbose=True):
     all_lpips = []
 
     for scene_id in scene_list:
-        assert (
-            Path(pred_dir) / scene_id
-        ).exists(), f"Prediction dir of scene {scene_id} does not exist"
+        assert (Path(pred_dir) / scene_id).exists(), f"Prediction dir of scene {scene_id} does not exist"
         num_images_pred = len(os.listdir(Path(pred_dir) / scene_id))
         assert num_images_pred > 0, f"Prediction dir of scene {scene_id} is empty"
         scene = ScannetppScene_Release(scene_id, data_root=data_root)
@@ -219,9 +203,7 @@ def main(args):
     print(val_scenes)
     if args.device == "cuda" and not torch.cuda.is_available():
         args.device = "cpu"
-    all_images, all_psnr, all_ssim, all_lpips = evaluate_all(
-        args.data_root, args.pred_dir, val_scenes, args.device
-    )
+    all_images, all_psnr, all_ssim, all_lpips = evaluate_all(args.data_root, args.pred_dir, val_scenes, args.device)
     # Flatten the lists
     all_psnr = np.concatenate(all_psnr)
     all_ssim = np.concatenate(all_ssim)
@@ -233,9 +215,7 @@ def main(args):
 
 if __name__ == "__main__":
     p = argparse.ArgumentParser()
-    p.add_argument(
-        "--data_root", help="Data root (e.g., scannetpp/data)", required=True
-    )
+    p.add_argument("--data_root", help="Data root (e.g., scannetpp/data)", required=True)
     p.add_argument(
         "--split",
         help="The split file containing the scenes for evaluation (e.g., scannetpp/splits/nvs_sem_val.txt)",

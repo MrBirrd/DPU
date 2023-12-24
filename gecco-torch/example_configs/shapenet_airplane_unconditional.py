@@ -1,21 +1,17 @@
 import os
 
-import torch
 import lightning.pytorch as pl
-
-from gecco_torch.diffusion import EDMPrecond, Diffusion, IdleConditioner
-from gecco_torch.reparam import GaussianReparam
-from gecco_torch.diffusion import Diffusion, LogUniformSchedule, EDMLoss
-from gecco_torch.models.set_transformer import SetTransformer
-from gecco_torch.models.linear_lift import LinearLift
-from gecco_torch.models.activation import GaussianActivation
+import torch
 from gecco_torch.data.shapenet_unc import ShapeNetUncondDataModule
+from gecco_torch.diffusion import Diffusion, EDMLoss, EDMPrecond, IdleConditioner, LogUniformSchedule
 from gecco_torch.ema import EMACallback
+from gecco_torch.models.activation import GaussianActivation
+from gecco_torch.models.linear_lift import LinearLift
+from gecco_torch.models.set_transformer import SetTransformer
+from gecco_torch.reparam import GaussianReparam
 from gecco_torch.vis import PCVisCallback
 
-dataset_path = (
-    "/cvlabdata2/cvlab/datasets_tyszkiewicz/point-flow-data/ShapeNetCore.v2.PC15k/"
-)
+dataset_path = "/cvlabdata2/cvlab/datasets_tyszkiewicz/point-flow-data/ShapeNetCore.v2.PC15k/"
 data = ShapeNetUncondDataModule(
     dataset_path,
     category="airplane",

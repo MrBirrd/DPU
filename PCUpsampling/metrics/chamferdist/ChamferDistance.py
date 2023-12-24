@@ -38,8 +38,7 @@ class chamferFunction(Function):
 
         gradxyz1 = gradxyz1.cuda()
         gradxyz2 = gradxyz2.cuda()
-        chamfer.backward(xyz1, xyz2, gradxyz1, gradxyz2, graddist1, graddist2,
-                         idx1, idx2)
+        chamfer.backward(xyz1, xyz2, gradxyz1, gradxyz2, graddist1, graddist2, idx1, idx2)
         return gradxyz1, gradxyz2
 
 

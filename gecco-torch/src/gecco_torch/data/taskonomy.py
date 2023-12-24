@@ -1,16 +1,15 @@
 import os
 import re
-from typing import Tuple, List
+from typing import List, Tuple
 
-import torch
-import numpy as np
 import h5py
-import lightning.pytorch as pl
-from tqdm.auto import tqdm
 import imageio as iio
-
-from gecco_torch.structs import Context3d, Example
+import lightning.pytorch as pl
+import numpy as np
+import torch
 from gecco_torch.data.samplers import FixedSampler
+from gecco_torch.structs import Context3d, Example
+from tqdm.auto import tqdm
 
 
 class Building:
@@ -32,9 +31,7 @@ class Building:
 
         self.points_and_views = list(zip(points.tolist(), views.tolist()))
         missing_points_and_views = self.missing_points_and_views()
-        is_available = ~np.array(
-            [(pv in missing_points_and_views) for pv in self.points_and_views]
-        )
+        is_available = ~np.array([(pv in missing_points_and_views) for pv in self.points_and_views])
         indices = np.arange(len(self.points_and_views))
         self.reindex = indices[is_available]
 
@@ -47,10 +44,7 @@ class Building:
 
     def missing_points_and_views(self) -> List[Tuple[int, int]]:
         existing_files = frozenset(os.listdir(self.rgb_path))
-        requested_files = frozenset(
-            self.rgb_file_path(i, name_only=True)
-            for i in range(len(self.points_and_views))
-        )
+        requested_files = frozenset(self.rgb_file_path(i, name_only=True) for i in range(len(self.points_and_views)))
 
         missing_files = requested_files - existing_files
 
@@ -125,9 +119,7 @@ class Taskonomy(torch.utils.data.ConcatDataset):
             if not belongs_in_split(name):
                 continue
 
-            buildings.append(
-                Building(name, self.h5_path, self.rgb_path, n_points=n_points)
-            )
+            buildings.append(Building(name, self.h5_path, self.rgb_path, n_points=n_points))
 
         super().__init__(buildings)
 
@@ -173,9 +165,7 @@ class TaskonomyDataModule(pl.LightningDataModule):
         else:
             kw = dict(
                 shuffle=False,
-                sampler=torch.utils.data.RandomSampler(
-                    self.train, replacement=True, num_samples=self.epoch_size
-                ),
+                sampler=torch.utils.data.RandomSampler(self.train, replacement=True, num_samples=self.epoch_size),
                 batch_size=self.batch_size,
             )
         return torch.utils.data.DataLoader(

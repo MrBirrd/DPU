@@ -18,10 +18,8 @@ import regex as re
 import torch
 import torch.nn as nn
 from iopath.common.file_io import g_pathmgr
+from third_party.imagebind.models.helpers import VerboseNNModule, cast_if_src_dtype
 from timm.models.layers import trunc_normal_
-
-from third_party.imagebind.models.helpers import (VerboseNNModule,
-                                                  cast_if_src_dtype)
 
 
 def get_sinusoid_encoding_table(n_position, d_hid):

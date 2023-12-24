@@ -1,5 +1,3 @@
-
-
 import json
 
 import yaml
@@ -10,11 +8,13 @@ def write_json(path, data):
     with open(path, "w") as f:
         f.write(json.dumps(data, indent=4))
 
+
 def load_json(path):
     with open(path) as f:
         j = json.load(f)
 
     return j
+
 
 def load_yaml(path):
     with open(path) as f:
@@ -24,10 +24,11 @@ def load_yaml(path):
 
 
 def read_txt_list(path):
-    with open(path) as f: 
+    with open(path) as f:
         lines = f.read().splitlines()
 
     return lines
+
 
 def load_yaml_munch(path):
     with open(path) as f:

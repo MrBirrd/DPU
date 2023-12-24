@@ -1,7 +1,7 @@
-from typing import List, Dict, Any, Tuple
 import json
-
 from pathlib import Path
+from typing import Any, Dict, List, Tuple
+
 import numpy as np
 from common.utils.colmap import Camera, Image, read_model
 
@@ -9,7 +9,7 @@ from common.utils.colmap import Camera, Image, read_model
 def convert_camera(camera: Camera) -> Dict[str, Any]:
     camera_params = camera.params
     out = {
-       "fl_x": float(camera_params[0]),
+        "fl_x": float(camera_params[0]),
         "fl_y": float(camera_params[1]),
         "cx": float(camera_params[2]),
         "cy": float(camera_params[3]),
@@ -67,7 +67,6 @@ def convert_frames(images: Dict[int, Image]) -> List[Dict[str, Any]]:
     return frames
 
 
-
 def prepare_transforms_json(
     model_path: Path,
     out_path: Path,
@@ -96,5 +95,5 @@ def prepare_transforms_json(
     data["test_frames"] = test_frames
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(out_path, 'w') as f:
+    with open(out_path, "w") as f:
         f.write(json.dumps(data, indent=4))

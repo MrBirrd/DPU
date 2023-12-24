@@ -57,9 +57,7 @@ class EMACallback(Callback):
         self.every_n_steps = every_n_steps
         self.cpu_offload = cpu_offload
 
-    def on_fit_start(
-        self, trainer: "pl.Trainer", pl_module: "pl.LightningModule"
-    ) -> None:
+    def on_fit_start(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule") -> None:
         device = pl_module.device if not self.cpu_offload else torch.device("cpu")
         trainer.optimizers = [
             EMAOptimizer(
@@ -73,27 +71,19 @@ class EMACallback(Callback):
             if not isinstance(optim, EMAOptimizer)
         ]
 
-    def on_validation_start(
-        self, trainer: "pl.Trainer", pl_module: "pl.LightningModule"
-    ) -> None:
+    def on_validation_start(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule") -> None:
         if self._should_validate_ema_weights(trainer):
             self.swap_model_weights(trainer)
 
-    def on_validation_end(
-        self, trainer: "pl.Trainer", pl_module: "pl.LightningModule"
-    ) -> None:
+    def on_validation_end(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule") -> None:
         if self._should_validate_ema_weights(trainer):
             self.swap_model_weights(trainer)
 
-    def on_test_start(
-        self, trainer: "pl.Trainer", pl_module: "pl.LightningModule"
-    ) -> None:
+    def on_test_start(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule") -> None:
         if self._should_validate_ema_weights(trainer):
             self.swap_model_weights(trainer)
 
-    def on_test_end(
-        self, trainer: "pl.Trainer", pl_module: "pl.LightningModule"
-    ) -> None:
+    def on_test_end(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule") -> None:
         if self._should_validate_ema_weights(trainer):
             self.swap_model_weights(trainer)
 
@@ -101,9 +91,7 @@ class EMACallback(Callback):
         return not self.validate_original_weights and self._ema_initialized(trainer)
 
     def _ema_initialized(self, trainer: "pl.Trainer") -> bool:
-        return any(
-            isinstance(optimizer, EMAOptimizer) for optimizer in trainer.optimizers
-        )
+        return any(isinstance(optimizer, EMAOptimizer) for optimizer in trainer.optimizers)
 
     def swap_model_weights(self, trainer: "pl.Trainer", saving_ema_model: bool = False):
         for optimizer in trainer.optimizers:
@@ -145,11 +133,7 @@ class EMACallback(Callback):
         # Replace connector._ckpt_path with below to avoid calling into lightning's protected API
         ckpt_path = trainer.ckpt_path
 
-        if (
-            ckpt_path
-            and checkpoint_callback is not None
-            and "NeMo" in type(checkpoint_callback).__name__
-        ):
+        if ckpt_path and checkpoint_callback is not None and "NeMo" in type(checkpoint_callback).__name__:
             ext = checkpoint_callback.FILE_EXTENSION
             if ckpt_path.endswith(f"-EMA{ext}"):
                 rank_zero_info(
@@ -178,9 +162,7 @@ class EMACallback(Callback):
         checkpoint: Dict[str, Any],
     ) -> None:
         with self.save_ema_model(trainer):
-            ema_state_dict = {
-                k: v.detach().clone() for k, v in pl_module.state_dict().items()
-            }
+            ema_state_dict = {k: v.detach().clone() for k, v in pl_module.state_dict().items()}
         checkpoint["ema_state_dict"] = ema_state_dict
 
 
@@ -194,9 +176,7 @@ def ema_update(ema_model_tuple, current_model_tuple, decay):
     )
 
 
-def run_ema_update_cpu(
-    ema_model_tuple, current_model_tuple, decay, pre_sync_stream=None
-):
+def run_ema_update_cpu(ema_model_tuple, current_model_tuple, decay, pre_sync_stream=None):
     if pre_sync_stream is not None:
         pre_sync_stream.synchronize()
 
@@ -283,8 +263,7 @@ class EMAOptimizer(torch.optim.Optimizer):
             opt_params = list(self.all_parameters())
 
             self.ema_params += tuple(
-                copy.deepcopy(param.data.detach()).to(self.device)
-                for param in opt_params[len(self.ema_params) :]
+                copy.deepcopy(param.data.detach()).to(self.device) for param in opt_params[len(self.ema_params) :]
             )
             self.rebuild_ema_params = False
 
@@ -305,8 +284,7 @@ class EMAOptimizer(torch.optim.Optimizer):
 
         with torch.cuda.stream(self.stream):
             current_model_state = tuple(
-                param.data.to(self.device, non_blocking=True)
-                for param in self.all_parameters()
+                param.data.to(self.device, non_blocking=True) for param in self.all_parameters()
             )
 
             if self.device.type == "cuda":
@@ -373,11 +351,7 @@ class EMAOptimizer(torch.optim.Optimizer):
             return self.optimizer.state_dict()
 
         # if we are in the context of saving an EMA model, the EMA weights are in the modules' actual weights
-        ema_params = (
-            self.ema_params
-            if not self.in_saving_ema_model_context
-            else list(self.all_parameters())
-        )
+        ema_params = self.ema_params if not self.in_saving_ema_model_context else list(self.all_parameters())
         state_dict = {
             "opt": self.optimizer.state_dict(),
             "ema": ema_params,
@@ -391,9 +365,7 @@ class EMAOptimizer(torch.optim.Optimizer):
         self.join()
 
         self.optimizer.load_state_dict(state_dict["opt"])
-        self.ema_params = tuple(
-            param.to(self.device) for param in copy.deepcopy(state_dict["ema"])
-        )
+        self.ema_params = tuple(param.to(self.device) for param in copy.deepcopy(state_dict["ema"]))
         self.current_step = state_dict["current_step"]
         self.decay = state_dict["decay"]
         self.every_n_steps = state_dict["every_n_steps"]

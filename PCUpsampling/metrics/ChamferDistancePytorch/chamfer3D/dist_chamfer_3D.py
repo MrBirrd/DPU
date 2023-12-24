@@ -7,19 +7,22 @@ from torch.autograd import Function
 from torch.cuda.amp import GradScaler, autocast, custom_bwd, custom_fwd
 
 cur_path = os.path.dirname(os.path.abspath(__file__))
-build_path = cur_path.replace('chamfer3D', 'tmp')
+build_path = cur_path.replace("chamfer3D", "tmp")
 os.makedirs(build_path, exist_ok=True)
 
 from torch.utils.cpp_extension import load
 
-chamfer_3D = load(name="chamfer_3D",
-      sources=[
-          "/".join(os.path.abspath(__file__).split('/')[:-1] + ["chamfer_cuda.cpp"]),
-          "/".join(os.path.abspath(__file__).split('/')[:-1] + ["chamfer3D.cu"]),
-          ], build_directory=build_path)
+chamfer_3D = load(
+    name="chamfer_3D",
+    sources=[
+        "/".join(os.path.abspath(__file__).split("/")[:-1] + ["chamfer_cuda.cpp"]),
+        "/".join(os.path.abspath(__file__).split("/")[:-1] + ["chamfer3D.cu"]),
+    ],
+    build_directory=build_path,
+)
 
-#chamfer_found = importlib.find_loader("chamfer_3D") is not None
-#if not chamfer_found:
+# chamfer_found = importlib.find_loader("chamfer_3D") is not None
+# if not chamfer_found:
 #    ## Cool trick from https://github.com/chrdiller
 #    print("Jitting Chamfer 3D")
 #    cur_path = os.path.dirname(os.path.abspath(__file__))
@@ -34,7 +37,7 @@ chamfer_3D = load(name="chamfer_3D",
 #              ], build_directory=build_path)
 #    print("Loaded JIT 3D CUDA chamfer distance")
 #
-#else:
+# else:
 #    import chamfer_3D
 #    print("Loaded compiled 3D CUDA chamfer distance")
 
@@ -43,12 +46,12 @@ chamfer_3D = load(name="chamfer_3D",
 # GPU tensors only
 class chamfer_3DFunction(Function):
     @staticmethod
-    @custom_fwd(cast_inputs=torch.float32) 
+    @custom_fwd(cast_inputs=torch.float32)
     def forward(ctx, xyz1, xyz2):
         batchsize, n, dim = xyz1.size()
-        assert dim==3, "Wrong last dimension for the chamfer distance 's input! Check with .size()"
+        assert dim == 3, "Wrong last dimension for the chamfer distance 's input! Check with .size()"
         _, m, dim = xyz2.size()
-        assert dim==3, "Wrong last dimension for the chamfer distance 's input! Check with .size()"
+        assert dim == 3, "Wrong last dimension for the chamfer distance 's input! Check with .size()"
         device = xyz1.device
 
         device = xyz1.device
@@ -82,9 +85,7 @@ class chamfer_3DFunction(Function):
 
         gradxyz1 = gradxyz1.to(device)
         gradxyz2 = gradxyz2.to(device)
-        chamfer_3D.backward(
-            xyz1, xyz2, gradxyz1, gradxyz2, graddist1, graddist2, idx1, idx2
-        )
+        chamfer_3D.backward(xyz1, xyz2, gradxyz1, gradxyz2, graddist1, graddist2, idx1, idx2)
         return gradxyz1, gradxyz2
 
 
@@ -104,9 +105,9 @@ class chamfer_3DFunction_noGrad(Function):
     @staticmethod
     def forward(ctx, xyz1, xyz2):
         batchsize, n, dim = xyz1.size()
-        assert dim==3, "Wrong last dimension for the chamfer distance 's input! Check with .size()"
+        assert dim == 3, "Wrong last dimension for the chamfer distance 's input! Check with .size()"
         _, m, dim = xyz2.size()
-        assert dim==3, "Wrong last dimension for the chamfer distance 's input! Check with .size()"
+        assert dim == 3, "Wrong last dimension for the chamfer distance 's input! Check with .size()"
         device = xyz1.device
 
         device = xyz1.device
@@ -125,6 +126,7 @@ class chamfer_3DFunction_noGrad(Function):
 
         chamfer_3D.forward(xyz1, xyz2, dist1, dist2, idx1, idx2)
         return dist1, dist2, idx1, idx2
+
 
 class chamfer_3DDist_nograd(nn.Module):
     def __init__(self):

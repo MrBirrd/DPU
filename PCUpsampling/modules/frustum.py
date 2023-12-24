@@ -1,9 +1,8 @@
+import modules.functional as PF
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
-import modules.functional as PF
 
 __all__ = ["FrustumPointNetLoss", "get_box_corners_3d"]
 

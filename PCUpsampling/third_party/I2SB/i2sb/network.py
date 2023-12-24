@@ -13,8 +13,7 @@ from guided_diffusion.script_util import create_model
 from ipdb import set_trace as debug
 
 from . import util
-from .ckpt_util import (I2SB_IMG256_COND_CKPT, I2SB_IMG256_COND_PKL,
-                        I2SB_IMG256_UNCOND_CKPT, I2SB_IMG256_UNCOND_PKL)
+from .ckpt_util import I2SB_IMG256_COND_CKPT, I2SB_IMG256_COND_PKL, I2SB_IMG256_UNCOND_CKPT, I2SB_IMG256_UNCOND_PKL
 
 
 class Image256Net(torch.nn.Module):
@@ -41,9 +40,8 @@ class Image256Net(torch.nn.Module):
         self.noise_levels = noise_levels
 
     def forward(self, x, steps, cond=None):
-
         t = self.noise_levels[steps].detach()
-        assert t.dim()==1 and t.shape[0] == x.shape[0]
+        assert t.dim() == 1 and t.shape[0] == x.shape[0]
 
         x = torch.cat([x, cond], dim=1) if self.cond else x
         return self.diffusion_model(x, t)

@@ -248,7 +248,7 @@ class SetTransformer(nn.Module):
     def __init__(
         self,
         n_layers: int,
-        feature_dim: int,
+        dim: int,
         num_inducers: int,
         t_embed_dim: int,
         num_groups: int = 32,
@@ -258,7 +258,7 @@ class SetTransformer(nn.Module):
         self.layers = nn.ModuleList(
             [
                 BroadcastingLayer(
-                    feature_dim=feature_dim,
+                    feature_dim=dim,
                     num_inducers=num_inducers,
                     embed_dim=t_embed_dim,
                     num_groups=num_groups,
@@ -267,7 +267,7 @@ class SetTransformer(nn.Module):
                 for _ in range(n_layers)
             ]
         )
-        self.feature_dim = feature_dim
+        self.feature_dim = dim
 
     def forward(
         self,

@@ -3,21 +3,25 @@ import torch
 
 
 def random_rotate_pointcloud_horizontally(pointcloud, theta=None):
+    rotated = False
     if pointcloud.shape[-1] != 3:
-        raise ValueError("Input pointclouds must have shape (n, 3).")
+        pointcloud = pointcloud.T
+        rotated = True
 
     if theta is None:
         theta = np.random.rand() * 2 * np.pi
 
     cosval = np.cos(theta)
     sinval = np.sin(theta)
-    rotation_matrix = np.array([[cosval, -sinval, 0], 
-                                [sinval, cosval, 0], 
-                                [0, 0, 1]])
+    rotation_matrix = np.array([[cosval, -sinval, 0], [sinval, cosval, 0], [0, 0, 1]])
 
     rotated_pointcloud = np.dot(pointcloud, rotation_matrix)
-    return rotated_pointcloud, theta
     
+    if rotated:
+        rotated_pointcloud = rotated_pointcloud.T
+    
+    return rotated_pointcloud, theta
+
 
 def rotation_matrix(axis, theta):
     """

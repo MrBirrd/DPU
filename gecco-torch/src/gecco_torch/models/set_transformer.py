@@ -4,11 +4,10 @@ some modifications to "inject" the diffusion noise level into the network.
 """
 import torch
 import torch.nn.functional as F
-from torch import nn, Tensor
 from einops import rearrange
-
 from gecco_torch.models.mlp import MLP
 from gecco_torch.models.normalization import AdaGN
+from torch import Tensor, nn
 
 
 class AttentionPool(nn.Module):
@@ -83,9 +82,7 @@ class Broadcast(nn.Module):
         super().__init__()
         self.pool = AttentionPool(feature_dim, num_heads, num_inducers)
         self.norm_1 = AdaGN(feature_dim, t_embed_dim)
-        self.mlp = MLP(
-            feature_dim, feature_dim, mlp_blowup * feature_dim, activation=activation
-        )
+        self.mlp = MLP(feature_dim, feature_dim, mlp_blowup * feature_dim, activation=activation)
         self.norm_2 = AdaGN(feature_dim, t_embed_dim)
         self.unpool = nn.MultiheadAttention(feature_dim, num_heads, batch_first=True)
 
@@ -106,7 +103,7 @@ class Broadcast(nn.Module):
         if h is None:
             h = self.pool(x)
             # TODO maybe concat here?
-            #print("h shape:", h.shape)
+            # print("h shape:", h.shape)
             h = self.norm_1(h, t_embed)
             h = self.mlp(h)
             h = self.norm_2(h, t_embed)
@@ -145,9 +142,7 @@ class BroadcastingLayer(nn.Module):
             activation=activation,
         )
         self.mlp_norm = AdaGN(feature_dim, embed_dim)
-        self.mlp = MLP(
-            feature_dim, feature_dim, mlp_blowup * feature_dim, activation=activation
-        )
+        self.mlp = MLP(feature_dim, feature_dim, mlp_blowup * feature_dim, activation=activation)
 
         with torch.no_grad():
             # scale down the skip connection weights

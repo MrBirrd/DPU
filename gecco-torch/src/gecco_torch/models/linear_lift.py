@@ -1,7 +1,8 @@
 from typing import Any
-from torch import nn, Tensor, cat
+
 from einops import rearrange
 from gecco_torch.models.set_transformer import SetTransformer
+from torch import Tensor, cat, nn
 
 
 class LinearLift(nn.Module):
@@ -18,7 +19,7 @@ class LinearLift(nn.Module):
         in_dim: int = 3,
         out_dim: int = 3,
         do_norm: bool = True,
-        self_conditioning = False,
+        self_conditioning=False,
     ):
         super().__init__()
         self.lift = nn.Linear(in_dim, feature_dim)
@@ -38,12 +39,11 @@ class LinearLift(nn.Module):
         self,
         geometry: Tensor,
         embed: Tensor,
-        cond = None,
-        x_self_cond = None,
+        cond=None,
+        x_self_cond=None,
         do_cache: bool = False,
         cache: list[Tensor] | None = None,
     ) -> tuple[Tensor, list[Tensor] | None]:
-
         n = geometry.shape[-1]
 
         if cond is not None and self.in_dim == 3:

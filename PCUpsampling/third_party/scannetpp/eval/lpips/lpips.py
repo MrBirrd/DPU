@@ -9,8 +9,7 @@ from .utils import get_state_dict
 
 
 class LPIPS(nn.Module):
-    """LPIPS score that supports inputing a invalid mask, and consider only the patches that are not affected by the invalid regions.
-    """
+    """LPIPS score that supports inputing a invalid mask, and consider only the patches that are not affected by the invalid regions."""
 
     def __init__(
         self,

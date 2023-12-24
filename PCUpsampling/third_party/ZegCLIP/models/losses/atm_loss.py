@@ -8,15 +8,9 @@ from .criterion import SegPlusCriterion
 
 @LOSSES.register_module()
 class SegLossPlus(nn.Module):
-    """ATMLoss.
-    """
-    def __init__(self,
-                 num_classes,
-                 dec_layers,
-                 mask_weight=20.0,
-                 dice_weight=1.0,
-                 loss_weight=1.0,
-                 use_point=False):
+    """ATMLoss."""
+
+    def __init__(self, num_classes, dec_layers, mask_weight=20.0, dice_weight=1.0, loss_weight=1.0, use_point=False):
         super(SegLossPlus, self).__init__()
         weight_dict = {"loss_mask": mask_weight, "loss_dice": dice_weight}
         aux_weight_dict = {}
@@ -32,13 +26,14 @@ class SegLossPlus(nn.Module):
 
         self.loss_weight = loss_weight
 
-    def forward(self,
-                outputs,
-                label,
-                ignore_index=255,
-                ):
+    def forward(
+        self,
+        outputs,
+        label,
+        ignore_index=255,
+    ):
         """Forward function."""
-        
+
         self.ignore_index = ignore_index
         targets = self.prepare_targets(label)
         losses = self.criterion(outputs, targets)

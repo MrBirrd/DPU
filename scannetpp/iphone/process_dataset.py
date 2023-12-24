@@ -1,28 +1,24 @@
-from multiprocessing import Pool
+import argparse
+import gc
+import json
 import os
 import subprocess
-import argparse
-
-
-import argparse
-from pathlib import Path
-import yaml
-from munch import Munch
-from tqdm import tqdm
-import json
 import sys
-import subprocess
 import zlib
-import numpy as np
+from functools import partial
+from multiprocessing import Pool
+from pathlib import Path
+
 import imageio as iio
 import lz4.block
-from PIL import Image
-from iphone.arkit_pcl import backproject, outlier_removal, voxel_down_sample, save_point_cloud
+import numpy as np
+import yaml
 from common.scene_release import ScannetppScene_Release
-from common.utils.utils import run_command, load_yaml_munch, load_json, read_txt_list
-import gc
-from multiprocessing import Pool
-from functools import partial
+from common.utils.utils import load_json, load_yaml_munch, read_txt_list, run_command
+from iphone.arkit_pcl import backproject, outlier_removal, save_point_cloud, voxel_down_sample
+from munch import Munch
+from PIL import Image
+from tqdm import tqdm
 
 
 def extract_rgb(scene):

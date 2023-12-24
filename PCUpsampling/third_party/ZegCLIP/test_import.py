@@ -1,5 +1,4 @@
 import torch
-
 from third_party.ZegCLIP.get_model import get_model, predict
 
 if __name__ == "__main__":
