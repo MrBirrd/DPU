@@ -126,7 +126,6 @@ class GaussianDiffusion(DiffusionModel):
 
         objective = cfg.diffusion.objective
         self.objective = objective
-        self.self_condition = self.model.self_condition
         self.dynamic_threshold = cfg.diffusion.dynamic_threshold
         assert objective in {
             "pred_noise",

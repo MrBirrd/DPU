@@ -73,7 +73,9 @@ class I2SB(DiffusionModel):
         self.model = model.to(device)
         # setup betas
         betas = make_beta_schedule(
-            n_timestep=cfg.diffusion.timesteps, linear_end=cfg.diffusion.beta_max / cfg.diffusion.timesteps
+            n_timestep=cfg.diffusion.timesteps,
+            linear_start = cfg.diffusion.beta_start / cfg.diffusion.timesteps,
+            linear_end=cfg.diffusion.beta_end / cfg.diffusion.timesteps
         )
         betas = np.concatenate([betas[: cfg.diffusion.timesteps // 2], np.flip(betas[: cfg.diffusion.timesteps // 2])])
 
@@ -223,14 +225,14 @@ class I2SB(DiffusionModel):
         self,
         features: Optional[Tensor] = None,
         cond: Optional[Tensor] = None,
-        x1: Optional[Tensor] = None,
+        x_start: Optional[Tensor] = None,
         clip: bool = False,
         *args,
         **kwargs,
     ) -> Dict:
         if self.cfg.diffusion.sampling_strategy == "DDPM":
             xs, x0s = self.ddpm_sampling(
-                x1=x1,
+                x1=x_start,
                 features=features,
                 cond=cond,
                 clip_denoise=clip,
@@ -240,7 +242,7 @@ class I2SB(DiffusionModel):
             data = {
                 "x_chain": xs,
                 "x_pred": xs[:, 0, ...],
-                "x_start": x1,
+                "x_start": x_start,
             }
             return data
         else:
