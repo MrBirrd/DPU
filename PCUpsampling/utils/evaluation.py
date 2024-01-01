@@ -67,8 +67,7 @@ def evaluate(model, eval_iter, cfg, step, sampling=False, save_npy=False, debug=
     with torch.no_grad():
         sample_data = model.sample(
             cond=features,
-            x1=x_start,
-            return_noised_hint=True if cfg.diffusion.sampling_hint else False,
+            x_start=x_start,
             clip=False,
         )
 
