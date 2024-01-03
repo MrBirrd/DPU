@@ -73,11 +73,16 @@ class I2SB(DiffusionModel):
         # load model
         self.model = model.to(device)
         # setup betas
-        betas = make_beta_schedule(
-            n_timestep=cfg.diffusion.timesteps,
-            linear_start = cfg.diffusion.beta_start / cfg.diffusion.timesteps,
-            linear_end=cfg.diffusion.beta_end / cfg.diffusion.timesteps
-        )
+        if "beta_max" in cfg.diffusion.keys():
+            betas = make_beta_schedule(
+                linear_end=cfg.diffusion.beta_max / cfg.diffusion.timesteps,
+            )
+        else:
+            betas = make_beta_schedule(
+                n_timestep=cfg.diffusion.timesteps,
+                linear_start = cfg.diffusion.beta_start / cfg.diffusion.timesteps,
+                linear_end=cfg.diffusion.beta_end / cfg.diffusion.timesteps
+            )
         betas = np.concatenate([betas[: cfg.diffusion.timesteps // 2], np.flip(betas[: cfg.diffusion.timesteps // 2])])
 
         # compute analytic std: eq 11
@@ -252,7 +257,7 @@ class I2SB(DiffusionModel):
     def loss(self, pred: Tensor, gt: Tensor) -> Tensor:
         pred = pred.to(self.device)
         gt = gt.to(self.device)
-        return F.mse_loss(pred, gt)
+        return F.mse_loss(pred, gt) * 1000
 
     def forward(
         self, x0: Tensor, x1: Tensor, cond: Optional[Tensor] = None, features: Optional[Tensor] = None, *args, **kwargs
