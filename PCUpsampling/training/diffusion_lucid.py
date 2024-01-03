@@ -9,10 +9,16 @@ from torch import Tensor
 from torch.cuda.amp import autocast
 from tqdm import tqdm
 
-from model.dpm_sampler import DPM_Solver, NoiseScheduleVP, model_wrapper
-from model.utils import (DiffusionModel, default, dynamic_threshold_percentile,
-                         extract, identity, normalize_to_neg_one_to_one,
-                         unnormalize_to_zero_to_one)
+from training.dpm_sampler import DPM_Solver, NoiseScheduleVP, model_wrapper
+from training.train_utils import (
+    DiffusionModel,
+    default,
+    dynamic_threshold_percentile,
+    extract,
+    identity,
+    normalize_to_neg_one_to_one,
+    unnormalize_to_zero_to_one,
+)
 from utils.losses import projection_loss
 
 ModelPrediction = namedtuple("ModelPrediction", ["pred_noise", "pred_x_start"])
@@ -364,7 +370,10 @@ class GaussianDiffusion(DiffusionModel):
         total_steps = min(self.sampling_timesteps, self.timesteps_clip)
 
         x_start = self.generate_x_start(
-            shape=shape, steps=self.num_timesteps, x_start=x_start, add_hint_noise=add_hint_noise
+            shape=shape,
+            steps=self.num_timesteps,
+            x_start=x_start,
+            add_hint_noise=add_hint_noise,
         )
 
         x = x_start
@@ -433,19 +442,34 @@ class GaussianDiffusion(DiffusionModel):
                 model_type="v",
                 model_kwargs={"cond": cond},
             )
-            dpm_solver = DPM_Solver(model_fn=wrapped_model, noise_schedule=vp_schedule, algorithm_type="dpmsolver++")
+            dpm_solver = DPM_Solver(
+                model_fn=wrapped_model,
+                noise_schedule=vp_schedule,
+                algorithm_type="dpmsolver++",
+            )
             x_start = self.generate_x_start(
-                shape=shape, steps=self.num_timesteps, x_start=x_start, add_hint_noise=add_x_start_noise
+                shape=shape,
+                steps=self.num_timesteps,
+                x_start=x_start,
+                add_hint_noise=add_x_start_noise,
             )
             logger.info("Sampling from DPM++ solver using {} steps".format(self.sampling_timesteps))
-            out = dpm_solver.sample(
-                x=x_start.clone(), steps=self.sampling_timesteps, order=3, method="singlestep", denoise_to_zero=True
+            out, chain = dpm_solver.sample(
+                x=x_start.clone(),
+                steps=self.sampling_timesteps,
+                order=3,
+                method="singlestep",
+                denoise_to_zero=True,
+                return_intermediate=True,
             )
-            logger.info("Finished sampling from DPM++ solver")
-            if return_noised_hint:
-                return out, x_start
-            else:
-                return out
+
+            data = {
+                "x_pred": out,
+                "x_chain": chain,
+                "x_start": x_start,
+            }
+
+            return data
 
     @torch.inference_mode()
     def interpolate(self, x1, x2, t=None, lam=0.5):

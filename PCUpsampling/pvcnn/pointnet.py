@@ -1,9 +1,9 @@
 import torch
 import torch.nn as nn
 
-import modules.functional as F
-from modules.ball_query import BallQuery
-from modules.shared_mlp import SharedMLP
+import pvcnn.functional as F
+from pvcnn.ball_query import BallQuery
+from pvcnn.shared_mlp import SharedMLP
 
 __all__ = ["PointNetAModule", "PointNetSAModule", "PointNetFPModule"]
 
@@ -21,7 +21,9 @@ class PointNetAModule(nn.Module):
         for _out_channels in out_channels:
             mlps.append(
                 SharedMLP(
-                    in_channels=in_channels + (3 if include_coordinates else 0), out_channels=_out_channels, dim=1
+                    in_channels=in_channels + (3 if include_coordinates else 0),
+                    out_channels=_out_channels,
+                    dim=1,
                 )
             )
             total_out_channels += _out_channels[-1]
@@ -48,7 +50,15 @@ class PointNetAModule(nn.Module):
 
 
 class PointNetSAModule(nn.Module):
-    def __init__(self, num_centers, radius, num_neighbors, in_channels, out_channels, include_coordinates=True):
+    def __init__(
+        self,
+        num_centers,
+        radius,
+        num_neighbors,
+        in_channels,
+        out_channels,
+        include_coordinates=True,
+    ):
         super().__init__()
         if not isinstance(radius, (list, tuple)):
             radius = [radius]
@@ -65,11 +75,17 @@ class PointNetSAModule(nn.Module):
         total_out_channels = 0
         for _radius, _out_channels, _num_neighbors in zip(radius, out_channels, num_neighbors):
             groupers.append(
-                BallQuery(radius=_radius, num_neighbors=_num_neighbors, include_coordinates=include_coordinates)
+                BallQuery(
+                    radius=_radius,
+                    num_neighbors=_num_neighbors,
+                    include_coordinates=include_coordinates,
+                )
             )
             mlps.append(
                 SharedMLP(
-                    in_channels=in_channels + (3 if include_coordinates else 0), out_channels=_out_channels, dim=2
+                    in_channels=in_channels + (3 if include_coordinates else 0),
+                    out_channels=_out_channels,
+                    dim=2,
                 )
             )
             total_out_channels += _out_channels[-1]
@@ -87,9 +103,17 @@ class PointNetSAModule(nn.Module):
             features, temb = mlp(grouper(coords, centers_coords, temb, features))
             features_list.append(features.max(dim=-1).values)
         if len(features_list) > 1:
-            return features_list[0], centers_coords, temb.max(dim=-1).values if temb.shape[1] > 0 else temb
+            return (
+                features_list[0],
+                centers_coords,
+                temb.max(dim=-1).values if temb.shape[1] > 0 else temb,
+            )
         else:
-            return features_list[0], centers_coords, temb.max(dim=-1).values if temb.shape[1] > 0 else temb
+            return (
+                features_list[0],
+                centers_coords,
+                temb.max(dim=-1).values if temb.shape[1] > 0 else temb,
+            )
 
     def extra_repr(self):
         return f"num_centers={self.num_centers}, out_channels={self.out_channels}"
@@ -105,7 +129,13 @@ class PointNetFPModule(nn.Module):
             points_coords, centers_coords, centers_features, temb = inputs
             points_features = None
         else:
-            points_coords, centers_coords, centers_features, points_features, temb = inputs
+            (
+                points_coords,
+                centers_coords,
+                centers_features,
+                points_features,
+                temb,
+            ) = inputs
         interpolated_features = F.nearest_neighbor_interpolate(points_coords, centers_coords, centers_features)
         interpolated_temb = F.nearest_neighbor_interpolate(points_coords, centers_coords, temb)
         if points_features is not None:

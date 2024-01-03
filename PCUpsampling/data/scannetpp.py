@@ -114,7 +114,7 @@ class ScanNetPP_Faro(ScanNetPP_NPZ):
             try:
                 data = self.scene_batches[index % len(self.scene_batches)]
                 data_dict = np.load(data["npz"])
-                points = data_dict["points"]
+                points = data_dict["faro"][:, :3]
                 # append the features if they are available
                 if self.features is not None:
                     features = data_dict[self.features]
@@ -122,7 +122,9 @@ class ScanNetPP_Faro(ScanNetPP_NPZ):
                 break
             except Exception as e:
                 logger.error(f"Failed to load data {data}")
+                logger.exception(e)
                 index = np.random.randint(0, self.__len__())
+                exit(0)
 
         # normalize the point coordinates
         center = np.mean(points, axis=0)
@@ -134,9 +136,9 @@ class ScanNetPP_Faro(ScanNetPP_NPZ):
             points, theta = random_rotate_pointcloud_horizontally(points)
 
         batch_data["idx"] = index
-        batch_data["train_points"] = torch.from_numpy(points).float()
-        batch_data["train_points_center"] = center
-        batch_data["train_points_scale"] = scale
+        batch_data["hr_points"] = torch.from_numpy(points).float()
+        batch_data["center"] = center
+        batch_data["scale"] = scale
 
         return batch_data
 
@@ -162,7 +164,7 @@ class ScanNetPP_iPhone(ScanNetPP_NPZ):
                 if iphone.shape[1] > 3:
                     batch_data["lr_colors"] = torch.from_numpy(iphone[:, 3:]).float()
                 if faro.shape[1] > 3:
-                    batch_data["hr_colors"] = torch.from_numpy(faro[:, 3:]).float() 
+                    batch_data["hr_colors"] = torch.from_numpy(faro[:, 3:]).float()
                 # append the features if they are available
                 if self.features is not None:
                     features = data_dict[self.features]

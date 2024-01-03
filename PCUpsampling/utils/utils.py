@@ -1,101 +1,11 @@
-from typing import Dict, List, Tuple, Union
 import torch
 import torch.nn.init as init
-from torch import Tensor
 from cuml.neighbors import NearestNeighbors
 from einops import rearrange
 from sklearn import neighbors
 import numpy as np
-from modules.functional.sampling import furthest_point_sample
+from pvcnn.functional.sampling import furthest_point_sample
 import os
-
-
-def to_cuda(data, device) -> Union[Tensor, List, Tuple, Dict, None]:
-    """
-    Moves the input data to the specified device (GPU) if available.
-
-    Args:
-        data: The input data to be moved to the device.
-        device: The device (GPU) to move the data to.
-
-    Returns:
-        The input data moved to the specified device.
-
-    """
-    if data is None:
-        return None
-    if isinstance(data, (list, tuple)):
-        return [to_cuda(d, device) for d in data]
-    if isinstance(data, dict):
-        return {k: to_cuda(v, device) for k, v in data.items()}
-    if device is None:
-        return data.cuda(non_blocking=True)
-    else:
-        return data.to(device, non_blocking=True)
-
-
-def ensure_size(x: Tensor) -> Tensor:
-    """
-    Ensures that the input tensor has the correct size and dimensions.
-
-    Args:
-        x (torch.Tensor): The input tensor.
-
-    Returns:
-        torch.Tensor: The input tensor with the correct size and dimensions.
-    """
-    if x.dim() == 2:
-        x = x.unsqueeze(1)
-    assert x.dim() == 3
-    if x.size(1) > x.size(2):
-        x = x.transpose(1, 2)
-    return x
-
-
-def get_data_batch(batch, cfg):
-    """
-    Get a batch of data for training or testing.
-
-    Args:
-        batch (dict): A dictionary containing the batch data.
-        cfg (dict): A dictionary containing the configuration settings.
-
-    Returns:
-        dict: A dictionary containing the processed batch data.
-    """
-    hr_points = batch["hr_points"].transpose(1, 2)
-
-    # load conditioning features
-    if not cfg.data.unconditional:
-        features = batch["features"] if "features" in batch else None
-        lr_points = batch["lr_points"] if "lr_points" in batch else None
-    else:
-        features, lr_points = None, None
-
-    hr_points = ensure_size(hr_points)
-    
-    features = ensure_size(features) if features is not None else None
-    lr_points = ensure_size(lr_points) if lr_points is not None else None
-    
-    lr_colors = ensure_size(batch["lr_colors"]) if "lr_colors" in batch else None
-    hr_colors = ensure_size(batch["hr_colors"]) if "hr_colors" in batch else None
-
-    # concatenate colors to features
-    if lr_colors is not None and lr_colors.shape[-1] > 0 and cfg.data.use_rgb_features:
-        features = torch.cat([lr_colors, features], dim=1) if features is not None else lr_colors
-
-    # unconditionals training (no features) at all
-    if cfg.data.unconditional:
-        features = None
-        lr_points = None
-    
-    assert hr_points.shape == lr_points.shape
-    
-    return {
-        "hr_points": hr_points,
-        "lr_points": lr_points,
-        "features": features,
-    }
 
 
 def optimize_assignments(A, B, closest_neighbors):
@@ -179,7 +89,8 @@ def create_room_batches_faro(pointcloud, features, n_batches, args):
             batch_features = features[feature][:, neighbor_indices.ravel()].astype(np.float16)
             batch_data[feature] = batch_features
         data[i] = batch_data
-    return data        
+    return data
+
 
 def create_room_batches_iphone(
     pcd_faro,
@@ -189,8 +100,30 @@ def create_room_batches_iphone(
     features,
     n_batches,
     min_points_faro,
-    npoints
-    ):
+    npoints,
+):
+    """
+    Create room batches for iPhone data.
+
+    Args:
+        pcd_faro (numpy.ndarray): Point cloud data from Faro scanner.
+        pcd_iphone (numpy.ndarray): Point cloud data from iPhone scanner.
+        rgb_faro (numpy.ndarray): RGB color data from Faro scanner.
+        rgb_iphone (numpy.ndarray): RGB color data from iPhone scanner.
+        features (numpy.ndarray): Additional features data from iPhone scanner.
+        n_batches (int): Number of batches to create.
+        min_points_faro (int): Minimum number of points required in a Faro batch.
+        npoints (int): Number of points to include in each iPhone batch.
+
+    Returns:
+        list: List of dictionaries containing the created batches. Each dictionary
+              contains the following keys:
+              - 'faro': Concatenated array of Faro batch points and colors.
+              - 'iphone': Concatenated array of iPhone batch points and colors.
+              - 'dino': Additional features data for iPhone batch.
+              - 'center': Center point of the iPhone batch.
+              - 'scale': Scaling factor applied to the iPhone batch points.
+    """
     tree_faro = neighbors.KDTree(pcd_faro, metric="l1")
     tree_iphone = neighbors.KDTree(pcd_iphone, metric="l1")
 
@@ -203,12 +136,10 @@ def create_room_batches_iphone(
     idxs_faro = tree_faro.query_radius(center_points, r=1, return_distance=False)
     idxs_iphone = tree_iphone.query_radius(center_points, r=1, return_distance=False)
 
-    assert (
-        len(idxs_faro) == len(idxs_iphone) == n_batches
-    ), "Number of batches is not equal to number of indices"
+    assert len(idxs_faro) == len(idxs_iphone) == n_batches, "Number of batches is not equal to number of indices"
 
     data = []
-    
+
     for idx in range(len(idxs_iphone)):
         faro_batch_points = pcd_faro[idxs_faro[idx]]
         iphone_batch_points = pcd_iphone[idxs_iphone[idx]]
@@ -220,7 +151,7 @@ def create_room_batches_iphone(
         if len(faro_batch_points) < min_points_faro:
             print(f"Skipping batch {idx} because it is too small ({len(faro_batch_points)} points)")
             continue
-        
+
         diff = npoints - len(iphone_batch_points)
         if diff > 0:
             rand_idx = np.random.randint(0, len(iphone_batch_points), diff)
@@ -254,7 +185,8 @@ def create_room_batches_iphone(
         scale = np.max(np.linalg.norm(iphone_batch_points, axis=1))
         faro_batch_points_assigned /= scale
         iphone_batch_points /= scale
-        
+
+        # create output data to save as npz later
         batch_data = {}
         batch_data["faro"] = np.concatenate([faro_batch_points_assigned, faro_batch_colors_assigned], axis=1)
         batch_data["iphone"] = np.concatenate([iphone_batch_points, iphone_batch_colors], axis=1)
@@ -263,6 +195,7 @@ def create_room_batches_iphone(
         batch_data["scale"] = scale
         data.append(batch_data)
     return data
+
 
 def smart_load_model_weights(model, pretrained_dict):
     # Get the model's state dict
@@ -329,3 +262,22 @@ def resize_weight(target_size, weight, layer_name="", device="cpu"):
     target_tensor = target_tensor * (1 - mask) + new_weights * mask
 
     return target_tensor
+
+
+def setup_output_subdirs(output_dir, *subfolders):
+    output_subdirs = output_dir
+    try:
+        os.makedirs(output_subdirs)
+    except OSError:
+        pass
+
+    subfolder_list = []
+    for sf in subfolders:
+        curr_subf = os.path.join(output_subdirs, sf)
+        try:
+            os.makedirs(curr_subf)
+        except OSError:
+            pass
+        subfolder_list.append(curr_subf)
+
+    return subfolder_list

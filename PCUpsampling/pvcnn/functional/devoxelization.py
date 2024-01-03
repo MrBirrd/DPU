@@ -1,6 +1,6 @@
 from torch.autograd import Function
 
-from modules.functional.backend import _backend
+from pvcnn.functional.backend import _backend
 
 __all__ = ["trilinear_devoxelize"]
 

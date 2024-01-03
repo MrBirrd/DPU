@@ -9,13 +9,19 @@ def args_to_string(args):
     args_str = json.dumps(args_dict, indent=4)
     return args_str
 
+
 def parse_args():
     # make parser which accepts optinal arguments
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", type=str, default=None, help="Path to the config file.")
     parser.add_argument("--name", type=str, default="", help="Name of the experiment.")
     parser.add_argument("--save_dir", default="checkpoints", help="path to save models")
-    parser.add_argument("--model_path", type=str, default="", help="path to model (to continue training)")
+    parser.add_argument(
+        "--model_path",
+        type=str,
+        default="",
+        help="path to model (to continue training)",
+    )
     parser.add_argument("--restart", action="store_true", help="restart training from scratch")
 
     """distributed"""

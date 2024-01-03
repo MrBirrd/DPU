@@ -26,13 +26,15 @@ from tabulate import tabulate
 from utils.checker import *
 
 from .ChamferDistancePytorch.chamfer3D.dist_chamfer_3D import (
-    chamfer_3DDist, chamfer_3DDist_nograd)
+    chamfer_3DDist,
+    chamfer_3DDist_nograd,
+)
 from .PyTorchEMD.emd import earth_mover_distance
 from .PyTorchEMD.emd_nograd import earth_mover_distance_nograd
 
 
 def distChamferCUDA_l1(pred, target, points_dim=3):
-    import modules.functional as pvcnn_fun
+    import pvcnn.functional as pvcnn_fun
 
     # expect B.2048.3 and B.2048.3
     B = pred.shape[0]
@@ -46,13 +48,19 @@ def distChamferCUDA_l1(pred, target, points_dim=3):
 
     target_point_normal = pvcnn_fun.grouping(target_normal, pred_nnidx[:, :, None])  # B,3,Np,1
     target_point_normal = target_point_normal.squeeze(-1)  # B,3,Np
-    cham_norm_y = F.l1_loss(pred_normal.view(-1, points_dim), target_point_normal.view(-1, points_dim), reduction="sum")
+    cham_norm_y = F.l1_loss(
+        pred_normal.view(-1, points_dim),
+        target_point_normal.view(-1, points_dim),
+        reduction="sum",
+    )
 
     closest_pred_point_normal = pvcnn_fun.grouping(pred_normal, target_nnidx[:, :, None]).squeeze(
         -1
     )  # B,3,Np,1 -> B,3,Np,
     cham_norm_y2 = F.l1_loss(
-        closest_pred_point_normal.view(-1, points_dim), target_normal.view(-1, points_dim), reduction="sum"
+        closest_pred_point_normal.view(-1, points_dim),
+        target_normal.view(-1, points_dim),
+        reduction="sum",
     )
 
     return cham_norm_y, cham_norm_y2
@@ -179,7 +187,14 @@ def distChamfer(a, b):
     return P.min(1)[0], P.min(2)[0]
 
 
-def EMD_CD(sample_pcs, ref_pcs, batch_size, accelerated_cd=False, reduced=True, require_grad=False):
+def EMD_CD(
+    sample_pcs,
+    ref_pcs,
+    batch_size,
+    accelerated_cd=False,
+    reduced=True,
+    require_grad=False,
+):
     N_sample = sample_pcs.shape[0]
     N_ref = ref_pcs.shape[0]
     assert N_sample == N_ref, "REF:%d SMP:%d" % (N_ref, N_sample)
@@ -260,7 +275,16 @@ def print_results(results, dataset="-", hash="-", step="", epoch=""):
     return msg
 
 
-def _pairwise_EMD_CD_sub(metric, sample_batch, ref_pcs, N_ref, batch_size, accelerated_cd, verbose, require_grad):
+def _pairwise_EMD_CD_sub(
+    metric,
+    sample_batch,
+    ref_pcs,
+    N_ref,
+    batch_size,
+    accelerated_cd,
+    verbose,
+    require_grad,
+):
     cd_lst = []
     emd_lst = []
     sub_iterator = range(0, N_ref, batch_size)
@@ -306,7 +330,15 @@ def _pairwise_EMD_CD_sub(metric, sample_batch, ref_pcs, N_ref, batch_size, accel
     return cd_lst, emd_lst
 
 
-def _pairwise_EMD_CD_(metric, sample_pcs, ref_pcs, batch_size, require_grad=True, accelerated_cd=True, verbose=True):
+def _pairwise_EMD_CD_(
+    metric,
+    sample_pcs,
+    ref_pcs,
+    batch_size,
+    require_grad=True,
+    accelerated_cd=True,
+    verbose=True,
+):
     N_sample = sample_pcs.shape[0]
     N_ref = ref_pcs.shape[0]
     # N_sample = 50
@@ -320,11 +352,21 @@ def _pairwise_EMD_CD_(metric, sample_pcs, ref_pcs, batch_size, require_grad=True
         exp_timer.tic()
         if iter_id % print_every == 0 and iter_id > 0 and verbose:
             logger.info(
-                "done {:02.1f}%({}) eta={:.1f}m", 100.0 * iter_id / total_iter, total_iter, exp_timer.hours_left() * 60
+                "done {:02.1f}%({}) eta={:.1f}m",
+                100.0 * iter_id / total_iter,
+                total_iter,
+                exp_timer.hours_left() * 60,
             )
         sample_batch = sample_pcs[sample_b_start]
         cd_lst, emd_lst = _pairwise_EMD_CD_sub(
-            metric, sample_batch, ref_pcs, N_ref, batch_size, accelerated_cd, verbose, require_grad
+            metric,
+            sample_batch,
+            ref_pcs,
+            N_ref,
+            batch_size,
+            accelerated_cd,
+            verbose,
+            require_grad,
         )
         all_cd.append(cd_lst)
         all_emd.append(emd_lst)
@@ -443,7 +485,14 @@ def lgan_mmd_cov(all_dist):
 
 
 def compute_all_metrics(
-    sample_pcs, ref_pcs, batch_size, verbose=True, accelerated_cd=False, metric1="CD", metric2="EMD", **print_kwargs
+    sample_pcs,
+    ref_pcs,
+    batch_size,
+    verbose=True,
+    accelerated_cd=False,
+    metric1="CD",
+    metric2="EMD",
+    **print_kwargs,
 ):
     results = {}
     ## metric2 = 'EMD'
@@ -457,15 +506,31 @@ def compute_all_metrics(
     metric = metric1  # 'CD'
     if verbose:
         logger.info(
-            "eval metric: {}; batch-size={}, device: {}, {}", metric, batch_size, ref_pcs.device, sample_pcs.device
+            "eval metric: {}; batch-size={}, device: {}, {}",
+            metric,
+            batch_size,
+            ref_pcs.device,
+            sample_pcs.device,
         )
         # batch_size = 100
         # v1 = True
     M_rs_cd, M_rs_emd = _pairwise_EMD_CD_(
-        metric, ref_pcs, sample_pcs, batch_size, accelerated_cd=accelerated_cd, require_grad=False, verbose=v1
+        metric,
+        ref_pcs,
+        sample_pcs,
+        batch_size,
+        accelerated_cd=accelerated_cd,
+        require_grad=False,
+        verbose=v1,
     )
     M_rs_cd, M_rs_emd = _pairwise_EMD_CD_(
-        metric, ref_pcs, sample_pcs, batch_size, accelerated_cd=accelerated_cd, require_grad=False, verbose=v1
+        metric,
+        ref_pcs,
+        sample_pcs,
+        batch_size,
+        accelerated_cd=accelerated_cd,
+        require_grad=False,
+        verbose=v1,
     )
 
     res_cd = lgan_mmd_cov(M_rs_cd.t())
@@ -474,10 +539,22 @@ def compute_all_metrics(
     if verbose:
         print_results(results, **print_kwargs)
     M_rr_cd, M_rr_emd = _pairwise_EMD_CD_(
-        metric, ref_pcs, ref_pcs, batch_size, accelerated_cd=accelerated_cd, require_grad=False, verbose=v1
+        metric,
+        ref_pcs,
+        ref_pcs,
+        batch_size,
+        accelerated_cd=accelerated_cd,
+        require_grad=False,
+        verbose=v1,
     )
     M_ss_cd, M_ss_emd = _pairwise_EMD_CD_(
-        metric, sample_pcs, sample_pcs, batch_size, accelerated_cd=accelerated_cd, require_grad=False, verbose=v1
+        metric,
+        sample_pcs,
+        sample_pcs,
+        batch_size,
+        accelerated_cd=accelerated_cd,
+        require_grad=False,
+        verbose=v1,
     )
     # 1-NN results
     one_nn_cd_res = knn(M_rr_cd, M_rs_cd, M_ss_cd, 1, sqrt=False)
@@ -494,10 +571,22 @@ def compute_all_metrics(
             logger.info("eval metric: {}", metric)
             ## batch_size = min(batch_size, 31)
         M_rs_cd, M_rs_emd = _pairwise_EMD_CD_(
-            metric, ref_pcs, sample_pcs, batch_size, accelerated_cd=accelerated_cd, require_grad=False, verbose=v2
+            metric,
+            ref_pcs,
+            sample_pcs,
+            batch_size,
+            accelerated_cd=accelerated_cd,
+            require_grad=False,
+            verbose=v2,
         )
         M_rs_cd, M_rs_emd = _pairwise_EMD_CD_(
-            metric, ref_pcs, sample_pcs, batch_size, accelerated_cd=accelerated_cd, require_grad=False, verbose=v2
+            metric,
+            ref_pcs,
+            sample_pcs,
+            batch_size,
+            accelerated_cd=accelerated_cd,
+            require_grad=False,
+            verbose=v2,
         )
 
         res_cd = lgan_mmd_cov(M_rs_cd.t())
@@ -506,10 +595,22 @@ def compute_all_metrics(
             print_results(results, **print_kwargs)
         # logger.info('results: {}', results)
         M_rr_cd, M_rr_emd = _pairwise_EMD_CD_(
-            metric, ref_pcs, ref_pcs, batch_size, accelerated_cd=accelerated_cd, require_grad=False, verbose=v2
+            metric,
+            ref_pcs,
+            ref_pcs,
+            batch_size,
+            accelerated_cd=accelerated_cd,
+            require_grad=False,
+            verbose=v2,
         )
         M_ss_cd, M_ss_emd = _pairwise_EMD_CD_(
-            metric, sample_pcs, sample_pcs, batch_size, accelerated_cd=accelerated_cd, require_grad=False, verbose=v2
+            metric,
+            sample_pcs,
+            sample_pcs,
+            batch_size,
+            accelerated_cd=accelerated_cd,
+            require_grad=False,
+            verbose=v2,
         )
         # 1-NN results
         one_nn_cd_res = knn(M_rr_cd, M_rs_cd, M_ss_cd, 1, sqrt=False)

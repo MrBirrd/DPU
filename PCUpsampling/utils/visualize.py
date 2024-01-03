@@ -179,7 +179,14 @@ def visualize_pointcloud(points, normals=None, out_file=None, show=False, elev=3
     ax.scatter(points[:, 2], points[:, 0], points[:, 1])
     if normals is not None:
         ax.quiver(
-            points[:, 2], points[:, 0], points[:, 1], normals[:, 2], normals[:, 0], normals[:, 1], length=0.1, color="k"
+            points[:, 2],
+            points[:, 0],
+            points[:, 1],
+            normals[:, 2],
+            normals[:, 0],
+            normals[:, 1],
+            length=0.1,
+            color="k",
         )
     ax.set_xlabel("Z")
     ax.set_ylabel("X")
@@ -196,7 +203,15 @@ def visualize_pointcloud(points, normals=None, out_file=None, show=False, elev=3
 
 
 def visualize_pointcloud_batch(
-    path, pointclouds, pred_labels=None, labels=None, categories=None, vis_label=False, target=None, elev=30, azim=225
+    path,
+    pointclouds,
+    pred_labels=None,
+    labels=None,
+    categories=None,
+    vis_label=False,
+    target=None,
+    elev=30,
+    azim=225,
 ):
     batch_size = len(pointclouds)
     fig = plt.figure(figsize=(20, 20))

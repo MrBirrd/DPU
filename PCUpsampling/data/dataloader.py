@@ -6,8 +6,7 @@ from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 
 from .arkitscenes import ArkitScans, IndoorScenes, IndoorScenesCut
-from .scannetpp import (NPZFolderTest, ScanNetPP_Faro, ScanNetPP_iPhone,
-                        ScanNetPPCut)
+from .scannetpp import NPZFolderTest, ScanNetPP_Faro, ScanNetPP_iPhone, ScanNetPPCut
 from .shapenet import get_dataset_shapenet
 
 
@@ -88,24 +87,42 @@ def get_dataloader(
         )
     elif opt.data.dataset == "ScanNetPP":
         train_dataset = ScanNetPPCut(
-            npoints=opt.data.npoints, root=opt.data.data_dir, mode="training", features=opt.data.point_features
+            npoints=opt.data.npoints,
+            root=opt.data.data_dir,
+            mode="training",
+            features=opt.data.point_features,
         )
         test_dataset = ScanNetPPCut(
-            npoints=opt.data.npoints, root=opt.data.data_dir, mode="validation", features=opt.data.point_features
+            npoints=opt.data.npoints,
+            root=opt.data.data_dir,
+            mode="validation",
+            features=opt.data.point_features,
         )
     elif opt.data.dataset == "ScanNetPP_Faro":
         train_dataset = ScanNetPP_Faro(
-            root=opt.data.data_dir, mode="training", features=opt.data.point_features, augment=opt.data.augment
+            root=opt.data.data_dir,
+            mode="training",
+            features=opt.data.point_features,
+            augment=opt.data.augment,
         )
         test_dataset = ScanNetPP_Faro(
-            root=opt.data.data_dir, mode="validation", features=opt.data.point_features, augment=opt.data.augment
+            root=opt.data.data_dir,
+            mode="validation",
+            features=opt.data.point_features,
+            augment=opt.data.augment,
         )
     elif opt.data.dataset == "ScanNetPP_iPhone":
         train_dataset = ScanNetPP_iPhone(
-            root=opt.data.data_dir, mode="training", features=opt.data.point_features, augment=opt.data.augment
+            root=opt.data.data_dir,
+            mode="training",
+            features=opt.data.point_features,
+            augment=opt.data.augment,
         )
         test_dataset = ScanNetPP_iPhone(
-            root=opt.data.data_dir, mode="validation", features=opt.data.point_features, augment=opt.data.augment
+            root=opt.data.data_dir,
+            mode="validation",
+            features=opt.data.point_features,
+            augment=opt.data.augment,
         )
     else:
         raise NotImplementedError(f"Dataset {opt.data.dataset} not implemented!")

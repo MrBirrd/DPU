@@ -24,6 +24,7 @@ def _calculate_correct_fan(tensor, mode):
     fan_in, fan_out = _calculate_fan_in_and_fan_out(tensor)
     return fan_in if mode == "fan_in" else fan_out
 
+
 def kaiming_uniform_(tensor, gain=1.0, mode="fan_in"):
     r"""Fills the input `Tensor` with values according to the method
     described in `Delving deep into rectifiers: Surpassing human-level
@@ -51,14 +52,17 @@ def kaiming_uniform_(tensor, gain=1.0, mode="fan_in"):
     with torch.no_grad():
         return tensor.uniform_(-bound, bound)
 
+
 def variance_scaling_init_(tensor, scale):
     return kaiming_uniform_(tensor, gain=1e-10 if scale == 0 else scale, mode="fan_avg")
+
 
 def dense(in_channels, out_channels, init_scale=1.0):
     lin = nn.Linear(in_channels, out_channels)
     variance_scaling_init_(lin.weight, scale=init_scale)
     nn.init.zeros_(lin.bias)
     return lin
+
 
 class AdaGN(nn.Module):
     """
@@ -108,7 +112,6 @@ class AdaGN(nn.Module):
         result = self.norm(image)
         result = result * factor + bias
         return result
-    
 
 
 FlashAttentionConfig = namedtuple("FlashAttentionConfig", ["enable_flash", "enable_math", "enable_mem_efficient"])

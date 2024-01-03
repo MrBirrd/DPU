@@ -47,7 +47,10 @@ def extract_openseg_img_feature(image, openseg_model, img_size=None, regional_po
         inp_image_bytes=tf.convert_to_tensor(np_image_string), inp_text_emb=text_emb
     )
     img_info = results["image_info"]
-    crop_sz = [int(img_info[0, 0] * img_info[2, 0]), int(img_info[0, 1] * img_info[2, 1])]
+    crop_sz = [
+        int(img_info[0, 0] * img_info[2, 0]),
+        int(img_info[0, 1] * img_info[2, 1]),
+    ]
     if regional_pool:
         image_embedding_feat = results["ppixel_ave_feat"][:, : crop_sz[0], : crop_sz[1]]
     else:
@@ -55,7 +58,8 @@ def extract_openseg_img_feature(image, openseg_model, img_size=None, regional_po
 
     if img_size is not None:
         feat_2d = tf.cast(
-            tf.image.resize_nearest_neighbor(image_embedding_feat, img_size, align_corners=True)[0], dtype=tf.float16
+            tf.image.resize_nearest_neighbor(image_embedding_feat, img_size, align_corners=True)[0],
+            dtype=tf.float16,
         ).numpy()
     else:
         feat_2d = tf.cast(image_embedding_feat[[0]], dtype=tf.float16).numpy()
@@ -69,7 +73,13 @@ def extract_openseg_img_feature(image, openseg_model, img_size=None, regional_po
 if __name__ == "__main__":
     if not os.path.exists("./exported_model"):
         subprocess.run(
-            ["gsutil", "cp", "-r", "gs://cloud-tpu-checkpoints/detection/projects/openseg/colab/exported_model", "./"]
+            [
+                "gsutil",
+                "cp",
+                "-r",
+                "gs://cloud-tpu-checkpoints/detection/projects/openseg/colab/exported_model",
+                "./",
+            ]
         )
 
     model = load_openseg_model(model_path="./exported_model")

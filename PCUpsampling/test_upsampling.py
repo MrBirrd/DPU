@@ -5,11 +5,11 @@ import torch.distributed as dist
 import torch.multiprocessing as mp
 import torch.utils.data
 
-from data.dataloader import get_dataloader, get_npz_loader
-from model.loader import load_diffusion
+from data.dataloader import get_dataloader
+from training.evaluation import evaluate
+from training.model_loader import load_diffusion
 from utils.args import parse_args
-from utils.evaluation import evaluate
-from utils.file_utils import set_seed
+from training.train_utils import set_seed
 
 
 @torch.no_grad()

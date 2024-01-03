@@ -1,4 +1,5 @@
 import json
+import os
 
 import torch.distributed as dist
 import torch.multiprocessing as mp
@@ -8,12 +9,12 @@ from omegaconf import OmegaConf
 
 import wandb
 from data.dataloader import get_dataloader, save_iter
-from model.loader import load_diffusion, load_optim_sched
+from training.evaluation import evaluate
+from training.model_loader import load_diffusion, load_optim_sched
+from training.train_utils import get_data_batch, set_seed, to_cuda
 from utils.args import parse_args
-from utils.evaluation import evaluate
-from utils.file_utils import *
 from utils.ops import *
-from utils.utils import get_data_batch, to_cuda
+from utils.utils import setup_output_subdirs
 
 
 def train(gpu, cfg, output_dir, noises_init=None):
@@ -183,7 +184,9 @@ def main():
     opt = parse_args()
 
     # generating output dir
-    output_dir = get_output_dir(opt.save_dir, opt)
+    output_dir = os.path.join(opt.save_dir, opt.name)
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
 
     os.makedirs(os.path.dirname(output_dir), exist_ok=True)
 

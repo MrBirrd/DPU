@@ -7,7 +7,14 @@ def get_scaling(snr):
     return snr_scaled
 
 
-def projection_loss(cloud_gt, cloud_pred, grid_size=0.01, range_x=[-1, 1], range_y=[-1, 1], reduction="none"):
+def projection_loss(
+    cloud_gt,
+    cloud_pred,
+    grid_size=0.01,
+    range_x=[-1, 1],
+    range_y=[-1, 1],
+    reduction="none",
+):
     """
     Computes the projection loss between the ground truth and the predicted pointcloud.
     Pointclouds should be of shape (batch_size, num_points, 3) and normalized to [-1, 1]

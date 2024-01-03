@@ -5,12 +5,9 @@ import numpy as np
 import open3d as o3d
 import torch
 from cuml.neighbors import NearestNeighbors
-from einops import rearrange
 from sklearn import neighbors
 from tqdm import tqdm
-
-from modules.functional import furthest_point_sample
-from utils.utils import create_room_batches_iphone, create_room_batches_faro
+from utils.utils import create_room_batches_faro, create_room_batches_iphone
 
 FEATURES = ["dino"]
 FACTOR = 3
@@ -180,7 +177,10 @@ def main():
                 if features[feature].shape[-1] != pointcloud.shape[0]:
                     print(
                         "Scene {} has {} points but {} {} features".format(
-                            data_folder, pointcloud.shape[0], features[feature].shape[-1], feature
+                            data_folder,
+                            pointcloud.shape[0],
+                            features[feature].shape[-1],
+                            feature,
                         )
                     )
                     continue
@@ -199,19 +199,24 @@ def main():
                 n_batches=n_batches,
                 target_scene_path=target_scene_path,
                 args=args.npoints,
-                existing_batches=existing_batches,                
+                existing_batches=existing_batches,
             )
             for batch_idx in batches:
                 np.savez(
                     os.path.join(target_scene_path, "points_{}.npz".format(batch_idx)),
                     **batches[batch_idx],
                 )
-            
+
         elif args.mode == "conditional":
             # feature paths creation and check
             features = {}
             for feature_type in FEATURES:
-                fpath = os.path.join(args.data_root, data_folder, "features", f"{feature_type}_iphone.npy")
+                fpath = os.path.join(
+                    args.data_root,
+                    data_folder,
+                    "features",
+                    f"{feature_type}_iphone.npy",
+                )
                 if os.path.exists(fpath):
                     features[feature_type] = np.load(fpath).T
                 else:
@@ -243,7 +248,10 @@ def main():
                 if features[feature].shape[0] != n_points_iphone:
                     print(
                         "Scene {} has {} points but {} {} features".format(
-                            data_folder, n_points_iphone, features[feature].shape[0], feature
+                            data_folder,
+                            n_points_iphone,
+                            features[feature].shape[0],
+                            feature,
                         )
                     )
                     continue

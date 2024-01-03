@@ -47,7 +47,10 @@ def prepare_image_batched(images, smaller_edge_size: float, patch_size: int) -> 
     image_tensor = transform(images)
     # Crop image to dimensions that are a multiple of the patch size
     height, width = image_tensor.shape[2:]  # B x C x H x W
-    cropped_width, cropped_height = width - width % patch_size, height - height % patch_size
+    cropped_width, cropped_height = (
+        width - width % patch_size,
+        height - height % patch_size,
+    )
     image_tensor = image_tensor[:, :, :cropped_height, :cropped_width]
 
     grid_size = (cropped_height // patch_size, cropped_width // patch_size)  # h x w

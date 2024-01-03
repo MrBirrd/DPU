@@ -1,5 +1,4 @@
 import numpy as np
-import torch
 
 
 def random_rotate_pointcloud_horizontally(pointcloud, theta=None):
@@ -16,10 +15,10 @@ def random_rotate_pointcloud_horizontally(pointcloud, theta=None):
     rotation_matrix = np.array([[cosval, -sinval, 0], [sinval, cosval, 0], [0, 0, 1]])
 
     rotated_pointcloud = np.dot(pointcloud, rotation_matrix)
-    
+
     if rotated:
         rotated_pointcloud = rotated_pointcloud.T
-    
+
     return rotated_pointcloud, theta
 
 
@@ -53,27 +52,3 @@ def rotate(vertices, faces):
 
     v, f = vertices[:, [1, 2, 0]].dot(M).dot(N).dot(K), faces[:, [1, 2, 0]]
     return v, f
-
-
-def norm(v, f):
-    v = (v - v.min()) / (v.max() - v.min()) - 0.5
-
-    return v, f
-
-
-def getGradNorm(net):
-    pNorm = torch.sqrt(sum(torch.sum(p**2) for p in net.parameters() if p.requires_grad))
-    gradNorm = torch.sqrt(sum(torch.sum(p.grad**2) for p in net.parameters() if p.requires_grad))
-    return pNorm, gradNorm
-
-
-def weights_init(m):
-    """
-    xavier initialization
-    """
-    classname = m.__class__.__name__
-    if classname.find("Conv") != -1 and m.weight is not None:
-        torch.nn.init.xavier_normal_(m.weight)
-    elif classname.find("BatchNorm") != -1:
-        m.weight.data.normal_()
-        m.bias.data.fill_(0)

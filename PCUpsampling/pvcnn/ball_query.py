@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 from torch.cuda.amp import custom_bwd, custom_fwd
 
-import modules.functional as F
+import pvcnn.functional as F
 
 __all__ = ["BallQuery"]
 
@@ -37,5 +37,7 @@ class BallQuery(nn.Module):
 
     def extra_repr(self):
         return "radius={}, num_neighbors={}{}".format(
-            self.radius, self.num_neighbors, ", include coordinates" if self.include_coordinates else ""
+            self.radius,
+            self.num_neighbors,
+            ", include coordinates" if self.include_coordinates else "",
         )

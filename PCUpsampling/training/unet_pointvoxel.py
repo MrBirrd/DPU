@@ -14,13 +14,18 @@ import torch
 import torch.nn as nn
 from einops import rearrange
 
-import model.utils as utils
-from model.set_transformer import SetTransformer
+import training.train_utils as train_utils
+from training.set_transformer import SetTransformer
 
-from model.modules import Attention
-from .pvcnn import (LinearAttention, SharedMLP, create_mlp_components,
-                    create_pointnet2_fp_modules,
-                    create_pointnet2_sa_components, create_pvc_layer_params)
+from training.modules import Attention
+from .pvcnn import (
+    LinearAttention,
+    SharedMLP,
+    create_mlp_components,
+    create_pointnet2_fp_modules,
+    create_pointnet2_sa_components,
+    create_pvc_layer_params,
+)
 
 
 class PVCNN2Unet(nn.Module):
@@ -33,19 +38,19 @@ class PVCNN2Unet(nn.Module):
         cfg: Dict,
     ):
         super().__init__()
-        
+
         model_cfg = cfg.model
         pvd_cfg = model_cfg.PVD
-        
+
         # initialize class variables
-        self.input_dim = utils.default(model_cfg.in_dim, 3)
-        self.extra_feature_channels = utils.default(model_cfg.extra_feature_channels, 3)
-        self.embed_dim = utils.default(model_cfg.time_embed_dim, 64)
-        
-        out_dim = utils.default(model_cfg.out_dim, 3)
-        st_params = utils.default(model_cfg.ST, {"layers": 6, "fdim": 512, "inducers": 32})
-        dropout = utils.default(model_cfg.dropout, 0.1)
-        attn_type = utils.default(pvd_cfg.attention_type, "linear")
+        self.input_dim = train_utils.default(model_cfg.in_dim, 3)
+        self.extra_feature_channels = train_utils.default(model_cfg.extra_feature_channels, 3)
+        self.embed_dim = train_utils.default(model_cfg.time_embed_dim, 64)
+
+        out_dim = train_utils.default(model_cfg.out_dim, 3)
+        st_params = train_utils.default(model_cfg.ST, {"layers": 6, "fdim": 512, "inducers": 32})
+        dropout = train_utils.default(model_cfg.dropout, 0.1)
+        attn_type = train_utils.default(pvd_cfg.attention_type, "linear")
 
         self.embedf = nn.Sequential(
             nn.Linear(self.embed_dim, self.embed_dim),
@@ -57,21 +62,27 @@ class PVCNN2Unet(nn.Module):
 
         # prepare attention
         if attn_type.lower() == "settransformer":
-            attention_fn = partial(SetTransformer,
-                           n_layers=st_params["layers"],
-                           num_inducers=st_params["inducers"],
-                           t_embed_dim=1,
-                           num_groups=st_params["gn_groups"]
-                           )
+            attention_fn = partial(
+                SetTransformer,
+                n_layers=st_params["layers"],
+                num_inducers=st_params["inducers"],
+                t_embed_dim=1,
+                num_groups=st_params["gn_groups"],
+            )
         elif attn_type.lower() == "linear":
             attention_fn = partial(LinearAttention, heads=cfg.model.PVD.attention_heads)
         elif attn_type.lower() == "flash":
             attention_fn = partial(Attention, norm=False, flash=True, heads=cfg.model.PVD.attention_heads)
         else:
             attention_fn = None
-            
+
         # create set abstraction layers
-        sa_layers, sa_in_channels, channels_sa_features, *_ = create_pointnet2_sa_components(
+        (
+            sa_layers,
+            sa_in_channels,
+            channels_sa_features,
+            *_,
+        ) = create_pointnet2_sa_components(
             input_dim=self.input_dim,
             sa_blocks=sa_blocks,
             extra_feature_channels=self.extra_feature_channels,

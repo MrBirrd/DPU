@@ -7,8 +7,8 @@ import torch
 from scipy import spatial
 from torch import nn
 
-from modules.functional.devoxelization import trilinear_devoxelize
-from modules.voxelization import Voxelization
+from pvcnn.functional.devoxelization import trilinear_devoxelize
+from pvcnn.voxelization import Voxelization
 
 
 def ply_to_np(pcd):

@@ -3,7 +3,7 @@ from torch.autograd import Function
 from torch.cuda.amp import custom_bwd, custom_fwd
 
 # from modules.functional.backend import _backend
-from modules.functional.backend import _backend
+from pvcnn.functional.backend import _backend
 
 __all__ = ["nearest_neighbor_interpolate"]
 

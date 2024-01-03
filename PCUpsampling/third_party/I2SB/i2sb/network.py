@@ -12,8 +12,7 @@ import torch
 from guided_diffusion.script_util import create_model
 
 from . import util
-from .ckpt_util import (I2SB_IMG256_COND_CKPT, I2SB_IMG256_COND_PKL,
-                        I2SB_IMG256_UNCOND_CKPT, I2SB_IMG256_UNCOND_PKL)
+from .ckpt_util import I2SB_IMG256_COND_CKPT, I2SB_IMG256_COND_PKL, I2SB_IMG256_UNCOND_CKPT, I2SB_IMG256_UNCOND_PKL
 
 
 class Image256Net(torch.nn.Module):

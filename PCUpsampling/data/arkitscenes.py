@@ -184,7 +184,14 @@ class IndoorScenesCut(Dataset):
 
 
 class ArkitScans(Dataset):
-    def __init__(self, root_dir, npoints=10000, voxel_size=0.03, normalize=False, unconditional=False):
+    def __init__(
+        self,
+        root_dir,
+        npoints=10000,
+        voxel_size=0.03,
+        normalize=False,
+        unconditional=False,
+    ):
         self.root = root_dir
         self.npoints = int(npoints)
         self.voxel_size = voxel_size

@@ -18,14 +18,14 @@ import torch
 import torch.nn as nn
 from einops import rearrange
 from torch.cuda.amp import custom_bwd, custom_fwd
-from modules.functional.voxelization import avg_voxelize
-from modules.functional.sampling import furthest_point_sample
-from modules.functional.grouping import grouping
-from modules.functional.ball_query import ball_query
-from modules.functional.interpolatation import nearest_neighbor_interpolate
-from modules.functional.devoxelization import trilinear_devoxelize
+from pvcnn.functional.voxelization import avg_voxelize
+from pvcnn.functional.sampling import furthest_point_sample
+from pvcnn.functional.grouping import grouping
+from pvcnn.functional.ball_query import ball_query
+from pvcnn.functional.interpolatation import nearest_neighbor_interpolate
+from pvcnn.functional.devoxelization import trilinear_devoxelize
 
-from model.modules import AdaGN
+from training.modules import AdaGN
 
 quiet = int(os.environ.get("quiet", 0))
 
@@ -37,37 +37,58 @@ def create_pvc_layer_params(cfg):
     n_fp_blocks = cfg.model.PVD.n_fp_blocks
     radius = cfg.model.PVD.radius
     voxel_resolutions = cfg.model.PVD.voxel_resolutions
-    
+
     n_centers = []
     sa_blocks = []
     fp_blocks = []
     n_channels = len(channels)
-    
-    for i in range(n_channels-1):
-        n_centers.append(npoints // 4**(i+1))
-        
+
+    for i in range(n_channels - 1):
+        n_centers.append(npoints // 4 ** (i + 1))
+
         # create set abstraction blocks
         if i != n_channels - 2:
-            sa_blocks.append((
-                (channels[i], n_sa_blocks[i], voxel_resolutions[i]), 
-                (n_centers[i], radius[i], 32, (channels[i], channels[i+1]))
-                ))
+            sa_blocks.append(
+                (
+                    (channels[i], n_sa_blocks[i], voxel_resolutions[i]),
+                    (n_centers[i], radius[i], 32, (channels[i], channels[i + 1])),
+                )
+            )
         else:
-            sa_blocks.append((
-                None, 
-                (n_centers[i], radius[i], 32, (channels[i], channels[i], channels[i+1]))
-                ))
+            sa_blocks.append(
+                (
+                    None,
+                    (
+                        n_centers[i],
+                        radius[i],
+                        32,
+                        (channels[i], channels[i], channels[i + 1]),
+                    ),
+                )
+            )
 
     vox_res_idxs = [i for i in range(len(channels) - 1)]
     fp_blocks_idxs = vox_res_idxs
-    in_channels_idxs = [min(i, n_channels-2) for i in range(2, len(channels) - 1)]
-    
+    in_channels_idxs = [min(i, n_channels - 2) for i in range(2, len(channels) - 1)]
+
     # in_channels, out_channels X | out_channels, num_blocks, voxel_resolution
     fp_blocks = [
-        ((channels[3], channels[3]), (channels[3], n_fp_blocks[3], voxel_resolutions[3])),
-        ((channels[3], channels[3]), (channels[3], n_fp_blocks[2], voxel_resolutions[2])),
-        ((channels[3], channels[2]), (channels[2], n_fp_blocks[1], voxel_resolutions[1])),
-        ((channels[2], channels[2], channels[1]), (channels[1], n_fp_blocks[0], voxel_resolutions[0])),
+        (
+            (channels[3], channels[3]),
+            (channels[3], n_fp_blocks[3], voxel_resolutions[3]),
+        ),
+        (
+            (channels[3], channels[3]),
+            (channels[3], n_fp_blocks[2], voxel_resolutions[2]),
+        ),
+        (
+            (channels[3], channels[2]),
+            (channels[2], n_fp_blocks[1], voxel_resolutions[1]),
+        ),
+        (
+            (channels[2], channels[2], channels[1]),
+            (channels[1], n_fp_blocks[0], voxel_resolutions[0]),
+        ),
     ]
     return sa_blocks, fp_blocks
 
@@ -568,7 +589,6 @@ def create_pointnet2_sa_components(
     embed_dim=64,
     attention_fn=None,
     attention_layers=None,
-    force_att=0,
     dropout=0.1,
     with_se=False,
     normalize=True,
@@ -576,7 +596,6 @@ def create_pointnet2_sa_components(
     has_temb=1,
     width_multiplier=1,
     voxel_resolution_multiplier=1,
-    verbose=True,
     use_conditioning=False,
     cfg={},
 ):
@@ -595,7 +614,7 @@ def create_pointnet2_sa_components(
         sa_in_channels.append(in_channels)
         sa_blocks = []
         use_att = attention_layers[idx]
-        
+
         if conv_configs is not None:
             out_channels, num_blocks, voxel_resolution = conv_configs
             out_channels = int(r * out_channels)
@@ -609,7 +628,7 @@ def create_pointnet2_sa_components(
                         kernel_size=3,
                         resolution=int(vr * voxel_resolution),
                         attention=attention,
-                        attention_fn = attention_fn,
+                        attention_fn=attention_fn,
                         dropout=dropout,
                         with_se=with_se,  # with_se_relu=True,
                         normalize=normalize,
@@ -702,7 +721,7 @@ def create_pointnet2_fp_modules(
         )
         in_channels = out_channels[-1]
         use_att = attention_layers[fp_idx]
-        
+
         if conv_configs is not None:
             out_channels, num_blocks, voxel_resolution = conv_configs
             out_channels = int(r * out_channels)

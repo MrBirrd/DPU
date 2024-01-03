@@ -1,6 +1,6 @@
 import torch.nn as nn
 
-import modules.functional as F
+import pvcnn.functional as F
 
 __all__ = ["KLLoss"]
 

@@ -1,4 +1,3 @@
-
 import torch
 from tqdm import tqdm
 
@@ -141,7 +140,9 @@ class NoiseScheduleVP:
         """
         if self.schedule == "discrete":
             return interpolate_fn(
-                t.reshape((-1, 1)), self.t_array.to(t.device), self.log_alpha_array.to(t.device)
+                t.reshape((-1, 1)),
+                self.t_array.to(t.device),
+                self.log_alpha_array.to(t.device),
             ).reshape((-1))
         elif self.schedule == "linear":
             return -0.25 * t**2 * (self.beta_1 - self.beta_0) - 0.5 * t * self.beta_0
@@ -437,7 +438,10 @@ class DPM_Solver:
         dims = x0.dim()
         p = self.dynamic_thresholding_ratio
         s = torch.quantile(torch.abs(x0).reshape((x0.shape[0], -1)), p, dim=1)
-        s = expand_dims(torch.maximum(s, self.thresholding_max_val * torch.ones_like(s).to(s.device)), dims)
+        s = expand_dims(
+            torch.maximum(s, self.thresholding_max_val * torch.ones_like(s).to(s.device)),
+            dims,
+        )
         x0 = torch.clamp(x0, -s, s) / s
         return x0
 
@@ -635,7 +639,14 @@ class DPM_Solver:
                 return x_t
 
     def singlestep_dpm_solver_second_update(
-        self, x, s, t, r1=0.5, model_s=None, return_intermediate=False, solver_type="dpmsolver"
+        self,
+        x,
+        s,
+        t,
+        r1=0.5,
+        model_s=None,
+        return_intermediate=False,
+        solver_type="dpmsolver",
     ):
         """
         Singlestep solver DPM-Solver-2 from time `s` to time `t`.
@@ -667,7 +678,11 @@ class DPM_Solver:
             ns.marginal_log_mean_coeff(s1),
             ns.marginal_log_mean_coeff(t),
         )
-        sigma_s, sigma_s1, sigma_t = ns.marginal_std(s), ns.marginal_std(s1), ns.marginal_std(t)
+        sigma_s, sigma_s1, sigma_t = (
+            ns.marginal_std(s),
+            ns.marginal_std(s1),
+            ns.marginal_std(t),
+        )
         alpha_s1, alpha_t = torch.exp(log_alpha_s1), torch.exp(log_alpha_t)
 
         if self.algorithm_type == "dpmsolver++":
@@ -771,7 +786,11 @@ class DPM_Solver:
             ns.marginal_std(s2),
             ns.marginal_std(t),
         )
-        alpha_s1, alpha_s2, alpha_t = torch.exp(log_alpha_s1), torch.exp(log_alpha_s2), torch.exp(log_alpha_t)
+        alpha_s1, alpha_s2, alpha_t = (
+            torch.exp(log_alpha_s1),
+            torch.exp(log_alpha_s2),
+            torch.exp(log_alpha_t),
+        )
 
         if self.algorithm_type == "dpmsolver++":
             phi_11 = torch.expm1(-r1 * h)
@@ -967,7 +986,15 @@ class DPM_Solver:
         return x_t
 
     def singlestep_dpm_solver_update(
-        self, x, s, t, order, return_intermediate=False, solver_type="dpmsolver", r1=None, r2=None
+        self,
+        x,
+        s,
+        t,
+        order,
+        return_intermediate=False,
+        solver_type="dpmsolver",
+        r1=None,
+        r2=None,
     ):
         """
         Singlestep DPM-Solver with the order `order` from time `s` to time `t`.
@@ -989,11 +1016,22 @@ class DPM_Solver:
             return self.dpm_solver_first_update(x, s, t, return_intermediate=return_intermediate)
         elif order == 2:
             return self.singlestep_dpm_solver_second_update(
-                x, s, t, return_intermediate=return_intermediate, solver_type=solver_type, r1=r1
+                x,
+                s,
+                t,
+                return_intermediate=return_intermediate,
+                solver_type=solver_type,
+                r1=r1,
             )
         elif order == 3:
             return self.singlestep_dpm_solver_third_update(
-                x, s, t, return_intermediate=return_intermediate, solver_type=solver_type, r1=r1, r2=r2
+                x,
+                s,
+                t,
+                return_intermediate=return_intermediate,
+                solver_type=solver_type,
+                r1=r1,
+                r2=r2,
             )
         else:
             raise ValueError("Solver order must be 1 or 2 or 3, got {}".format(order))
@@ -1023,7 +1061,17 @@ class DPM_Solver:
             raise ValueError("Solver order must be 1 or 2 or 3, got {}".format(order))
 
     def dpm_solver_adaptive(
-        self, x, order, t_T, t_0, h_init=0.05, atol=0.0078, rtol=0.05, theta=0.9, t_err=1e-5, solver_type="dpmsolver"
+        self,
+        x,
+        order,
+        t_T,
+        t_0,
+        h_init=0.05,
+        atol=0.0078,
+        rtol=0.05,
+        theta=0.9,
+        t_err=1e-5,
+        solver_type="dpmsolver",
     ):
         """
         The adaptive step size solver based on singlestep DPM-Solver.
@@ -1073,7 +1121,10 @@ class DPM_Solver:
             t = ns.inverse_lambda(lambda_s + h)
             x_lower, lower_noise_kwargs = lower_update(x, s, t)
             x_higher = higher_update(x, s, t, **lower_noise_kwargs)
-            delta = torch.max(torch.ones_like(x).to(x) * atol, rtol * torch.max(torch.abs(x_lower), torch.abs(x_prev)))
+            delta = torch.max(
+                torch.ones_like(x).to(x) * atol,
+                rtol * torch.max(torch.abs(x_lower), torch.abs(x_prev)),
+            )
             norm_fn = lambda v: torch.sqrt(torch.square(v.reshape((v.shape[0], -1))).mean(dim=-1, keepdim=True))
             E = norm_fn((x_higher - x_lower) / delta).max()
             if torch.all(E <= 1.0):
@@ -1081,7 +1132,10 @@ class DPM_Solver:
                 s = t
                 x_prev = x_lower
                 lambda_s = ns.marginal_lambda(s)
-            h = torch.min(theta * h * torch.float_power(E, -1.0 / order).float(), lambda_0 - lambda_s)
+            h = torch.min(
+                theta * h * torch.float_power(E, -1.0 / order).float(),
+                lambda_0 - lambda_s,
+            )
             nfe += order
         print("adaptive solver nfe", nfe)
         return x
@@ -1293,7 +1347,13 @@ class DPM_Solver:
         with torch.no_grad():
             if method == "adaptive":
                 x = self.dpm_solver_adaptive(
-                    x, order=order, t_T=t_T, t_0=t_0, atol=atol, rtol=rtol, solver_type=solver_type
+                    x,
+                    order=order,
+                    t_T=t_T,
+                    t_0=t_0,
+                    atol=atol,
+                    rtol=rtol,
+                    solver_type=solver_type,
                 )
             elif method == "multistep":
                 assert steps >= order
@@ -1313,7 +1373,12 @@ class DPM_Solver:
                 for step in range(1, order):
                     t = timesteps[step]
                     x = self.multistep_dpm_solver_update(
-                        x, model_prev_list, t_prev_list, t, step, solver_type=solver_type
+                        x,
+                        model_prev_list,
+                        t_prev_list,
+                        t,
+                        step,
+                        solver_type=solver_type,
                     )
                     if self.correcting_xt_fn is not None:
                         x = self.correcting_xt_fn(x, t, step)
@@ -1331,7 +1396,12 @@ class DPM_Solver:
                     else:
                         step_order = order
                     x = self.multistep_dpm_solver_update(
-                        x, model_prev_list, t_prev_list, t, step_order, solver_type=solver_type
+                        x,
+                        model_prev_list,
+                        t_prev_list,
+                        t,
+                        step_order,
+                        solver_type=solver_type,
                     )
                     if self.correcting_xt_fn is not None:
                         x = self.correcting_xt_fn(x, t, step)
@@ -1347,8 +1417,16 @@ class DPM_Solver:
                     pbar.update(1)
             elif method in ["singlestep", "singlestep_fixed"]:
                 if method == "singlestep":
-                    timesteps_outer, orders = self.get_orders_and_timesteps_for_singlestep_solver(
-                        steps=steps, order=order, skip_type=skip_type, t_T=t_T, t_0=t_0, device=device
+                    (
+                        timesteps_outer,
+                        orders,
+                    ) = self.get_orders_and_timesteps_for_singlestep_solver(
+                        steps=steps,
+                        order=order,
+                        skip_type=skip_type,
+                        t_T=t_T,
+                        t_0=t_0,
+                        device=device,
                     )
                 elif method == "singlestep_fixed":
                     K = steps // order
@@ -1362,7 +1440,11 @@ class DPM_Solver:
                 for step, order in enumerate(orders):
                     s, t = timesteps_outer[step], timesteps_outer[step + 1]
                     timesteps_inner = self.get_time_steps(
-                        skip_type=skip_type, t_T=s.item(), t_0=t.item(), N=order, device=device
+                        skip_type=skip_type,
+                        t_T=s.item(),
+                        t_0=t.item(),
+                        N=order,
+                        device=device,
                     )
                     lambda_inner = self.noise_schedule.marginal_lambda(timesteps_inner)
                     h = lambda_inner[-1] - lambda_inner[0]

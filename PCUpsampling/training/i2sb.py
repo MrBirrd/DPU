@@ -8,7 +8,7 @@ from loguru import logger
 from torch import Tensor
 from tqdm import tqdm
 
-from model.utils import DiffusionModel
+from training.train_utils import DiffusionModel
 
 
 def space_indices(num_steps: int, count: int):
@@ -75,10 +75,15 @@ class I2SB(DiffusionModel):
         # setup betas
         betas = make_beta_schedule(
             n_timestep=cfg.diffusion.timesteps,
-            linear_start = cfg.diffusion.beta_start / cfg.diffusion.timesteps,
-            linear_end=cfg.diffusion.beta_end / cfg.diffusion.timesteps
+            linear_start=cfg.diffusion.beta_start / cfg.diffusion.timesteps,
+            linear_end=cfg.diffusion.beta_end / cfg.diffusion.timesteps,
         )
-        betas = np.concatenate([betas[: cfg.diffusion.timesteps // 2], np.flip(betas[: cfg.diffusion.timesteps // 2])])
+        betas = np.concatenate(
+            [
+                betas[: cfg.diffusion.timesteps // 2],
+                np.flip(betas[: cfg.diffusion.timesteps // 2]),
+            ]
+        )
 
         # compute analytic std: eq 11
         std_fwd = np.sqrt(np.cumsum(betas))
@@ -151,7 +156,16 @@ class I2SB(DiffusionModel):
 
         return xt_prev
 
-    def sample_ddpm(self, steps, pred_x0_fn, x1, cond=None, features=None, log_steps=None, verbose=True):
+    def sample_ddpm(
+        self,
+        steps,
+        pred_x0_fn,
+        x1,
+        cond=None,
+        features=None,
+        log_steps=None,
+        verbose=True,
+    ):
         xt = x1.detach().to(self.device)
 
         xs = []
@@ -177,7 +191,16 @@ class I2SB(DiffusionModel):
         return stack_bwd_traj(xs), stack_bwd_traj(pred_x0s)
 
     @torch.no_grad()
-    def ddpm_sampling(self, x1, cond=None, features=None, clip_denoise=False, nfe=None, log_count=10, verbose=True):
+    def ddpm_sampling(
+        self,
+        x1,
+        cond=None,
+        features=None,
+        clip_denoise=False,
+        nfe=None,
+        log_count=10,
+        verbose=True,
+    ):
         # create discrete time steps that split [0, INTERVAL] into NFE sub-intervals.
         # e.g., if NFE=2 & INTERVAL=1000, then STEPS=[0, 500, 999] and 2 network
         # evaluations will be invoked, first from 999 to 500, then from 500 to 0.
@@ -202,7 +225,7 @@ class I2SB(DiffusionModel):
             out = self.model(
                 torch.cat([xt, cond], dim=1) if cond is not None else xt,
                 torch.cat([step.unsqueeze(-1), features.unsqueeze(-1)], dim=1) if features is not None else step,
-                )
+            )
             return self.compute_pred_x0(step, xt, out, clip_denoise=clip_denoise)
 
         xs, pred_x0 = self.sample_ddpm(
@@ -255,7 +278,13 @@ class I2SB(DiffusionModel):
         return F.mse_loss(pred, gt)
 
     def forward(
-        self, x0: Tensor, x1: Tensor, cond: Optional[Tensor] = None, features: Optional[Tensor] = None, *args, **kwargs
+        self,
+        x0: Tensor,
+        x1: Tensor,
+        cond: Optional[Tensor] = None,
+        features: Optional[Tensor] = None,
+        *args,
+        **kwargs,
     ) -> Tensor:
         step = torch.randint(0, self.timesteps, (x0.shape[0],)).to(self.device)
         xt = self.q_sample(step, x0, x1)

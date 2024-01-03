@@ -3,19 +3,18 @@ from loguru import logger
 from torch import optim
 from torch.nn.parallel import DataParallel, DistributedDataParallel
 
-from model.i2sb import I2SB
+from training.i2sb import I2SB
 
 try:
-    from model.unet_mink import MinkUnet
+    from training.unet_mink import MinkUnet
 except ImportError:
     logger.warning("Minkowski Engine not installed. Minkowski models will not be available.")
 
-from model.diffusion_lucid import GaussianDiffusion as LUCID
-from model.unet_pointvoxel import PVCNN2Unet
+from training.diffusion_lucid import GaussianDiffusion as LUCID
+from training.unet_pointvoxel import PVCNN2Unet
 from third_party.gecco_torch.models.linear_lift import LinearLift
 from third_party.gecco_torch.models.set_transformer import SetTransformer
-
-from .diffusion_lucid import GaussianDiffusion as LUCID
+from training.diffusion_lucid import GaussianDiffusion as LUCID
 
 
 def load_optim_sched(cfg, model, model_ckpt=None):
@@ -135,7 +134,11 @@ def load_diffusion(cfg, smart=False):
         ckpt = torch.load(cfg.model_path, map_location=torch.device("cpu"))
         if not cfg.restart:
             cfg.start_step = ckpt["step"] + 1
-            model.load_state_dict(ckpt["model_state"])
+            try:
+                model.load_state_dict(ckpt["model_state"])
+            except RuntimeError:
+                logger.warning("Could not load model state dict. Trying to load only the model parameters.")
+                model.load_state_dict(ckpt["model_state"], strict=False)
         else:
             # only load the model parameters and let rest start from scratch
             model_keys = {k.replace("model.", ""): v for k, v in ckpt["model_state"].items() if k.startswith("model.")}

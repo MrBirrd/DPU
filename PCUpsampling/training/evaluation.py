@@ -1,16 +1,11 @@
 import os
-
 import numpy as np
 import torch
 from loguru import logger
-from scipy import spatial
-from tqdm import tqdm
-
 import wandb
 from metrics.emd_ import emd_module as EMD
 from metrics.metrics import calculate_cd
-from modules.functional.sampling import furthest_point_sample
-from utils.utils import get_data_batch, to_cuda
+from training.train_utils import get_data_batch, to_cuda
 from utils.visualize import visualize_pointcloud_batch
 
 
@@ -64,6 +59,7 @@ def evaluate(model, eval_iter, cfg, step, sampling=False, save_npy=False, debug=
 
     with torch.no_grad():
         sample_data = model.sample(
+            shape=x0.shape,
             cond=features,
             x_start=x_start,
             clip=False,
@@ -71,10 +67,16 @@ def evaluate(model, eval_iter, cfg, step, sampling=False, save_npy=False, debug=
 
     pred = sample_data["x_pred"]
     chain = sample_data["x_chain"][0]
+    x_start = sample_data["x_start"]
 
     # visualize the pointclouds
     save_visualizations(
-        [(pred, "pred"), (x_start, "start") if x_start is not None else None, (x0, "gt"), (chain, "chain")],
+        [
+            (pred, "pred"),
+            (x_start, "start") if x_start is not None else None,
+            (x0, "gt"),
+            (chain, "chain"),
+        ],
         out_dir,
         step,
     )
@@ -115,72 +117,6 @@ def evaluate(model, eval_iter, cfg, step, sampling=False, save_npy=False, debug=
         save_ptc("gt", x0, out_dir, step)
 
     return batch_metrics
-
-
-def upsample_big_pointcloud(model, pointcloud, batch_size=8192, n_batches=32):
-    """Upsamples big pointcloud of shape [N, 3] by generating batches of smaller pointclouds and stitching them together."""
-    # numerate the pointcloud points
-    numbering = torch.arange(pointcloud.shape[0], device=pointcloud.device).unsqueeze(-1)
-    pointcloud = torch.cat([pointcloud, numbering], dim=-1)
-    # make tree to generate local sample batches
-    pcd_tree = spatial.cKDTree(pointcloud[:, :3])
-    # find center points of batches by farthest point sampling
-    n_centers = pointcloud.shape[0] // batch_size * 2
-    center_points = furthest_point_sample(pointcloud[:, :3].T.unsqueeze(0).cuda(), n_centers).squeeze().T
-
-    upsampled_points = torch.tensor([]).cuda()
-    upsampling_batch = torch.tensor([]).cuda()
-
-    total_pbar = tqdm(total=np.ceil(center_points.shape[0] / n_batches), desc="Upsampling pointcloud")
-
-    # upsample batches
-    for n_center, center in enumerate(center_points):
-        # sample
-        _, idx = pcd_tree.query(center.cpu(), k=batch_size)
-        batch = pointcloud[idx].cuda()
-        upsampling_batch = torch.cat([upsampling_batch, batch.unsqueeze(0)], dim=0)
-        if upsampling_batch.shape[0] == n_batches:
-            # upsample
-            low_res_cloud = upsampling_batch[:, :, :3].permute(0, 2, 1).cuda()
-            with torch.no_grad():
-                upsampled_batch = model.sample(
-                    shape=low_res_cloud.shape,
-                    device=low_res_cloud.device,
-                    cond=None,
-                    hint=low_res_cloud,
-                    add_hint_noise=False,
-                    clip_denoised=False,
-                )
-            total_pbar.update(1)
-            # reshape
-            upsampled_batch = upsampled_batch.permute(0, 2, 1)  # B, 3, N => B, N 3
-            # add back indices
-            upsampled_batch = torch.cat([upsampled_batch, upsampling_batch[:, :, 3:]], dim=-1)
-            upsampled_points = torch.cat([upsampled_points, upsampled_batch.squeeze(0)], dim=0)
-            upsampling_batch = torch.tensor([]).cuda()
-    # do final upsampling with last batch
-    if upsampling_batch.shape[0] != 0:
-        # upsample
-        low_res_cloud = upsampling_batch[:, :, :3].permute(0, 2, 1).cuda()
-        with torch.no_grad():
-            upsampled_batch = model.sample(
-                shape=low_res_cloud.shape,
-                device=low_res_cloud.device,
-                cond=None,
-                hint=low_res_cloud,
-                add_hint_noise=False,
-                clip_denoised=False,
-            )
-        total_pbar.update(1)
-        # reshape
-        upsampled_batch = upsampled_batch.permute(0, 2, 1)  # B, 3, N => B, N 3
-        # add back indices
-        upsampled_batch = torch.cat([upsampled_batch, upsampling_batch[:, :, 3:]], dim=-1)
-        upsampled_points = torch.cat([upsampled_points, upsampled_batch.squeeze(0)], dim=0)
-        upsampling_batch = torch.tensor([]).cuda()
-
-    # check if all points were upsampled
-    return upsampled_points
 
 
 def get_metrics(model, gt, pred):

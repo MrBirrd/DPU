@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-import modules.functional as PF
+import pvcnn.functional as PF
 
 __all__ = ["FrustumPointNetLoss", "get_box_corners_3d"]
 
@@ -29,7 +29,8 @@ class FrustumPointNetLoss(nn.Module):
         self.num_size_templates = num_size_templates
         self.register_buffer("size_templates", size_templates.view(self.num_size_templates, 3))
         self.register_buffer(
-            "heading_angle_bin_centers", torch.arange(0, 2 * np.pi, 2 * np.pi / self.num_heading_angle_bins)
+            "heading_angle_bin_centers",
+            torch.arange(0, 2 * np.pi, 2 * np.pi / self.num_heading_angle_bins),
         )
 
     def forward(self, inputs, targets):
@@ -69,7 +70,8 @@ class FrustumPointNetLoss(nn.Module):
         size_residuals_normalized = size_residuals_normalized[batch_id, size_template_id_target]  # (B, 3)
         size_residual_normalized_target = size_residual_target / self.size_templates[size_template_id_target]
         size_residual_normalized_loss = PF.huber_loss(
-            torch.norm(size_residual_normalized_target - size_residuals_normalized, dim=-1), delta=1.0
+            torch.norm(size_residual_normalized_target - size_residuals_normalized, dim=-1),
+            delta=1.0,
         )
 
         # Bounding box losses
@@ -84,10 +86,16 @@ class FrustumPointNetLoss(nn.Module):
         heading_target = self.heading_angle_bin_centers[heading_bin_id_target] + heading_residual_target  # (B, )
         size_target = self.size_templates[size_template_id_target] + size_residual_target  # (B, 3)
         corners_target, corners_target_flip = get_box_corners_3d(
-            centers=center_target, headings=heading_target, sizes=size_target, with_flip=True
+            centers=center_target,
+            headings=heading_target,
+            sizes=size_target,
+            with_flip=True,
         )  # (B, 3, 8)
         corners_loss = PF.huber_loss(
-            torch.min(torch.norm(corners - corners_target, dim=1), torch.norm(corners - corners_target_flip, dim=1)),
+            torch.min(
+                torch.norm(corners - corners_target, dim=1),
+                torch.norm(corners - corners_target_flip, dim=1),
+            ),
             delta=1.0,
         )
         # Summing up
@@ -134,7 +142,10 @@ def get_box_corners_3d(centers, headings, sizes, with_flip=False):
     R = torch.stack([c, z, s, z, o, z, -s, z, c], dim=1).view(-1, 3, 3)  # roty matrix: (N, 3, 3)
     if with_flip:
         R_flip = torch.stack([-c, z, -s, z, o, z, s, z, -c], dim=1).view(-1, 3, 3)
-        return torch.matmul(R, corners) + centers, torch.matmul(R_flip, corners) + centers
+        return (
+            torch.matmul(R, corners) + centers,
+            torch.matmul(R_flip, corners) + centers,
+        )
     else:
         return torch.matmul(R, corners) + centers
 

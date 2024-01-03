@@ -1,10 +1,10 @@
 import torch
 import torch.nn as nn
 
-import modules.functional as F
-from modules.se import SE3d
-from modules.shared_mlp import SharedMLP
-from modules.voxelization import Voxelization
+import pvcnn.functional as F
+from pvcnn.se import SE3d
+from pvcnn.shared_mlp import SharedMLP
+from pvcnn.voxelization import Voxelization
 
 __all__ = ["PVConv", "Attention", "Swish", "PVConvReLU"]
 
@@ -81,13 +81,25 @@ class PVConv(nn.Module):
 
         self.voxelization = Voxelization(resolution, normalize=normalize, eps=eps)
         voxel_layers = [
-            nn.Conv3d(in_channels, out_channels, kernel_size, stride=1, padding=kernel_size // 2),
+            nn.Conv3d(
+                in_channels,
+                out_channels,
+                kernel_size,
+                stride=1,
+                padding=kernel_size // 2,
+            ),
             nn.GroupNorm(num_groups=8, num_channels=out_channels),
             Swish(),
         ]
         voxel_layers += [nn.Dropout(dropout)] if dropout is not None else []
         voxel_layers += [
-            nn.Conv3d(out_channels, out_channels, kernel_size, stride=1, padding=kernel_size // 2),
+            nn.Conv3d(
+                out_channels,
+                out_channels,
+                kernel_size,
+                stride=1,
+                padding=kernel_size // 2,
+            ),
             nn.GroupNorm(num_groups=8, num_channels=out_channels),
             Attention(out_channels, 8) if attention else Swish(),
         ]
@@ -128,13 +140,25 @@ class PVConvReLU(nn.Module):
 
         self.voxelization = Voxelization(resolution, normalize=normalize, eps=eps)
         voxel_layers = [
-            nn.Conv3d(in_channels, out_channels, kernel_size, stride=1, padding=kernel_size // 2),
+            nn.Conv3d(
+                in_channels,
+                out_channels,
+                kernel_size,
+                stride=1,
+                padding=kernel_size // 2,
+            ),
             nn.BatchNorm3d(out_channels),
             nn.LeakyReLU(leak, True),
         ]
         voxel_layers += [nn.Dropout(dropout)] if dropout is not None else []
         voxel_layers += [
-            nn.Conv3d(out_channels, out_channels, kernel_size, stride=1, padding=kernel_size // 2),
+            nn.Conv3d(
+                out_channels,
+                out_channels,
+                kernel_size,
+                stride=1,
+                padding=kernel_size // 2,
+            ),
             nn.BatchNorm3d(out_channels),
             Attention(out_channels, 8) if attention else nn.LeakyReLU(leak, True),
         ]

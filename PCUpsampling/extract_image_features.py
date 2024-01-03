@@ -34,7 +34,11 @@ def main():
         help="Path to the output directory.",
     )
     parser.add_argument(
-        "--feature_type", type=str, default="rgb", help="Type of features to extract.", choices=["rgb", "dino", "clip"]
+        "--feature_type",
+        type=str,
+        default="rgb",
+        help="Type of features to extract.",
+        choices=["rgb", "dino", "clip"],
     )
     parser.add_argument(
         "--source_cloud",
@@ -42,10 +46,30 @@ def main():
         default="iphone",
         help="Source of the pointcloud coordinates.",
     )
-    parser.add_argument("--sampling_rate", type=int, default=20, help="Number of scans to skip between each scan.")
-    parser.add_argument("--image_width", type=int, default=1920, help="Width of the images in the video.")
-    parser.add_argument("--image_height", type=int, default=1440, help="Height of the images in the video.")
-    parser.add_argument("--dino_model_name", type=str, default="dinov2_vits14", help="Name of the DINO model to use.")
+    parser.add_argument(
+        "--sampling_rate",
+        type=int,
+        default=20,
+        help="Number of scans to skip between each scan.",
+    )
+    parser.add_argument(
+        "--image_width",
+        type=int,
+        default=1920,
+        help="Width of the images in the video.",
+    )
+    parser.add_argument(
+        "--image_height",
+        type=int,
+        default=1440,
+        help="Height of the images in the video.",
+    )
+    parser.add_argument(
+        "--dino_model_name",
+        type=str,
+        default="dinov2_vits14",
+        help="Name of the DINO model to use.",
+    )
     args = parser.parse_args()
 
     # deactivate xformers
@@ -65,7 +89,12 @@ def main():
 
     for scene_id in scenes:
         # construct paths
-        target_path = os.path.join(args.output_dir, scene_id, "features", f"{args.feature_type}_{args.source_cloud}")
+        target_path = os.path.join(
+            args.output_dir,
+            scene_id,
+            "features",
+            f"{args.feature_type}_{args.source_cloud}",
+        )
         os.makedirs(os.path.dirname(target_path), exist_ok=True)
         movie_path = os.path.join(args.data_root, scene_id, "iphone", "rgb.mp4")
 
