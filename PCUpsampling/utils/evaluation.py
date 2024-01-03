@@ -66,7 +66,6 @@ def evaluate(model, eval_iter, cfg, step, sampling=False, save_npy=False, debug=
         sample_data = model.sample(
             cond=features,
             x_start=x_start,
-            return_noised_hint=True if cfg.diffusion.sampling_hint else False,
             clip=False,
         )
 
