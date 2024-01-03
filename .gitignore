@@ -32,3 +32,4 @@ sampling.sh
 exported_model
 pyviz3d
 test_room
+cuda

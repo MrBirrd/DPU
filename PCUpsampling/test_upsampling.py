@@ -31,12 +31,8 @@ def sample(gpu, cfg, output_dir):
 
         cfg.sampling.bs = int(cfg.sampling.bs / cfg.ngpus_per_node)
 
-    # get the loaders
-    if "eval_folder" in cfg:
-        test_loader = get_npz_loader(cfg.eval_folder, cfg)
-        cfg.out_sampling = cfg.out_sampling.replace("sampling", "sampling_npz")
-    else:
-        test_loader = get_dataloader(cfg, sampling=True)[1]
+    # get the loader
+    test_loader = get_dataloader(cfg, sampling=True)[1]
 
     model, _ = load_diffusion(cfg)
 
