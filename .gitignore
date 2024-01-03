@@ -31,3 +31,4 @@ sampling.sh
 *.sh
 exported_model
 pyviz3d
+test_room
