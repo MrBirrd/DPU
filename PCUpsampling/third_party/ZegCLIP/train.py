@@ -5,7 +5,6 @@ import os.path as osp
 import time
 
 import mmcv
-import models
 import torch
 from mmcv.runner import init_dist
 from mmcv.utils import Config, DictAction, get_git_hash

@@ -2,7 +2,7 @@ import gzip
 import html
 import os
 from functools import lru_cache
-from typing import Any, List, Union
+from typing import List, Union
 
 import ftfy
 import regex as re

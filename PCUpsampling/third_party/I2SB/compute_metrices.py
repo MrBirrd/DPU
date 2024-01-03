@@ -11,7 +11,6 @@ import pickle
 import random
 from pathlib import Path
 
-import colored_traceback.always
 import numpy as np
 import torch
 import torchvision.transforms as transforms
@@ -19,7 +18,6 @@ from easydict import EasyDict as edict
 from evaluation import fid_util
 from evaluation.resnet import build_resnet50
 from i2sb import download
-from ipdb import set_trace as debug
 from logger import Logger
 from torch.utils.data import DataLoader, Dataset
 

@@ -1,5 +1,5 @@
 from functools import partial
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Dict, Optional, Tuple
 
 import numpy as np
 import torch
@@ -7,6 +7,7 @@ import torch.nn.functional as F
 from loguru import logger
 from torch import Tensor
 from tqdm import tqdm
+
 from model.utils import DiffusionModel
 
 
@@ -188,7 +189,7 @@ class I2SB(DiffusionModel):
         log_count = min(len(steps) - 1, log_count)
         log_steps = [steps[i] for i in space_indices(len(steps) - 1, log_count)]
         assert log_steps[0] == 0
-        logger.info(f"[DDPM Sampling] steps={self.timesteps}, {nfe=}, {log_steps=}!")
+        logger.info(f"[DDPM Sampling] steps={self.timesteps}, {nfe=}!")
 
         x1 = x1.to(self.device)
         if cond is not None:

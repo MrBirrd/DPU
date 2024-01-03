@@ -9,7 +9,6 @@ import enum
 
 import numpy as np
 import torch
-from ipdb import set_trace as debug
 from torch.utils.data import Dataset
 
 from .blur import Deblurring

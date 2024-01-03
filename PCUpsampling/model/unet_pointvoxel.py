@@ -6,24 +6,21 @@
 # distribution of this software and related documentation without an express
 # license agreement from NVIDIA CORPORATION & AFFILIATES is strictly prohibited.
 
-from typing import Dict, List, Tuple, Union
+from functools import partial
+from typing import Dict
 
-import model.utils as utils
 import numpy as np
 import torch
 import torch.nn as nn
 from einops import rearrange
+
+import model.utils as utils
 from model.set_transformer import SetTransformer
-from functools import partial
-from .attention import Attention
-from .pvcnn2_ada import (
-    LinearAttention,
-    SharedMLP,
-    create_mlp_components,
-    create_pointnet2_fp_modules,
-    create_pointnet2_sa_components,
-    create_pvc_layer_params,
-)
+
+from model.modules import Attention
+from .pvcnn import (LinearAttention, SharedMLP, create_mlp_components,
+                    create_pointnet2_fp_modules,
+                    create_pointnet2_sa_components, create_pvc_layer_params)
 
 
 class PVCNN2Unet(nn.Module):

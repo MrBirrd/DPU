@@ -1,9 +1,9 @@
 import torch
+from torch.autograd import Function
+from torch.cuda.amp import custom_bwd, custom_fwd
 
 # from modules.functional.backend import _backend
 from modules.functional.backend import _backend
-from torch.autograd import Function
-from torch.cuda.amp import GradScaler, autocast, custom_bwd, custom_fwd
 
 __all__ = ["avg_voxelize"]
 

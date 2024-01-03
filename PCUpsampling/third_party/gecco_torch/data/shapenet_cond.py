@@ -1,7 +1,7 @@
 import os
 import re
 from functools import partial
-from typing import List, NamedTuple, Union
+from typing import List, Union
 
 import imageio as iio
 import lightning.pytorch as pl

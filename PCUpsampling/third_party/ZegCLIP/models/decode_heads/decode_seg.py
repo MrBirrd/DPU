@@ -1,20 +1,13 @@
 import math
-from ast import Gt
-from functools import partial
 from typing import Optional
 
-import matplotlib.pyplot as plt
-import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from mmcv.cnn import ConvModule
-from mmcv.runner import auto_fp16, force_fp32
+from mmcv.runner import force_fp32
 from mmseg.models.builder import HEADS
 from mmseg.models.decode_heads.decode_head import BaseDecodeHead
 from mmseg.models.losses import accuracy
-from mmseg.ops import Upsample, resize
-from third_party.ZegCLIP.models.decode_heads.utils import positional_encoding
 from timm.models.layers import trunc_normal_
 from torch import Tensor
 from torch.nn import TransformerDecoder, TransformerDecoderLayer

@@ -4,8 +4,9 @@ import pandas as pd
 import torch.distributed as dist
 import torch.multiprocessing as mp
 import torch.utils.data
+
 from data.dataloader import get_dataloader, get_npz_loader
-from model.loader import load_diffusion, load_model
+from model.loader import load_diffusion
 from utils.args import parse_args
 from utils.evaluation import evaluate
 from utils.file_utils import set_seed

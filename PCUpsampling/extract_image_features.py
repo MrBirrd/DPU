@@ -4,6 +4,7 @@ import os
 import traceback
 
 import torch
+
 from utils.image_features import process_scene
 
 
@@ -91,7 +92,6 @@ def main():
             gc.collect()
         except Exception as e:
             print(traceback.format_exc())
-            pass
 
 
 if __name__ == "__main__":

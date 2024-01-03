@@ -11,23 +11,21 @@ copied and modified from source:
     and functions under 
     https://github.com/alexzhou907/PVD/tree/9747265a5f141e5546fd4f862bfa66aa59f1bd33/modules 
 """
-import copy
 import functools
 import os
-from functools import partial
-from typing import List
 
-import modules.functional as F
-import numpy as np
 import torch
 import torch.nn as nn
 from einops import rearrange
-from loguru import logger
+from torch.cuda.amp import custom_bwd, custom_fwd
+from modules.functional.voxelization import avg_voxelize
+from modules.functional.sampling import furthest_point_sample
+from modules.functional.grouping import grouping
+from modules.functional.ball_query import ball_query
+from modules.functional.interpolatation import nearest_neighbor_interpolate
+from modules.functional.devoxelization import trilinear_devoxelize
 
-# from utils.checker import *
-from torch.cuda.amp import GradScaler, autocast, custom_bwd, custom_fwd
-
-from .adagn import AdaGN
+from model.modules import AdaGN
 
 quiet = int(os.environ.get("quiet", 0))
 
@@ -154,15 +152,15 @@ class BallQuery(nn.Module):
         # neighbor_features: B,D(+3),Ncenter
         points_coords = points_coords.contiguous()
         centers_coords = centers_coords.contiguous()
-        neighbor_indices = F.ball_query(centers_coords, points_coords, self.radius, self.num_neighbors)
-        neighbor_coordinates = F.grouping(points_coords, neighbor_indices)
+        neighbor_indices = ball_query(centers_coords, points_coords, self.radius, self.num_neighbors)
+        neighbor_coordinates = grouping(points_coords, neighbor_indices)
         neighbor_coordinates = neighbor_coordinates - centers_coords.unsqueeze(-1)
 
         if points_features is None:
             assert self.include_coordinates, "No Features For Grouping"
             neighbor_features = neighbor_coordinates
         else:
-            neighbor_features = F.grouping(points_features, neighbor_indices)
+            neighbor_features = grouping(points_features, neighbor_indices)
             if self.include_coordinates:
                 neighbor_features = torch.cat([neighbor_coordinates, neighbor_features], dim=1)
         return neighbor_features
@@ -249,7 +247,7 @@ class Voxelization(nn.Module):
         vox_coords = torch.round(norm_coords).to(torch.int32)
         if features is None:
             return features, norm_coords
-        return F.avg_voxelize(features, vox_coords, self.r), norm_coords
+        return avg_voxelize(features, vox_coords, self.r), norm_coords
 
     def extra_repr(self):
         return "resolution={}{}".format(self.r, ", normalized eps = {}".format(self.eps) if self.normalize else "")
@@ -344,7 +342,7 @@ class PVConv(nn.Module):
                 voxel_features_4d = voxel_layers(voxel_features_4d, cond)
             else:
                 voxel_features_4d = voxel_layers(voxel_features_4d)
-        voxel_features = F.trilinear_devoxelize(voxel_features_4d, voxel_coords, r, self.training)
+        voxel_features = trilinear_devoxelize(voxel_features_4d, voxel_coords, r, self.training)
 
         fused_features = voxel_features
         if self.add_point_feat:
@@ -463,7 +461,7 @@ class PointNetSAModule(nn.Module):
         if coords.shape[1] > 3:
             coords = coords[:, :3]
 
-        centers_coords = F.furthest_point_sample(coords, self.num_centers)
+        centers_coords = furthest_point_sample(coords, self.num_centers)
         # centers_coords: B,D,N
         S = centers_coords.shape[-1]
         time_emb = inputs[2]
@@ -516,7 +514,7 @@ class PointNetFPModule(nn.Module):
         else:
             raise NotImplementedError
 
-        interpolated_features = F.nearest_neighbor_interpolate(points_coords, centers_coords, centers_features)
+        interpolated_features = nearest_neighbor_interpolate(points_coords, centers_coords, centers_features)
         if points_features is not None:
             interpolated_features = torch.cat([interpolated_features, points_features], dim=1)
         if time_emb is not None:

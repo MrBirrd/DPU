@@ -1,15 +1,13 @@
 import os
-from typing import Tuple, Union
+from typing import Tuple
 
-import numpy as np
-import torch
-from git import Union
 from loguru import logger
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 
 from .arkitscenes import ArkitScans, IndoorScenes, IndoorScenesCut
-from .scannetpp import NPZFolderTest, ScanNetPP_Faro, ScanNetPP_iPhone, ScanNetPPCut
+from .scannetpp import (NPZFolderTest, ScanNetPP_Faro, ScanNetPP_iPhone,
+                        ScanNetPPCut)
 from .shapenet import get_dataset_shapenet
 
 

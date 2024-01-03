@@ -9,7 +9,6 @@ from collections import OrderedDict
 
 import torch
 import torch.nn.functional as F
-from ipdb import set_trace as debug
 from torchvision.models import resnet50
 
 

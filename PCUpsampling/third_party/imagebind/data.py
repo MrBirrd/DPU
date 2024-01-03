@@ -15,9 +15,11 @@ from PIL import Image
 from pytorchvideo import transforms as pv_transforms
 from pytorchvideo.data.clip_sampling import ConstantClipsPerVideoSampler
 from pytorchvideo.data.encoded_video import EncodedVideo
-from third_party.imagebind.models.multimodal_preprocessors import SimpleTokenizer
 from torchvision import transforms
 from torchvision.transforms._transforms_video import NormalizeVideo
+
+from third_party.imagebind.models.multimodal_preprocessors import \
+    SimpleTokenizer
 
 DEFAULT_AUDIO_FRAME_SHIFT_MS = 10  # in milliseconds
 

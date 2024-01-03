@@ -5,7 +5,6 @@
 # for I2SB. To view a copy of this license, see the LICENSE file.
 # ---------------------------------------------------------------
 
-import os
 import pickle
 
 import distributed_util as dist_util

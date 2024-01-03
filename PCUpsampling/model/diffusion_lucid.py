@@ -1,24 +1,18 @@
 import math
 from collections import namedtuple
 from functools import partial
-from typing import Optional
 
 import torch
 import torch.nn.functional as F
 from einops import rearrange, reduce, repeat
-from model.dpm_sampler import DPM_Solver, NoiseScheduleVP, model_wrapper
-from model.utils import (
-    DiffusionModel,
-    default,
-    dynamic_threshold_percentile,
-    extract,
-    identity,
-    normalize_to_neg_one_to_one,
-    unnormalize_to_zero_to_one,
-)
+from torch import Tensor
 from torch.cuda.amp import autocast
 from tqdm import tqdm
-from torch import Tensor
+
+from model.dpm_sampler import DPM_Solver, NoiseScheduleVP, model_wrapper
+from model.utils import (DiffusionModel, default, dynamic_threshold_percentile,
+                         extract, identity, normalize_to_neg_one_to_one,
+                         unnormalize_to_zero_to_one)
 from utils.losses import projection_loss
 
 ModelPrediction = namedtuple("ModelPrediction", ["pred_noise", "pred_x_start"])
@@ -28,10 +22,9 @@ from loguru import logger
 from .loss import get_loss
 
 try:
-    from .unet_mink import MinkUnet
+    pass
 except:
     logger.error("MinkUnet not found, please install MinkowskiEngine")
-    pass
 
 
 # gaussian diffusion trainer class

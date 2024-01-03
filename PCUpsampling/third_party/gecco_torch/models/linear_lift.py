@@ -1,8 +1,8 @@
-from typing import Any
 
 from einops import rearrange
-from third_party.gecco_torch.models.set_transformer import SetTransformer
 from torch import Tensor, cat, nn
+
+from third_party.gecco_torch.models.set_transformer import SetTransformer
 
 
 class LinearLift(nn.Module):

@@ -8,10 +8,11 @@
 import os
 
 import torch
-import wandb
 from prefetch_generator import BackgroundGenerator
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
+
+import wandb
 
 
 class DataLoaderX(DataLoader):

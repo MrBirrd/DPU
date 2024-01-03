@@ -9,15 +9,12 @@
 # ---------------------------------------------------------------
 
 import io
-import math
 import os
 from pathlib import Path
 
 import gdown
 import numpy as np
 import torch
-from ipdb import set_trace as debug
-from PIL import Image, ImageDraw
 
 FREEFORM_URL = "https://drive.google.com/file/d/1-5YRGsekjiRKQWqo0BV5RVQu0bagc12w/view?usp=share_link"
 

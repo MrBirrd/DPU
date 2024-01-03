@@ -1,10 +1,9 @@
-import importlib
 import os
 
 import torch
 from torch import nn
 from torch.autograd import Function
-from torch.cuda.amp import GradScaler, autocast, custom_bwd, custom_fwd
+from torch.cuda.amp import custom_bwd, custom_fwd
 
 cur_path = os.path.dirname(os.path.abspath(__file__))
 build_path = cur_path.replace("chamfer3D", "tmp")

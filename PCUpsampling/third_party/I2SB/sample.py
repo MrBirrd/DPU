@@ -11,7 +11,6 @@ import os
 import random
 from pathlib import Path
 
-import colored_traceback.always
 import distributed_util as dist_util
 import numpy as np
 import torch
@@ -21,7 +20,6 @@ from corruption import build_corruption
 from dataset import imagenet
 from easydict import EasyDict as edict
 from i2sb import Runner, ckpt_util, download_ckpt
-from ipdb import set_trace as debug
 from logger import Logger
 from torch.multiprocessing import Process
 from torch.utils.data import DataLoader, Subset

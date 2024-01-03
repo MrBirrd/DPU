@@ -1,5 +1,6 @@
-import modules.functional as F
 import torch.nn as nn
+
+import modules.functional as F
 
 __all__ = ["KLLoss"]
 

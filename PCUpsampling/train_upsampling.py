@@ -3,16 +3,17 @@ import json
 import torch.distributed as dist
 import torch.multiprocessing as mp
 import torch.utils.data
+from loguru import logger
+from omegaconf import OmegaConf
+
 import wandb
 from data.dataloader import get_dataloader, save_iter
-from loguru import logger
 from model.loader import load_diffusion, load_optim_sched
-from omegaconf import OmegaConf
 from utils.args import parse_args
 from utils.evaluation import evaluate
 from utils.file_utils import *
 from utils.ops import *
-from utils.utils import get_data_batch, smart_load_model_weights, to_cuda
+from utils.utils import get_data_batch, to_cuda
 
 
 def train(gpu, cfg, output_dir, noises_init=None):

@@ -1,10 +1,9 @@
-from functools import partial
-
 import torch
 from loguru import logger
-from model.i2sb import I2SB
 from torch import optim
 from torch.nn.parallel import DataParallel, DistributedDataParallel
+
+from model.i2sb import I2SB
 
 try:
     from model.unet_mink import MinkUnet

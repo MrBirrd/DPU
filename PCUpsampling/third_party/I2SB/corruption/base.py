@@ -11,7 +11,6 @@
 # The modifications to this file are subject to the same license.
 # ---------------------------------------------------------------
 
-import torch
 
 
 class H_functions:

@@ -12,9 +12,8 @@ from pathlib import Path
 
 import requests
 import torch
-from easydict import EasyDict as edict
-from guided_diffusion.script_util import args_to_dict, create_model, model_and_diffusion_defaults
-from ipdb import set_trace as debug
+from guided_diffusion.script_util import (args_to_dict, create_model,
+                                          model_and_diffusion_defaults)
 from tqdm import tqdm
 
 ADM_IMG256_UNCOND_CKPT = "https://openaipublic.blob.core.windows.net/diffusion/jul-2021/256x256_diffusion_uncond.pt"

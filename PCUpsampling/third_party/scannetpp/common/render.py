@@ -1,5 +1,4 @@
 import argparse
-import os
 import sys
 from pathlib import Path
 
@@ -14,8 +13,8 @@ except ImportError:
     sys.exit(1)
 
 from common.scene_release import ScannetppScene_Release
-from common.utils.colmap import Image, read_model, write_model
-from common.utils.utils import load_json, load_yaml_munch, read_txt_list, run_command
+from common.utils.colmap import read_model
+from common.utils.utils import load_yaml_munch, read_txt_list
 
 
 def main(args):

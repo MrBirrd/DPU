@@ -4,10 +4,11 @@ from typing import Tuple
 
 import numpy as np
 import torch
-from modules.functional import trilinear_devoxelize
-from modules.voxelization import Voxelization
 from scipy import spatial
 from torch import nn
+
+from modules.functional.devoxelization import trilinear_devoxelize
+from modules.voxelization import Voxelization
 
 
 def ply_to_np(pcd):

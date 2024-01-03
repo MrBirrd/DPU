@@ -11,7 +11,6 @@ import os
 import lmdb
 import torch
 import torchvision.datasets as datasets
-from ipdb import set_trace as debug
 from PIL import Image
 from torch.utils.data import Dataset
 from torchvision import transforms

@@ -1,16 +1,16 @@
 import argparse
 import os
 
-import cudf
 import numpy as np
 import open3d as o3d
-import pyminiply
 import torch
 from cuml.neighbors import NearestNeighbors
 from einops import rearrange
-from modules.functional import furthest_point_sample
 from sklearn import neighbors
 from tqdm import tqdm
+
+from modules.functional import furthest_point_sample
+from utils.utils import create_room_batches_iphone, create_room_batches_faro
 
 FEATURES = ["dino"]
 FACTOR = 3
@@ -193,44 +193,20 @@ def main():
                     print("Skipping", data_folder)
                     continue
 
-            # get center points
-            pointcloud_torch = torch.from_numpy(pointcloud).float().cuda()
-            pointcloud_torch = rearrange(pointcloud_torch, "n d -> 1 d n")
-            center_points = furthest_point_sample(pointcloud_torch, n_batches).squeeze().cpu().numpy().T
-
-            pointcloud_tree_cuml = NearestNeighbors(metric="l1" if args.mode == "conditional" else "l2")
-            pointcloud_tree_cuml.fit(pointcloud)
-
-            idxs = pointcloud_tree_cuml.kneighbors(center_points, n_neighbors=args.npoints, return_distance=False)
-            latest_idx = 0
-
-            if args.append:
-                if len(existing_batches) > 0:
-                    latest_idx = max([int(f.split("_")[-1].split(".")[0]) for f in existing_batches])
-
-            # generate new data
-            for i in range(n_batches):
-                batch_path = os.path.join(target_scene_path, "points_{}.npz".format(i + latest_idx))
-                if os.path.exists(batch_path):
-                    continue
-
-                # extract the indices for the current batch
-                neighbor_indices = idxs[i]
-
-                # create npz file to append to and later save
-                batch_data = {}
-
-                # handle the points
-                batch_points = pointcloud[neighbor_indices]
-                batch_data["points"] = batch_points
-                batch_data["indices"] = neighbor_indices
-
-                # handle features
-                for feature in features:
-                    batch_features = features[feature][:, neighbor_indices.ravel()].astype(np.float16)
-                    batch_data[feature] = batch_features
-
-                np.savez(batch_path, **batch_data)
+            batches = create_room_batches_faro(
+                pointcloud=pointcloud,
+                features=features,
+                n_batches=n_batches,
+                target_scene_path=target_scene_path,
+                args=args.npoints,
+                existing_batches=existing_batches,                
+            )
+            for batch_idx in batches:
+                np.savez(
+                    os.path.join(target_scene_path, "points_{}.npz".format(batch_idx)),
+                    **batches[batch_idx],
+                )
+            
         elif args.mode == "conditional":
             # feature paths creation and check
             features = {}
@@ -275,69 +251,22 @@ def main():
             # calculate number of center points
             n_batches = int(n_points_iphone * args.centers_amount)
 
-            tree_faro = neighbors.KDTree(pcd_faro, metric="l1")
-            tree_iphone = neighbors.KDTree(pcd_iphone, metric="l1")
-
-            # get center points of batches
-            pointcloud_torch = torch.from_numpy(pcd_iphone).float().cuda()
-            pointcloud_torch = rearrange(pointcloud_torch, "n d -> 1 d n")
-            center_points = furthest_point_sample(pointcloud_torch, n_batches).squeeze().cpu().numpy().T
-
-            # first query points in radius
-            idxs_faro = tree_faro.query_radius(center_points, r=1, return_distance=False)
-            idxs_iphone = tree_iphone.query_radius(center_points, r=1, return_distance=False)
-
-            assert (
-                len(idxs_faro) == len(idxs_iphone) == n_batches
-            ), "Number of batches is not equal to number of indices"
-
-            batch_idx = 0
-            for idx in range(len(idxs_iphone)):
-                faro_batch_points = pcd_faro[idxs_faro[idx]]
-                iphone_batch_points = pcd_iphone[idxs_iphone[idx]]
-                faro_batch_colors = rgb_faro[idxs_faro[idx]]
-                iphone_batch_colors = rgb_iphone[idxs_iphone[idx]]
-                iphone_batch_dino = features["dino"][idxs_iphone[idx]]
-
-                # skip if the batch is too small
-                if len(faro_batch_points) < args.npoints:
-                    continue
-
-                # center the points
-                center = faro_batch_points.mean(axis=0)
-                faro_batch_points -= center
-                iphone_batch_points -= center
-
-                diff = args.npoints - len(iphone_batch_points)
-                if diff > 0:
-                    rand_idx = np.random.randint(0, len(iphone_batch_points), diff)
-                    iphone_additional_xyz = iphone_batch_points[rand_idx]
-                    iphone_additional_rgb = iphone_batch_colors[rand_idx]
-                    iphone_additional_dino = features["dino"][idxs_iphone[idx]][rand_idx]
-                    iphone_additional_xyz += np.random.normal(0, 1e-2, iphone_additional_xyz.shape)
-
-                    iphone_batch_points = np.concatenate([iphone_batch_points, iphone_additional_xyz])
-                    iphone_batch_colors = np.concatenate([iphone_batch_colors, iphone_additional_rgb])
-                    iphone_batch_dino = np.concatenate([iphone_batch_dino, iphone_additional_dino])
-                else:
-                    rand_idx = np.random.randint(0, len(iphone_batch_points), args.npoints)
-                    iphone_batch_points = iphone_batch_points[rand_idx]
-                    iphone_batch_colors = iphone_batch_colors[rand_idx]
-                    iphone_batch_dino = features["dino"][idxs_iphone[idx]][rand_idx]
-
-                # assign points using NN
-                cn = find_closest_neighbors_cuml(iphone_batch_points, faro_batch_points, k=200)
-                assignment = optimize_assignments(iphone_batch_points, faro_batch_points, cn)
-
-                faro_batch_points_assigned = faro_batch_points[assignment]
-                faro_batch_colors_assigned = faro_batch_colors[assignment]
-
-                batch_data = {}
-                batch_data["faro"] = np.concatenate([faro_batch_points_assigned, faro_batch_colors_assigned], axis=1)
-                batch_data["iphone"] = np.concatenate([iphone_batch_points, iphone_batch_colors], axis=1)
-                batch_data["dino"] = iphone_batch_dino
-                np.savez(os.path.join(target_scene_path, "points_{}.npz".format(batch_idx)), **batch_data)
-                batch_idx += 1
+            # get batches
+            batches = create_room_batches_iphone(
+                pcd_faro=pcd_faro,
+                pcd_iphone=pcd_iphone,
+                rgb_faro=rgb_faro,
+                rgb_iphone=rgb_iphone,
+                features=features,
+                n_batches=n_batches,
+                npoints=args.npoints,
+            )
+            # save batches
+            for batch_idx in batches:
+                np.savez(
+                    os.path.join(target_scene_path, "points_{}.npz".format(batch_idx)),
+                    **batches[batch_idx],
+                )
 
 
 if __name__ == "__main__":

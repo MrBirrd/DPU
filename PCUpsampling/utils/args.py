@@ -1,8 +1,13 @@
 import argparse
 import os
-
+import json
 from omegaconf import OmegaConf
 
+
+def args_to_string(args):
+    args_dict = OmegaConf.to_container(args, resolve=True)
+    args_str = json.dumps(args_dict, indent=4)
+    return args_str
 
 def parse_args():
     # make parser which accepts optinal arguments

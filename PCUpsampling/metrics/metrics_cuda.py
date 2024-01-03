@@ -22,9 +22,11 @@ from numpy.linalg import norm
 from scipy.stats import entropy
 from sklearn.neighbors import NearestNeighbors
 from tabulate import tabulate
+
 from utils.checker import *
 
-from .ChamferDistancePytorch.chamfer3D.dist_chamfer_3D import chamfer_3DDist, chamfer_3DDist_nograd
+from .ChamferDistancePytorch.chamfer3D.dist_chamfer_3D import (
+    chamfer_3DDist, chamfer_3DDist_nograd)
 from .PyTorchEMD.emd import earth_mover_distance
 from .PyTorchEMD.emd_nograd import earth_mover_distance_nograd
 

@@ -1,17 +1,15 @@
-import json
 import os
 
 import numpy as np
 import torch
-import wandb
 from loguru import logger
-from metrics.emd_ import emd_module as EMD
-from metrics.metrics import calculate_cd, print_stats
-from modules.functional import furthest_point_sample
-from point_cloud_utils import chamfer_distance
 from scipy import spatial
-from torch import Tensor
 from tqdm import tqdm
+
+import wandb
+from metrics.emd_ import emd_module as EMD
+from metrics.metrics import calculate_cd
+from modules.functional.sampling import furthest_point_sample
 from utils.utils import get_data_batch, to_cuda
 from utils.visualize import visualize_pointcloud_batch
 
@@ -67,7 +65,7 @@ def evaluate(model, eval_iter, cfg, step, sampling=False, save_npy=False, debug=
     with torch.no_grad():
         sample_data = model.sample(
             cond=features,
-            x1=x_start,
+            x_start=x_start,
             return_noised_hint=True if cfg.diffusion.sampling_hint else False,
             clip=False,
         )
@@ -187,6 +185,20 @@ def upsample_big_pointcloud(model, pointcloud, batch_size=8192, n_batches=32):
 
 
 def get_metrics(model, gt, pred):
+    """
+    Calculate evaluation metrics for the given model predictions.
+
+    Args:
+        model (torch.nn.Module): The model used for predictions.
+        gt (torch.Tensor): Ground truth point cloud.
+        pred (torch.Tensor): Predicted point cloud.
+
+    Returns:
+        tuple: A tuple containing the evaluation metrics (cd, emd, eval_loss).
+            - cd (float): Chamfer distance between the ground truth and predicted point clouds.
+            - emd (float): Earth Mover's Distance between the ground truth and predicted point clouds.
+            - eval_loss (float): Evaluation loss of the model predictions.
+    """
     emd = EMD.emdModule()
     cd = calculate_cd(pred, gt)
     eval_loss = model.loss(pred, gt).mean().item()
