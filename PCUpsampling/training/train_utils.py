@@ -1,13 +1,12 @@
+import random
 from abc import ABC, abstractmethod
-from typing import Optional
+from typing import Dict, List, Optional, Tuple, Union
 
+import numpy as np
 import torch
 from einops import rearrange
-from torch import Tensor, nn
-import random
-import numpy as np
 from loguru import logger
-from typing import Union, List, Tuple, Dict
+from torch import Tensor, nn
 
 
 class DiffusionModel(ABC, nn.Module):

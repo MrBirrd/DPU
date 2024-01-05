@@ -11,7 +11,7 @@ from pvcnn.functional.sampling import furthest_point_sample
 from training.evaluation import get_metrics
 from training.model_loader import load_diffusion
 from utils.args import args_to_string, parse_args
-from utils.utils import create_room_batches_iphone
+from utils.utils import create_room_batches_training_iphone
 
 
 def main():
@@ -21,6 +21,8 @@ def main():
     model, ckpt = load_diffusion(cfg)
     model.eval()
 
+    #model = torch.compile(model, mode="max-autotune", fullgraph=True)
+    
     room_path = "../test_room/02455b3d20"
     # point clouds
     faro_path = room_path + "/scans/mesh_aligned_0.05.ply"
@@ -59,7 +61,7 @@ def main():
             else:
                 features = rgb_iphone
 
-        upsampling_batches = create_room_batches_iphone(
+        upsampling_batches = create_room_batches_training_iphone(
             pcd_faro=points_faro,
             pcd_iphone=points_iphone,
             rgb_faro=rgb_faro,
@@ -122,7 +124,7 @@ def main():
             )
             scales.append((data["center"], data["scale"]))
 
-        with torch.inference_mode():
+        with torch.inference_mode(), torch.cuda.amp.autocast(dtype=torch.bfloat16):
             sample = model.sample(
                 shape=batch_points.shape,
                 cond=batch_features if not cfg.data.unconditional else None,

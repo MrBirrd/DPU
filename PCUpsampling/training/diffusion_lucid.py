@@ -10,15 +10,10 @@ from torch.cuda.amp import autocast
 from tqdm import tqdm
 
 from training.dpm_sampler import DPM_Solver, NoiseScheduleVP, model_wrapper
-from training.train_utils import (
-    DiffusionModel,
-    default,
-    dynamic_threshold_percentile,
-    extract,
-    identity,
-    normalize_to_neg_one_to_one,
-    unnormalize_to_zero_to_one,
-)
+from training.train_utils import (DiffusionModel, default,
+                                  dynamic_threshold_percentile, extract,
+                                  identity, normalize_to_neg_one_to_one,
+                                  unnormalize_to_zero_to_one)
 from utils.losses import projection_loss
 
 ModelPrediction = namedtuple("ModelPrediction", ["pred_noise", "pred_x_start"])

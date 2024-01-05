@@ -41,6 +41,12 @@ def main():
         choices=["rgb", "dino", "clip"],
     )
     parser.add_argument(
+        "--feature_suffix",
+        type=str,
+        default="",
+        help="Suffix to add to the feature name.",
+    )
+    parser.add_argument(
         "--source_cloud",
         type=str,
         default="iphone",
@@ -73,7 +79,7 @@ def main():
     args = parser.parse_args()
 
     # deactivate xformers
-    os.environ["XFORMERS_DISABLED"] = "1"
+    os.environ["XFORMERS_DISABLED"] = "0"
 
     if args.scenes_files is not None:
         with open(args.scenes_files, "r") as f:
@@ -93,7 +99,7 @@ def main():
             args.output_dir,
             scene_id,
             "features",
-            f"{args.feature_type}_{args.source_cloud}",
+            f"{args.feature_type}{args.feature_suffix}_{args.source_cloud}",
         )
         os.makedirs(os.path.dirname(target_path), exist_ok=True)
         movie_path = os.path.join(args.data_root, scene_id, "iphone", "rgb.mp4")
@@ -106,6 +112,7 @@ def main():
                 movie_path=movie_path,
                 target_path=target_path,
                 feature_type=args.feature_type,
+                feature_suffix=args.feature_suffix,
                 sampling_rate=args.sampling_rate,
                 image_width=args.image_width,
                 image_height=args.image_height,

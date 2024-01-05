@@ -1,7 +1,9 @@
 import os
+
 import numpy as np
 import torch
 from loguru import logger
+
 import wandb
 from metrics.emd_ import emd_module as EMD
 from metrics.metrics import calculate_cd

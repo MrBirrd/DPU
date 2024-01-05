@@ -103,15 +103,16 @@ def process_frame(frame_id, data, iphone_depth_dir, iphone_rgb_dir, args):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--data_root", type=str, required=True)
+    parser.add_argument("--filename", type=str, required=True, help="Name of the iphone scans.")
     parser.add_argument("--split", type=int, default=None, help="Split id to process")
-    parser.add_argument("--sample_rate", type=int, default=10, help="Sample rate of the frames.")
-    parser.add_argument("--max_depth", type=float, default=5.0)
+    parser.add_argument("--sample_rate", type=int, default=30, help="Sample rate of the frames.")
+    parser.add_argument("--max_depth", type=float, default=10.0)
     parser.add_argument("--min_depth", type=float, default=0.1)
     parser.add_argument("--grid_size", type=float, default=0.05, help="Grid size for voxel downsampling.")
-    parser.add_argument("--n_outliers", type=int, default=50, help="Number of neighbors for outlier removal.")
-    parser.add_argument("--outlier_radius", type=float, default=0.1, help="Radius for outlier removal.")
-    parser.add_argument("--final_grid_size", type=float, default=0.05, help="Grid size for voxel downsampling.")
-    parser.add_argument("--final_n_outliers", type=int, default=20, help="Number of neighbors for outlier removal.")
+    parser.add_argument("--n_outliers", type=int, default=20, help="Number of neighbors for outlier removal.")
+    parser.add_argument("--outlier_radius", type=float, default=0.05, help="Radius for outlier removal.")
+    parser.add_argument("--final_grid_size", type=float, default=0.02, help="Grid size for voxel downsampling.")
+    parser.add_argument("--final_n_outliers", type=int, default=10, help="Number of neighbors for outlier removal.")
     parser.add_argument("--final_outlier_radius", type=float, default=0.05, help="Radius for outlier removal.")
     args = parser.parse_args()
 
@@ -175,7 +176,7 @@ def main():
         )
         all_xyz, all_rgb = voxel_down_sample(all_xyz, all_rgb, voxel_size=args.grid_size)
 
-        iphone_scan_path = os.path.join(scene.data_root, scene_id, "scans", "iphone.ply")
+        iphone_scan_path = os.path.join(scene.data_root, scene_id, "scans", f"{args.filename}.ply")
         save_point_cloud(
             filename=iphone_scan_path,
             points=all_xyz,

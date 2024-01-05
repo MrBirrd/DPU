@@ -5,7 +5,8 @@
 # for I2SB. To view a copy of this license, see the LICENSE file.
 # ---------------------------------------------------------------
 
-from __future__ import absolute_import, division, print_function, unicode_literals
+from __future__ import (absolute_import, division, print_function,
+                        unicode_literals)
 
 import argparse
 import copy

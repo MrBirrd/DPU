@@ -64,7 +64,7 @@ def normalize_t(t):
     return normalized_t
 
 
-@torch.inference_mode()
+@torch.no_grad()
 def get_dino_features(model, image, patch_size=14):
     B, C, H, W = image.shape
     smaller_edge_size = min(H, W)
@@ -200,6 +200,8 @@ def interpolate_missing_features(ptc_feats, ptc_feats_count, points, f_shape, ba
     if len(missing_idx) == 0:
         return ptc_feats
 
+    print("Interpolating", len(missing_idx), "missing features. Total points:", len(ptc_feats))
+    
     # Create a KDTree for nearest neighbor search
     tree = KDTree(points)
 
@@ -237,6 +239,7 @@ def process_scene(
     movie_path,
     target_path,
     feature_type,
+    feature_suffix,
     sampling_rate: int = 5,
     image_width: int = 1920,
     image_height: int = 1440,
@@ -261,7 +264,7 @@ def process_scene(
         return
 
     if pointcloud_source == "iphone":
-        mesh_path = os.path.dirname(mesh_path) + "/iphone.ply"
+        mesh_path = os.path.dirname(mesh_path) + f"/iphone{feature_suffix}.ply"
     elif pointcloud_source == "faro":
         pass
     else:
@@ -294,6 +297,7 @@ def process_scene(
         f_shape = 384
         print("Loading DINO model")
         model = load_dino(dino_model_name)
+        model = torch.compile(model, fullgraph=True)
     elif feature_type == "clip":
         f_shape = 512
         print("Loading ZegCLIP model")

@@ -8,8 +8,8 @@ import torch.utils.data
 from data.dataloader import get_dataloader
 from training.evaluation import evaluate
 from training.model_loader import load_diffusion
-from utils.args import parse_args
 from training.train_utils import set_seed
+from utils.args import parse_args
 
 
 @torch.no_grad()
@@ -38,7 +38,7 @@ def sample(gpu, cfg, output_dir):
 
     ds_iter = iter(test_loader)
     model.eval()
-
+    
     # run evaluatoin for each iteration and accumulate the stats
     metrics_df = pd.DataFrame()
     for eval_iter in range(cfg.sampling.num_iter):

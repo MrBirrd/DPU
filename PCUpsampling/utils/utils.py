@@ -1,11 +1,13 @@
+import os
+
+import numpy as np
 import torch
 import torch.nn.init as init
 from cuml.neighbors import NearestNeighbors
 from einops import rearrange
 from sklearn import neighbors
-import numpy as np
+
 from pvcnn.functional.sampling import furthest_point_sample
-import os
 
 
 def optimize_assignments(A, B, closest_neighbors):
@@ -59,7 +61,10 @@ def find_closest_neighbors_cuml(A, B, k=5):
     return indices
 
 
-def create_room_batches_faro(pointcloud, features, n_batches, args):
+def create_room_batches_inference(pointcloud, features, args):
+    pass
+
+def create_room_batches_training_faro(pointcloud, features, n_batches, args):
     # get center points
     pointcloud_torch = torch.from_numpy(pointcloud).float().cuda()
     pointcloud_torch = rearrange(pointcloud_torch, "n d -> 1 d n")
@@ -92,7 +97,7 @@ def create_room_batches_faro(pointcloud, features, n_batches, args):
     return data
 
 
-def create_room_batches_iphone(
+def create_room_batches_training_iphone(
     pcd_faro,
     pcd_iphone,
     rgb_faro,
@@ -198,6 +203,16 @@ def create_room_batches_iphone(
 
 
 def smart_load_model_weights(model, pretrained_dict):
+    """
+    Loads pretrained weights into a model's state dictionary, handling size mismatches if necessary.
+
+    Args:
+        model (nn.Module): The model to load the weights into.
+        pretrained_dict (dict): A dictionary containing the pretrained weights.
+
+    Returns:
+        None
+    """
     # Get the model's state dict
     model_dict = model.state_dict()
 
@@ -265,6 +280,16 @@ def resize_weight(target_size, weight, layer_name="", device="cpu"):
 
 
 def setup_output_subdirs(output_dir, *subfolders):
+    """
+    Creates the output directory and subdirectories if they don't exist.
+
+    Args:
+        output_dir (str): The path to the output directory.
+        *subfolders (str): Variable number of subfolder names.
+
+    Returns:
+        list: A list of the created subdirectory paths.
+    """
     output_subdirs = output_dir
     try:
         os.makedirs(output_subdirs)

@@ -18,13 +18,13 @@ import torch
 import torch.nn as nn
 from einops import rearrange
 from torch.cuda.amp import custom_bwd, custom_fwd
-from pvcnn.functional.voxelization import avg_voxelize
-from pvcnn.functional.sampling import furthest_point_sample
-from pvcnn.functional.grouping import grouping
-from pvcnn.functional.ball_query import ball_query
-from pvcnn.functional.interpolatation import nearest_neighbor_interpolate
-from pvcnn.functional.devoxelization import trilinear_devoxelize
 
+from pvcnn.functional.ball_query import ball_query
+from pvcnn.functional.devoxelization import trilinear_devoxelize
+from pvcnn.functional.grouping import grouping
+from pvcnn.functional.interpolatation import nearest_neighbor_interpolate
+from pvcnn.functional.sampling import furthest_point_sample
+from pvcnn.functional.voxelization import avg_voxelize
 from training.modules import AdaGN
 
 quiet = int(os.environ.get("quiet", 0))

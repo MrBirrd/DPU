@@ -6,7 +6,8 @@ from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 
 from .arkitscenes import ArkitScans, IndoorScenes, IndoorScenesCut
-from .scannetpp import NPZFolderTest, ScanNetPP_Faro, ScanNetPP_iPhone, ScanNetPPCut
+from .scannetpp import (NPZFolderTest, ScanNetPP_Faro, ScanNetPP_iPhone,
+                        ScanNetPPCut)
 from .shapenet import get_dataset_shapenet
 
 

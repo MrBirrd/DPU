@@ -7,7 +7,8 @@ import torch
 from cuml.neighbors import NearestNeighbors
 from sklearn import neighbors
 from tqdm import tqdm
-from utils.utils import create_room_batches_faro, create_room_batches_iphone
+
+from utils.utils import create_room_batches_training_faro, create_room_batches_training_iphone
 
 FEATURES = ["dino"]
 FACTOR = 3
@@ -193,7 +194,7 @@ def main():
                     print("Skipping", data_folder)
                     continue
 
-            batches = create_room_batches_faro(
+            batches = create_room_batches_training_faro(
                 pointcloud=pointcloud,
                 features=features,
                 n_batches=n_batches,
@@ -260,7 +261,7 @@ def main():
             n_batches = int(n_points_iphone * args.centers_amount)
 
             # get batches
-            batches = create_room_batches_iphone(
+            batches = create_room_batches_training_iphone(
                 pcd_faro=pcd_faro,
                 pcd_iphone=pcd_iphone,
                 rgb_faro=rgb_faro,

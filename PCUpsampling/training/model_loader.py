@@ -10,11 +10,10 @@ try:
 except ImportError:
     logger.warning("Minkowski Engine not installed. Minkowski models will not be available.")
 
-from training.diffusion_lucid import GaussianDiffusion as LUCID
-from training.unet_pointvoxel import PVCNN2Unet
 from third_party.gecco_torch.models.linear_lift import LinearLift
 from third_party.gecco_torch.models.set_transformer import SetTransformer
 from training.diffusion_lucid import GaussianDiffusion as LUCID
+from training.unet_pointvoxel import PVCNN2Unet
 
 
 def load_optim_sched(cfg, model, model_ckpt=None):
