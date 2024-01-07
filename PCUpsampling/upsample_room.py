@@ -11,7 +11,7 @@ from pvcnn.functional.sampling import furthest_point_sample
 from training.evaluation import get_metrics
 from training.model_loader import load_diffusion
 from utils.args import args_to_string, parse_args
-from utils.utils import create_room_batches_training_iphone
+from utils.utils import create_room_batches_training_iphone_v1
 
 
 def main():
@@ -61,7 +61,7 @@ def main():
             else:
                 features = rgb_iphone
 
-        upsampling_batches = create_room_batches_training_iphone(
+        upsampling_batches = create_room_batches_training_iphone_v1(
             pcd_faro=points_faro,
             pcd_iphone=points_iphone,
             rgb_faro=rgb_faro,

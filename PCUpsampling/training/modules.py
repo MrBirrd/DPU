@@ -467,3 +467,85 @@ class FeedForward(nn.Module):
             x = (x * (scale + 1)) + shift
 
         return self.net(x)
+
+class AdaGN(nn.Module):
+    """
+    Adaptive Group Normalization module.
+
+    Args:
+        num_channels (int): Number of input channels.
+        ctx_dim (int): Dimension of the context input.
+        num_groups (int, optional): Number of groups to separate the channels into. Defaults to 32.
+    """
+
+    def __init__(
+        self,
+        num_channels: int,
+        ctx_dim: int,
+        num_groups: int = 32,
+    ):
+        super().__init__()
+        self.gn = nn.GroupNorm(
+            num_groups=num_groups,
+            num_channels=num_channels,
+            affine=False,
+        )
+        self.bias = nn.Linear(ctx_dim, num_channels)
+        self.scale = nn.Linear(ctx_dim, num_channels)
+
+        with torch.no_grad():
+            self.bias.weight.fill_(0.0)
+            self.bias.bias.fill_(0.0)
+            self.scale.weight.fill_(0.0)
+            self.scale.bias.fill_(1.0)
+
+    def forward(self, x: Tensor, ctx: Tensor) -> Tensor:
+        x_bcn = rearrange(x, "b n c -> b c n")
+        normed_bcn = self.gn(x_bcn)
+        normed = rearrange(normed_bcn, "b c n -> b n c")
+        bias = self.bias(ctx)
+        scale = self.scale(ctx)
+
+        shape = (x.shape[0], *((1,) * (x.ndim - 2)), x.shape[-1])
+        return scale.reshape(shape) * normed + bias.reshape(shape)
+
+
+class AdaLN(nn.Module):
+    """
+    Adaptive Layer Normalization module.
+
+    Args:
+        num_channels (int): Number of input channels.
+        ctx_dim (int): Dimension of the context input.
+    """
+
+    def __init__(
+        self,
+        num_channels: int,
+        ctx_dim: int,
+    ):
+        super().__init__()
+        self.ln = nn.LayerNorm(
+            normalized_shape=num_channels,
+            elementwise_affine=False,
+        )
+        self.bias = nn.Linear(ctx_dim, num_channels)
+        self.scale = nn.Linear(ctx_dim, num_channels)
+
+        with torch.no_grad():
+            self.bias.weight.fill_(0.0)
+            self.bias.bias.fill_(0.0)
+            self.scale.weight.fill_(0.0)
+            self.scale.bias.fill_(1.0)
+
+    def forward(self, x: torch.Tensor, ctx: torch.Tensor) -> torch.Tensor:
+        # Apply Layer Normalization
+        normed = self.ln(x)
+
+        # Get adaptive bias and scale from context
+        bias = self.bias(ctx)
+        scale = self.scale(ctx)
+
+        # Reshape to match the dimensions of `x`
+        shape = (x.shape[0], *((1,) * (x.ndim - 2)), x.shape[-1])
+        return scale.reshape(shape) * normed + bias.reshape(shape)

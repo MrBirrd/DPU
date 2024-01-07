@@ -99,7 +99,7 @@ def main():
             args.output_dir,
             scene_id,
             "features",
-            f"{args.feature_type}{args.feature_suffix}_{args.source_cloud}",
+            f"{args.feature_type}_{args.source_cloud}{args.feature_suffix}",
         )
         os.makedirs(os.path.dirname(target_path), exist_ok=True)
         movie_path = os.path.join(args.data_root, scene_id, "iphone", "rgb.mp4")

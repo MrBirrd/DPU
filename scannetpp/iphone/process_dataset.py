@@ -2,23 +2,17 @@ import argparse
 import gc
 import json
 import os
-import subprocess
-import sys
 import zlib
-from functools import partial
-from multiprocessing import Pool
-from pathlib import Path
 
 import imageio as iio
 import lz4.block
 import numpy as np
-import yaml
-from common.scene_release import ScannetppScene_Release
-from common.utils.utils import load_json, load_yaml_munch, read_txt_list, run_command
-from iphone.arkit_pcl import backproject, outlier_removal, save_point_cloud, voxel_down_sample
-from munch import Munch
 from PIL import Image
 from tqdm import tqdm
+
+from common.scene_release import ScannetppScene_Release
+from common.utils.utils import *
+from iphone.arkit_pcl import *
 
 
 def extract_rgb(scene):
@@ -111,7 +105,7 @@ def main():
     parser.add_argument("--grid_size", type=float, default=0.05, help="Grid size for voxel downsampling.")
     parser.add_argument("--n_outliers", type=int, default=20, help="Number of neighbors for outlier removal.")
     parser.add_argument("--outlier_radius", type=float, default=0.05, help="Radius for outlier removal.")
-    parser.add_argument("--final_grid_size", type=float, default=0.02, help="Grid size for voxel downsampling.")
+    parser.add_argument("--final_grid_size", type=float, default=0.01, help="Grid size for voxel downsampling.")
     parser.add_argument("--final_n_outliers", type=int, default=10, help="Number of neighbors for outlier removal.")
     parser.add_argument("--final_outlier_radius", type=float, default=0.05, help="Radius for outlier removal.")
     args = parser.parse_args()
@@ -136,18 +130,15 @@ def main():
         scenes_filtered = scenes_filtered[args.split * batch_size : (args.split + 1) * batch_size]
 
     # process the scenes
-    for scene_id in tqdm(scenes_filtered, desc="Scenes"):
+    for scene_idx, scene_id in tqdm(enumerate(scenes_filtered), desc="Scenes"):
         # extract the frames and depth
         print("#" * 50)
         print("Processing scene: ", scene_id)
-        print("#" * 50)
         scene = ScannetppScene_Release(scene_id, data_root=scenes_root)
         extract_rgb(scene)
         print("Extracted RGB")
-        print("#" * 50)
         extract_depth(scene, sample_rate=args.sample_rate)
         print("Extracted Depth")
-        print("#" * 50)
 
         iphone_rgb_dir = scene.iphone_rgb_dir
         iphone_depth_dir = scene.iphone_depth_dir
@@ -171,9 +162,11 @@ def main():
         all_rgb = np.concatenate(all_rgb, axis=0)
 
         # Voxel downsample again
-        all_xyz, all_rgb, _ = outlier_removal(
+        print("Removing outliers. Number of points: ", all_xyz.shape[0])
+        all_xyz, all_rgb, _ = outlier_removal_fast(
             all_xyz, all_rgb, nb_points=args.final_n_outliers, radius=args.final_outlier_radius
         )
+        print("Voxel downsampling. Number of points: ", all_xyz.shape[0])
         all_xyz, all_rgb = voxel_down_sample(all_xyz, all_rgb, voxel_size=args.grid_size)
 
         iphone_scan_path = os.path.join(scene.data_root, scene_id, "scans", f"{args.filename}.ply")
@@ -185,7 +178,7 @@ def main():
             verbose=True,
         )
 
-        print("Saved point cloud with {} points tp {}".format(all_xyz.shape[0], iphone_scan_path))
+        print("Saved point cloud with {} points to {}".format(all_xyz.shape[0], iphone_scan_path))
         # remove the extracted frames and depth
         os.system("rm -rf {}".format(iphone_rgb_dir))
         os.system("rm -rf {}".format(iphone_depth_dir))

@@ -5,9 +5,10 @@ from pathlib import Path
 
 import cv2
 import numpy as np
+from tqdm import tqdm
+
 from common.scene_release import ScannetppScene_Release
 from common.utils.utils import load_json, load_yaml_munch, read_txt_list
-from tqdm import tqdm
 
 
 def compute_resize_intrinsic(K, height, width, scale_factor):

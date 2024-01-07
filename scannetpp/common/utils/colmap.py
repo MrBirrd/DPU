@@ -33,7 +33,7 @@ import argparse
 import collections
 import os
 import struct
-from typing import Dict, List, Tuple
+from typing import Dict, Tuple
 
 import numpy as np
 

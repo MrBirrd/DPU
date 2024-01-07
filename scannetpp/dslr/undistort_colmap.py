@@ -7,11 +7,12 @@ from pathlib import Path
 
 import imageio
 import numpy as np
+from tqdm import tqdm
+
 from common.scene_release import ScannetppScene_Release
 from common.utils.colmap import Image, read_model, write_model
 from common.utils.nerfstudio import convert_camera
 from common.utils.utils import load_json, load_yaml_munch, read_txt_list, run_command
-from tqdm import tqdm
 
 
 def undistort_anon_masks(

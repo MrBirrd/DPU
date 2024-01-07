@@ -8,10 +8,11 @@ import argparse
 from pathlib import Path
 
 import torch
-from common.file_io import load_yaml_munch, read_txt_list
 from semantic.datasets.scannetpp_release import ScannetPP_Release_Dataset
-from semantic.transforms.factory import get_transform
 from tqdm import tqdm
+
+from common.file_io import load_yaml_munch, read_txt_list
+from semantic.transforms.factory import get_transform
 
 
 def main(args):

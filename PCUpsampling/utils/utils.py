@@ -97,41 +97,20 @@ def create_room_batches_training_faro(pointcloud, features, n_batches, args):
     return data
 
 
-def create_room_batches_training_iphone(
+def create_room_batches_training_iphone_v1(
     pcd_faro,
     pcd_iphone,
     rgb_faro,
     rgb_iphone,
     features,
-    n_batches,
-    min_points_faro,
-    npoints,
+    args
 ):
-    """
-    Create room batches for iPhone data.
+    tree_faro = neighbors.KDTree(pcd_faro, metric="l2")
+    tree_iphone = neighbors.KDTree(pcd_iphone, metric="l2")
 
-    Args:
-        pcd_faro (numpy.ndarray): Point cloud data from Faro scanner.
-        pcd_iphone (numpy.ndarray): Point cloud data from iPhone scanner.
-        rgb_faro (numpy.ndarray): RGB color data from Faro scanner.
-        rgb_iphone (numpy.ndarray): RGB color data from iPhone scanner.
-        features (numpy.ndarray): Additional features data from iPhone scanner.
-        n_batches (int): Number of batches to create.
-        min_points_faro (int): Minimum number of points required in a Faro batch.
-        npoints (int): Number of points to include in each iPhone batch.
-
-    Returns:
-        list: List of dictionaries containing the created batches. Each dictionary
-              contains the following keys:
-              - 'faro': Concatenated array of Faro batch points and colors.
-              - 'iphone': Concatenated array of iPhone batch points and colors.
-              - 'dino': Additional features data for iPhone batch.
-              - 'center': Center point of the iPhone batch.
-              - 'scale': Scaling factor applied to the iPhone batch points.
-    """
-    tree_faro = neighbors.KDTree(pcd_faro, metric="l1")
-    tree_iphone = neighbors.KDTree(pcd_iphone, metric="l1")
-
+    # calculate number of center points
+    n_batches = int(pcd_iphone.shape[0] * args.centers_amount)
+    
     # get center points of batches
     pointcloud_torch = torch.from_numpy(pcd_iphone).float().cuda()
     pointcloud_torch = rearrange(pointcloud_torch, "n d -> 1 d n")
@@ -145,7 +124,7 @@ def create_room_batches_training_iphone(
 
     data = []
 
-    for idx in range(len(idxs_iphone)):
+    for idx in range(len(idxs_iphone)):        
         faro_batch_points = pcd_faro[idxs_faro[idx]]
         iphone_batch_points = pcd_iphone[idxs_iphone[idx]]
         faro_batch_colors = rgb_faro[idxs_faro[idx]]
@@ -153,11 +132,12 @@ def create_room_batches_training_iphone(
         iphone_batch_dino = features[idxs_iphone[idx]]
 
         # skip if the batch is too small
-        if len(faro_batch_points) < min_points_faro:
+        if len(faro_batch_points) < args.npoints:
             print(f"Skipping batch {idx} because it is too small ({len(faro_batch_points)} points)")
             continue
 
-        diff = npoints - len(iphone_batch_points)
+        diff = args.npoints - len(iphone_batch_points)
+        
         if diff > 0:
             rand_idx = np.random.randint(0, len(iphone_batch_points), diff)
             iphone_additional_xyz = iphone_batch_points[rand_idx]
@@ -169,7 +149,7 @@ def create_room_batches_training_iphone(
             iphone_batch_colors = np.concatenate([iphone_batch_colors, iphone_additional_rgb])
             iphone_batch_dino = np.concatenate([iphone_batch_dino, iphone_additional_dino])
         else:
-            rand_idx = np.random.randint(0, len(iphone_batch_points), npoints)
+            rand_idx = np.random.randint(0, len(iphone_batch_points), args.npoints)
             iphone_batch_points = iphone_batch_points[rand_idx]
             iphone_batch_colors = iphone_batch_colors[rand_idx]
             iphone_batch_dino = iphone_batch_dino[rand_idx]
@@ -200,6 +180,108 @@ def create_room_batches_training_iphone(
         batch_data["scale"] = scale
         data.append(batch_data)
     return data
+
+
+def create_room_batches_training_iphone_v2(
+    pcd_faro,
+    pcd_iphone,
+    rgb_faro,
+    rgb_iphone,
+    features,
+    args
+):
+    tree_faro = neighbors.KDTree(pcd_faro, metric="l2")
+    tree_iphone = neighbors.KDTree(pcd_iphone, metric="l2")
+
+    n_batches  = pcd_faro.shape[0] // args.npoints
+    
+    # get center points of batches from faro, such that we don't get empty correspondences
+    pointcloud_torch = torch.from_numpy(pcd_faro).float().cuda()
+    pointcloud_torch = rearrange(pointcloud_torch, "n d -> 1 d n")
+    center_points = furthest_point_sample(pointcloud_torch, n_batches).squeeze().cpu().numpy().T
+
+    # query points from iphone scan around the center points from faro
+    dists_lr, idxs_iphone = tree_iphone.query(center_points, k=args.npoints // args.upsampling_rate)
+    max_dist_lr = dists_lr.max(axis=-1, keepdims=True).squeeze()
+    idxs_faro = tree_faro.query_radius(center_points, max_dist_lr)
+    
+    data = []
+    
+    for idx in range(len(idxs_iphone)):        
+        faro_batch_points = pcd_faro[idxs_faro[idx]]
+        iphone_batch_points = pcd_iphone[idxs_iphone[idx]]
+        faro_batch_colors = rgb_faro[idxs_faro[idx]]
+        iphone_batch_colors = rgb_iphone[idxs_iphone[idx]]
+        iphone_batch_dino = features[idxs_iphone[idx]]
+
+        # skip if the batch is too small
+        if len(faro_batch_points) < args.npoints:
+            print(f"Skipping batch {idx} because it is too small ({len(faro_batch_points)} points)")
+            continue
+        
+        # randomly downsample the faro scan to npoints
+        rand_idx = np.random.randint(0, len(faro_batch_points), args.npoints)
+        faro_batch_points = faro_batch_points[rand_idx]
+        faro_batch_colors = faro_batch_colors[rand_idx]
+        
+        # randomly upsample the iphone scan to npoints
+        diff = args.npoints - len(iphone_batch_points)
+
+        rand_idx = np.random.randint(0, len(iphone_batch_points), diff)
+        iphone_additional_xyz = iphone_batch_points[rand_idx]
+        iphone_additional_rgb = iphone_batch_colors[rand_idx]
+        iphone_additional_dino = iphone_batch_dino[rand_idx]
+        
+        # add noise to the points and features
+        iphone_additional_xyz += np.random.normal(0, 1e-2, iphone_additional_xyz.shape)
+        iphone_additional_dino += np.random.normal(0, 1e-2, iphone_additional_dino.shape)
+
+        iphone_batch_points = np.concatenate([iphone_batch_points, iphone_additional_xyz])
+        iphone_batch_colors = np.concatenate([iphone_batch_colors, iphone_additional_rgb])
+        iphone_batch_dino = np.concatenate([iphone_batch_dino, iphone_additional_dino])
+
+        # assign points using NN
+        cn = find_closest_neighbors_cuml(iphone_batch_points, faro_batch_points, k=200)
+        assignment = optimize_assignments(iphone_batch_points, faro_batch_points, cn)
+
+        faro_batch_points_assigned = faro_batch_points[assignment]
+        faro_batch_colors_assigned = faro_batch_colors[assignment]
+
+        # center the points
+        center = iphone_batch_points.mean(axis=0)
+        faro_batch_points_assigned -= center
+        iphone_batch_points -= center
+
+        # scale the points
+        scale = np.max(np.linalg.norm(iphone_batch_points, axis=1))
+        faro_batch_points_assigned /= scale
+        iphone_batch_points /= scale
+
+        # create output data to save as npz later
+        batch_data = {}
+        batch_data["faro"] = np.concatenate([faro_batch_points_assigned, faro_batch_colors_assigned], axis=1)
+        batch_data["iphone"] = np.concatenate([iphone_batch_points, iphone_batch_colors], axis=1)
+        batch_data["dino"] = iphone_batch_dino
+        batch_data["center"] = center
+        batch_data["scale"] = scale
+        data.append(batch_data)
+    return data
+
+
+def filter_iphone_scan(iphone_scan, iphone_colors, features, faro_scan, threshold=1.0):
+    """
+    Filter the iPhone scan to remove points that are too far from the Faro scan.
+    This is done by calculating the nearest neighbor distances between the two scans,
+    and then removing points that are more than the specified threshold times the std away from the mean.
+    """
+    tree_faro = neighbors.KDTree(faro_scan, metric="l2")
+    
+    distances = tree_faro.query(iphone_scan, k=1, return_distance=True)[0].ravel()
+    mean = distances.mean()
+    std = distances.std()
+    threshold = mean + threshold * std
+    mask = distances < threshold
+    return iphone_scan[mask], iphone_colors[mask], features[mask]
 
 
 def smart_load_model_weights(model, pretrained_dict):

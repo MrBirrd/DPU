@@ -8,9 +8,8 @@ from cuml.neighbors import NearestNeighbors
 from sklearn import neighbors
 from tqdm import tqdm
 
-from utils.utils import create_room_batches_training_faro, create_room_batches_training_iphone
+from utils.utils import create_room_batches_training_faro, create_room_batches_training_iphone_v1, create_room_batches_training_iphone_v2, filter_iphone_scan
 
-FEATURES = ["dino"]
 FACTOR = 3
 
 
@@ -94,6 +93,12 @@ def main():
         help="Path to the data directory.",
     )
     parser.add_argument(
+        "--name_suffix",
+        type=str,
+        default="",
+        help="Suffix to append to the name of the points and features.",
+    )
+    parser.add_argument(
         "--target_root",
         type=str,
         help="Path to the target directory.",
@@ -105,20 +110,22 @@ def main():
         help="Number of batches per scene.",
     )
     parser.add_argument(
+        "--upsampling_rate",
+        type=int,
+        default=4,
+        help="Upsampling ratio.",
+    )
+    parser.add_argument(
         "--centers_amount",
         type=float,
         default=2e-3,
         help="Amount of centers to sample from the point cloud.",
     )
     parser.add_argument(
-        "--append",
-        action="store_true",
-        help="Whether to append to existing batches.",
-    )
-    parser.add_argument(
-        "--fix",
-        action="store_true",
-        help="Whether to fix missing batches.",
+        "--feature_type",
+        type=str,
+        default="dino",
+        help="Features to use.",
     )
     parser.add_argument(
         "--mode",
@@ -143,7 +150,7 @@ def main():
     for data_folder in pbar:
         pbar.set_description(data_folder)
         faro_scan_path = os.path.join(args.data_root, data_folder, "scans", "mesh_aligned_0.05.ply")
-        iphone_scan_path = os.path.join(args.data_root, data_folder, "scans", "iphone.ply")
+        iphone_scan_path = os.path.join(args.data_root, data_folder, "scans", f"iphone{args.name_suffix}.ply")
 
         if not os.path.exists(faro_scan_path) or (args.mode == "conditional" and not os.path.exists(iphone_scan_path)):
             continue
@@ -151,15 +158,11 @@ def main():
         # unconditional mode
         if args.mode == "unconditional":
             # feature paths creation and check
-            features = {}
-            for feature_type in FEATURES:
-                fpath = os.path.join(args.data_root, data_folder, "features", f"{feature_type}.npy")
-                if os.path.exists(fpath):
-                    features[feature_type] = np.load(fpath)
-                else:
-                    continue
-            if len(features) != len(FEATURES):
-                continue
+            fpath = os.path.join(args.data_root, data_folder, "features", f"{args.feature_type}{args.name_suffix}.npy")
+            if os.path.exists(fpath):
+                features = np.load(fpath)
+            else:
+                print("Skipping", data_folder, "because of missing features")
 
             # target scene path
             target_scene_path = os.path.join(args.target_root, data_folder)
@@ -169,22 +172,18 @@ def main():
                 f for f in os.listdir(target_scene_path) if f.startswith("points") and f.endswith(".npz")
             ]
 
-            if args.mode == "conditional":
-                pointcloud = np.array(o3d.io.read_point_cloud(iphone_scan_path).points)
-            else:
-                pointcloud = np.array(o3d.io.read_point_cloud(faro_scan_path).points)
+            pointcloud = np.array(o3d.io.read_point_cloud(faro_scan_path).points)
 
-            for feature in features:
-                if features[feature].shape[-1] != pointcloud.shape[0]:
-                    print(
-                        "Scene {} has {} points but {} {} features".format(
-                            data_folder,
-                            pointcloud.shape[0],
-                            features[feature].shape[-1],
-                            feature,
-                        )
+            if features.shape[-1] != pointcloud.shape[0]:
+                print(
+                    "Scene {} has {} points but {} {} features".format(
+                        data_folder,
+                        pointcloud.shape[0],
+                        features[feature].shape[-1],
+                        feature,
                     )
-                    continue
+                )
+                continue
 
             # calculate number of center points
             n_batches = int(pointcloud.shape[0] * args.centers_amount)
@@ -194,6 +193,7 @@ def main():
                     print("Skipping", data_folder)
                     continue
 
+            
             batches = create_room_batches_training_faro(
                 pointcloud=pointcloud,
                 features=features,
@@ -210,19 +210,16 @@ def main():
 
         elif args.mode == "conditional":
             # feature paths creation and check
-            features = {}
-            for feature_type in FEATURES:
-                fpath = os.path.join(
-                    args.data_root,
-                    data_folder,
-                    "features",
-                    f"{feature_type}_iphone.npy",
-                )
-                if os.path.exists(fpath):
-                    features[feature_type] = np.load(fpath).T
-                else:
-                    continue
-            if len(features) != len(FEATURES):
+            fpath = os.path.join(
+                args.data_root,
+                data_folder,
+                "features",
+                f"{args.feature_type}_iphone{args.name_suffix}.npy",
+            )
+            if os.path.exists(fpath):
+                features = np.load(fpath).T
+            else:
+                print("Skipping", data_folder, "because of missing features")
                 continue
 
             # target scene path
@@ -242,36 +239,34 @@ def main():
             pcd_faro = np.array(scan_faro.points)
             rgb_faro = np.array(scan_faro.colors)
 
+            # filter iphone scan
+            pcd_iphone, rgb_iphone, features = filter_iphone_scan(pcd_iphone, rgb_iphone, features, pcd_faro)
+            
             n_points_iphone = pcd_iphone.shape[0]
             n_points_faro = pcd_faro.shape[0]
 
-            for feature in features:
-                if features[feature].shape[0] != n_points_iphone:
-                    print(
-                        "Scene {} has {} points but {} {} features".format(
-                            data_folder,
-                            n_points_iphone,
-                            features[feature].shape[0],
-                            feature,
-                        )
+            if features.shape[0] != n_points_iphone:
+                print(
+                    "Scene {} has {} points but {} features".format(
+                        data_folder,
+                        n_points_iphone,
+                        features.shape[0],
                     )
-                    continue
-
-            # calculate number of center points
-            n_batches = int(n_points_iphone * args.centers_amount)
+                )
+                continue
 
             # get batches
-            batches = create_room_batches_training_iphone(
+            batches = create_room_batches_training_iphone_v2(
                 pcd_faro=pcd_faro,
                 pcd_iphone=pcd_iphone,
                 rgb_faro=rgb_faro,
                 rgb_iphone=rgb_iphone,
                 features=features,
-                n_batches=n_batches,
-                npoints=args.npoints,
+                args=args
             )
+            
             # save batches
-            for batch_idx in batches:
+            for batch_idx in range(len(batches)):
                 np.savez(
                     os.path.join(target_scene_path, "points_{}.npz".format(batch_idx)),
                     **batches[batch_idx],

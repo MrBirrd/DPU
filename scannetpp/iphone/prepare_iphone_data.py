@@ -7,20 +7,16 @@ and semantic tasks on the mesh
 """
 
 import argparse
-import json
-import subprocess
-import sys
 import zlib
 from pathlib import Path
 
 import imageio as iio
 import lz4.block
 import numpy as np
-import yaml
-from common.scene_release import ScannetppScene_Release
-from common.utils.utils import load_json, load_yaml_munch, read_txt_list, run_command
-from munch import Munch
 from tqdm import tqdm
+
+from common.scene_release import ScannetppScene_Release
+from common.utils.utils import load_yaml_munch, read_txt_list, run_command
 
 
 def extract_rgb(scene):

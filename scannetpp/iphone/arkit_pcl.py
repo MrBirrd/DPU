@@ -4,17 +4,16 @@ The script reads the iphone RGB, depth images, and the corresponding camera pose
 import argparse
 import json
 import os
-import time
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Optional
 
 import cv2
 import numpy as np
 import open3d as o3d
-from common.scene_release import ScannetppScene_Release
 from PIL import Image
 from plyfile import PlyData, PlyElement
 from tqdm import tqdm
-from xarray import merge
+
+from common.scene_release import ScannetppScene_Release
 
 
 def parse_args():
@@ -85,6 +84,25 @@ def outlier_removal(xyz, rgb, nb_points, radius, feats=None):
     xyz = np.asarray(pcd.points)
     rgb = np.asarray(pcd.colors)
     feats = feats[idxs] if feats is not None else None
+    return xyz, rgb, feats
+
+
+def outlier_removal_fast(xyz, rgb, nb_points, radius, feats=None):
+    # using cuml NearestNeighbors
+    from cudf import DataFrame
+    from cuml.neighbors import NearestNeighbors
+
+    xyz_df = DataFrame(xyz)
+
+    nbrs = NearestNeighbors(n_neighbors=nb_points).fit(xyz_df)
+    distances, indices = nbrs.kneighbors(xyz_df)
+    # create list from distances
+    distances = distances.to_pandas().values
+    # check if biggest distance is smaller than radius
+    mask = distances[:, -1] < radius
+    xyz = xyz[mask]
+    rgb = rgb[mask]
+    feats = feats[mask] if feats is not None else None
     return xyz, rgb, feats
 
 
@@ -333,7 +351,7 @@ def main():
 
     # Voxel downsample again
     print("Final processing...")
-    all_xyz, all_rgb, _ = outlier_removal(
+    all_xyz, all_rgb, _ = outlier_removal_fast(
         all_xyz, all_rgb, nb_points=args.final_n_outliers, radius=args.final_outlier_radius
     )
     all_xyz, all_rgb = voxel_down_sample(all_xyz, all_rgb, voxel_size=args.grid_size)

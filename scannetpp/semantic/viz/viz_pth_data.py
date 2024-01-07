@@ -9,9 +9,10 @@ from pathlib import Path
 import numpy as np
 import open3d as o3d
 import torch
+from tqdm import tqdm
+
 from common.file_io import load_yaml_munch, read_txt_list
 from common.scene_release import ScannetppScene_Release
-from tqdm import tqdm
 
 
 def main(args):
